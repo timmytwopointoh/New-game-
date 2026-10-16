@@ -31,6 +31,14 @@ if [[ -z "$end_pid" || "$start_pid" != "$end_pid" ]]; then
   echo "ECHOFORM process exited or restarted after touch input."
   exit 1
 fi
+if cmp -s echoform-start.png echoform-move.png; then
+  echo "Visual smoke failed: screenshots are identical after touch movement."
+  exit 1
+fi
+if grep -E 'Fragment shader active uniforms exceed|SceneShaderGLES3: Program linking failed|CanvasShaderGLES3: Program linking failed|SCRIPT ERROR' echoform-logcat.txt; then
+  echo "Visual smoke failed: Godot shader compilation or script errors in logcat."
+  exit 1
+fi
 if grep -E 'Fatal signal.*(echoform.game|m.echoform.game)|ANR in com.echoform.game|Process: com.echoform.game' echoform-logcat.txt; then
   echo "ECHOFORM crash or ANR detected."
   exit 1
