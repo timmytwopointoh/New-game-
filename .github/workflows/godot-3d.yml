@@ -55,7 +55,7 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-          ./Godot_v4.3-stable_linux.x86_64 --headless --path game --export-debug Android build/echoform-debug.apk
+          ./Godot_v4.3-stable_linux.x86_64 --headless --path game --export-debug Android "$GITHUB_WORKSPACE/build/echoform-debug.apk"
           test -s build/echoform-debug.apk
       - uses: actions/upload-artifact@v4
         if: always()
