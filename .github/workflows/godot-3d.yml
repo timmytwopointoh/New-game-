@@ -1,0 +1,45 @@
+name: ECHOFORM 3D Android build
+on:
+  push:
+    branches: [feature/aaa-3d-foundation]
+  workflow_dispatch:
+jobs:
+  validate-and-export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Godot and Android export templates
+        run: |
+          set -eux
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q Godot_v4.3-stable_linux.x86_64.zip
+          chmod +x Godot_v4.3-stable_linux.x86_64
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+          unzip -q Godot_v4.3-stable_export_templates.tpz
+          mv templates/* ~/.local/share/godot/export_templates/4.3.stable/
+      - name: Validate project
+        run: |
+          ./Godot_v4.3-stable_linux.x86_64 --headless --path game --editor --quit
+      - name: Configure Android export
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          keytool -genkeypair -keystore "$HOME/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          mkdir -p ~/.config/godot
+          printf '[gd_resource type="EditorSettings" format=3]\n' > ~/.config/godot/editor_settings-4.tres
+      - name: Export APK
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG: ${{ github.workspace }}/debug.keystore
+        run: |
+          mkdir -p build
+          ./Godot_v4.3-stable_linux.x86_64 --headless --path game --export-debug Android build/echoform-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: echoform-3d-build
+          path: build/*.apk
