@@ -62,3 +62,50 @@ jobs:
         with:
           name: echoform-3d-build
           path: build/*.apk
+          if-no-files-found: error
+
+  emulator-smoke:
+    name: Install and launch Godot 3D game
+    needs: validate-and-export
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: echoform-3d-build
+          path: apk
+      - name: Confirm downloadable 3D APK
+        run: test -s apk/echoform-debug.apk
+      - name: Boot emulator, launch game, capture evidence
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -eux
+            adb install -r apk/echoform-debug.apk
+            adb shell monkey -p com.echoform.game -c android.intent.category.LAUNCHER 1
+            sleep 12
+            adb shell pidof com.echoform.game
+            adb shell screencap -p /sdcard/echoform-start.png
+            adb pull /sdcard/echoform-start.png echoform-start.png
+            adb shell input swipe 220 500 420 600 550
+            sleep 3
+            adb shell screencap -p /sdcard/echoform-move.png
+            adb pull /sdcard/echoform-move.png echoform-move.png
+            adb logcat -d -v threadtime > echoform-logcat.txt
+            if grep -E 'FATAL EXCEPTION|Fatal signal|ANR in com.echoform.game' echoform-logcat.txt; then exit 1; fi
+      - name: Publish emulator screenshots and crash logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: echoform-3d-emulator-evidence
+          path: |
+            echoform-start.png
+            echoform-move.png
+            echoform-logcat.txt
+          if-no-files-found: warn
