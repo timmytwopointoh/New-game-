@@ -90,7 +90,7 @@ jobs:
       - name: Boot emulator, launch game, capture evidence
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
+          api-level: 34
           arch: x86_64
           target: google_apis
           profile: pixel_2
