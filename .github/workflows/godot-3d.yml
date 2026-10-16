@@ -6,7 +6,7 @@ on:
     branches: [main]
   workflow_dispatch:
 concurrency:
-  group: echoform-3d-${{ github.ref }}
+  group: echoform-3d-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   validate-and-export:
@@ -105,24 +105,7 @@ jobs:
           disable-animations: true
           disable-linux-hw-accel: false
           emulator-boot-timeout: 360
-          script: |
-            set -eux
-            adb install -r apk/echoform-debug.apk
-            adb logcat -c
-            adb shell monkey -p com.echoform.game -c android.intent.category.LAUNCHER 1
-            sleep 10
-            start_pid=$(adb shell pidof com.echoform.game | tr -d '\r')
-            test -n "$start_pid"
-            adb shell screencap -p /sdcard/echoform-start.png
-            adb pull /sdcard/echoform-start.png echoform-start.png
-            adb shell input swipe 220 500 420 600 550
-            sleep 3
-            end_pid=$(adb shell pidof com.echoform.game | tr -d '\r')
-            test "$start_pid" = "$end_pid"
-            adb shell screencap -p /sdcard/echoform-move.png
-            adb pull /sdcard/echoform-move.png echoform-move.png
-            adb logcat -d -v threadtime > echoform-logcat.txt
-            if grep -E 'Fatal signal.*(echoform.game|m.echoform.game)|ANR in com.echoform.game|Process: com.echoform.game' echoform-logcat.txt; then exit 1; fi
+          script: bash .github/scripts/echoform-emulator-smoke.sh
       - name: Publish emulator screenshots and crash logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -132,4 +115,5 @@ jobs:
             echoform-start.png
             echoform-move.png
             echoform-logcat.txt
+            echoform-activity.txt
           if-no-files-found: warn
