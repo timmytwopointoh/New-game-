@@ -9,4 +9,6 @@ config/features=PackedStringArray("4.3", "GL Compatibility")
 textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+rendering/limits/opengl/max_lights_per_object=1
+rendering/limits/opengl/max_renderable_lights=4
 textures/default_filters/use_nearest_mipmap_filter=false
