@@ -3,12 +3,12 @@ config_version=5
 [application]
 config/name="ECHOFORM"
 run/main_scene="res://scenes/world.tscn"
-config/features=PackedStringArray("4.3", "GL Compatibility")
+config/features=PackedStringArray("4.3", "Mobile")
 
 [rendering]
 textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.mobile="mobile"
 rendering/limits/opengl/max_lights_per_object=1
 rendering/limits/opengl/max_renderable_lights=4
 textures/default_filters/use_nearest_mipmap_filter=false
