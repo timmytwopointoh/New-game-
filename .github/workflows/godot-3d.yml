@@ -1,9 +1,13 @@
 name: ECHOFORM 3D Android build
 on:
+  # Keep automatic tests on the active 3D development branch.
+  # Only game, smoke-test, or CI changes require the expensive emulator.
   push:
     branches: [feature/aaa-3d-foundation]
-  pull_request:
-    branches: [main]
+    paths:
+      - 'game/**'
+      - '.github/scripts/echoform-emulator-smoke.sh'
+      - '.github/workflows/godot-3d.yml'
   workflow_dispatch:
 concurrency:
   group: echoform-3d-${{ github.event.pull_request.head.ref || github.ref_name }}
@@ -73,6 +77,7 @@ jobs:
           name: echoform-3d-build
           path: build/*.apk
           if-no-files-found: error
+          retention-days: 7
 
   emulator-smoke:
     name: Install and launch Godot 3D game
@@ -109,6 +114,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: echoform-3d-emulator-evidence
+          retention-days: 14
           path: |
             echoform-start.png
             echoform-move.png
