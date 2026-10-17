@@ -1,9 +1,9 @@
 name: ECHOFORM 3D Android build
 on:
-  # Avoid separate push and PR exports for the same commit.
-  # PR validation remains automatic; manual validation remains available.
-  pull_request:
-    branches: [main]
+  # Keep automatic tests on the active 3D development branch.
+  # Only game, smoke-test, or CI changes require the expensive emulator.
+  push:
+    branches: [feature/aaa-3d-foundation]
     paths:
       - 'game/**'
       - '.github/scripts/echoform-emulator-smoke.sh'
