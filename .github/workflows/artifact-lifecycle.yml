@@ -1,0 +1,66 @@
+name: VQ Artifact Lifecycle — preserve knowledge, expire disposable builds
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/artifact-lifecycle.yml']
+  schedule:
+    - cron: '27 8 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: vq-disposable-artifact-gc
+  cancel-in-progress: false
+jobs:
+  remove-replaced-test-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner,repo}=context.repo;
+            const [artifacts,runs]=await Promise.all([
+              github.paginate(github.rest.actions.listArtifactsForRepo,{owner,repo,per_page:100}),
+              github.paginate(github.rest.actions.listWorkflowRunsForRepo,{owner,repo,per_page:100})
+            ]);
+            const runById=new Map(runs.map(r=>[r.id,r]));
+            // No deletions of user-approved assets, recipes, model source, learning or reports.
+            const protectedName=/(approved|validated|keeper|golden|pinned|source|recipe|technique|knowledge|learning|backup|milestone|release)/i;
+            // This is deliberately narrow; unknown artifacts and knowledge reports are retained.
+            const disposable=/(apk|screenshots?|captures?|model[-_]preview|model[-_]candidate|render[-_]?preview|emulator[-_]?evidence|candidate[-_]UNVERIFIED|android[-_]?scene|phone[-_]test[-_]build)/i;
+            const groups=new Map();
+            for(const a of artifacts){
+              if(a.expired||protectedName.test(a.name)||!disposable.test(a.name))continue;
+              const r=runById.get(a.workflow_run?.id);
+              if(!r||r.status!=='completed')continue;
+              if(!groups.has(a.name))groups.set(a.name,[]);
+              groups.get(a.name).push({a,r});
+            }
+            const newest=new Set(),eligible=[];
+            for(const items of groups.values()){
+              items.sort((a,b)=>Date.parse(b.a.created_at)-Date.parse(a.a.created_at));
+              items.slice(0,2).forEach(x=>newest.add(x.a.id));
+              const success=items.find(x=>x.r.conclusion==='success');
+              if(success)newest.add(success.a.id);
+              for(const item of items){
+                if(newest.has(item.a.id))continue;
+                if(Date.now()-Date.parse(item.a.created_at)<24*60*60*1000)continue;
+                eligible.push(item);
+              }
+            }
+            eligible.sort((a,b)=>b.a.size_in_bytes-a.a.size_in_bytes);
+            let count=0,bytes=0,errors=0;
+            for(const x of eligible.slice(0,80)){
+              try{await github.rest.actions.deleteArtifact({owner,repo,artifact_id:x.a.id});
+                count++;bytes+=x.a.size_in_bytes;
+              }catch(e){errors++;core.warning('Cannot delete old artifact '+x.a.id+': '+String(e.message).slice(0,180));
+                if(e.status===401||e.status===403)break;}
+            }
+            const MiB=n=>(n/1048576).toFixed(2);
+            core.info('VQ_ARTIFACT_LIFECYCLE repo='+repo+' scanned='+artifacts.length+' candidates='+eligible.length
+              +' protected='+newest.size+' deleted='+count+' freed_MiB='+MiB(bytes)+' errors='+errors);
+            await core.summary.addHeading('Knowledge-first artifact lifecycle',2)
+              .addRaw('Replaced ephemeral files deleted: **'+count+'**; estimated reclaimed: **'+MiB(bytes)+' MiB**. Latest two per build family, newest successful build, files younger than 24h, validated and learned sources remain protected.\n\nThis job only calls GitHub Actions artifact deletion; it does not remove Git files, models stored on devices, releases or repositories.').write();
+            if(errors)core.setFailed('Some expired artifacts were not reclaimed');
