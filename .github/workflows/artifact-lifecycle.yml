@@ -55,7 +55,10 @@ jobs:
             for(const x of eligible.slice(0,80)){
               try{await github.rest.actions.deleteArtifact({owner,repo,artifact_id:x.a.id});
                 count++;bytes+=x.a.size_in_bytes;
-              }catch(e){errors++;core.warning('Cannot delete old artifact '+x.a.id+': '+String(e.message).slice(0,180));
+              }catch(e){
+                // Another GC run can delete the same artifact while this job is listing old pages.
+                if(e.status===404){core.info('ALREADY_REMOVED '+x.a.id);continue;}
+                errors++;core.warning('Cannot delete old artifact '+x.a.id+': '+String(e.message).slice(0,180));
                 if(e.status===401||e.status===403)break;}
             }
             const MiB=n=>(n/1048576).toFixed(2);
