@@ -40,6 +40,7 @@ jobs:
           path: apk
       - name: Verify reused debug APK
         run: test -s apk/app-debug.apk
+      - uses: android-actions/setup-android@v3
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
