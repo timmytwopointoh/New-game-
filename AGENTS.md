@@ -11,3 +11,6 @@ Read https://github.com/timmytwopointoh/New-game-/issues/4 for verified storage 
 - Verify source/test run links and real conclusions before calling anything passed. The handoff issue tracks the four fresh CI regressions.
 
 Other chats do not receive this file as a direct notification. If a worker is asked to coordinate, read the linked issues and AGENTS files first.
+
+## Repeatable storage relief
+Use the **Storage recovery - safeguarded audit and reclaim** GitHub Actions workflow on `main`. It is manual only and defaults to `apply=false`, which inventories candidates without deleting anything. Review the candidate count and estimated bytes in the job summary. Select `apply=true` manually to remove at most 125 superseded allowlisted artifacts per invocation. Never add protected backups, source, latest emulator-tested APKs, or repair tasks to this delete allowlist.

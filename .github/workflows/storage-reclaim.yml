@@ -1,0 +1,88 @@
+name: Storage recovery - safeguarded audit and reclaim
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Delete only audited, superseded allowlisted artifacts'
+        required: true
+        type: boolean
+        default: false
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: storage-reclaim-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  reclaim:
+    name: Audit and safely recover Actions artifact storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: List retained artifacts, protect latest evidence, and optionally delete superseded copies
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const doApply = context.eventName === 'workflow_dispatch' && context.ref === 'refs/heads/main' && context.payload.inputs?.apply === 'true';
+            const targets = repo === 'Project-hail'
+              ? new Set(['veilforge-android-scene-world','veilforge-android-nature-mobile','veilforge-android-props-equipment','veilforge-android-characters','veilbound-native3d-inspection-report','veilbound-native3d-candidate-UNVERIFIED'])
+              : new Set(['echoform-3d-build','echoform-3d-emulator-evidence','echoform-debug-apk','emulator-screenshot']);
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo,{owner,repo,per_page:100});
+            const runById = new Map(runs.map(r => [r.id, r]));
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo,{owner,repo,per_page:100});
+            const groups = new Map();
+            let protectedCount = 0;
+            for (const a of artifacts) {
+              const r = runById.get(a.workflow_run?.id);
+              if (!targets.has(a.name) || a.expired || !r || r.status !== 'completed'
+                  || !['success','cancelled'].includes(r.conclusion)) { protectedCount++; continue; }
+              const key = a.name + ' / ' + (r.head_branch || 'UNKNOWN');
+              if (!groups.has(key)) groups.set(key, []);
+              groups.get(key).push({a,r});
+            }
+            const cutoff = Date.now() - 3 * 60 * 60 * 1000;
+            const eligible = [];
+            for (const [key, arr] of groups) {
+              arr.sort((x,y)=>new Date(y.a.created_at)-new Date(x.a.created_at));
+              const protectedSuccess = arr.find(x=>x.r.conclusion==='success');
+              for (let i=0; i<arr.length; i++) {
+                const item=arr[i];
+                if (i<2 || item===protectedSuccess || new Date(item.a.created_at).getTime()>=cutoff) {
+                  protectedCount++;
+                } else {
+                  eligible.push({...item,key});
+                }
+              }
+            }
+            eligible.sort((x,y)=>y.a.size_in_bytes-x.a.size_in_bytes);
+            const selected = eligible.slice(0,125);
+            const sum = selected.reduce((v,x)=>v+x.a.size_in_bytes,0);
+            const mb = n => (n/1048576).toFixed(2);
+            core.info('Repository: '+owner+'/'+repo+'; run_count='+runs.length+'; artifacts='+artifacts.length);
+            core.info('Allowlisted superseded artifacts: '+eligible.length+'; this pass max 125, estimated '+mb(sum)+' MiB');
+            core.info('Protected/non-target artifacts '+protectedCount);
+            const details=selected.slice(0,30).map(x=>'| '+x.a.id+' | '+x.a.name+' | '+x.r.head_branch+' | '+mb(x.a.size_in_bytes)+' |').join('\n');
+            await core.summary.addHeading('Actions storage '+(doApply?'reclamation':'audit (dry run)'),2)
+            .addRaw('Only finished successful/cancelled runs are considered. The newest two artifacts per name and branch, newest successful artifact per group, and artifacts under three hours old are protected. VQ backups, unapproved model candidates, repair tasks and tested VEILBOUND APKs are not deletion targets.\n\n')
+            .addRaw('Scanned '+runs.length+' runs, '+artifacts.length+' artifacts; eligible '+eligible.length+'; batch '+selected.length+'; potential '+mb(sum)+' MiB.\n\n')
+            .addRaw('| ID | Artifact | Branch | MiB |\n|---|---|---|---:|\n'+details+'\n\n');
+            let deleted=0, freed=0, errors=0;
+            if (doApply) {
+              for (const {a} of selected) {
+                try {
+                  await github.rest.actions.deleteArtifact({owner,repo,artifact_id:a.id});
+                  deleted++; freed+=a.size_in_bytes;
+                } catch(e) {
+                  errors++;
+                  core.warning('Could not delete artifact '+a.id+': '+String(e.message || e).slice(0,300));
+                  if (e.status===401 || e.status===403) break;
+                }
+              }
+            }
+            await core.summary.addRaw('Result: mode='+(doApply?'APPLY':'DRY RUN')+'; deleted='+deleted+'; estimated bytes reclaimed='+mb(freed)+' MiB; errors='+errors+'.\n').write();
+            if (doApply && errors) core.setFailed('Some eligible artifact deletions failed; see log for permission or API errors.');
+
+
