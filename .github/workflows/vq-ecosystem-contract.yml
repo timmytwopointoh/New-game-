@@ -1,0 +1,31 @@
+name: VQ ecosystem contract — lightweight
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'AGENTS.md'
+      - 'docs/VQ_CROSS_REPO_HANDOFF.md'
+      - 'ecosystem/**'
+      - 'tools/verify_vq_ecosystem.py'
+      - '.github/workflows/vq-ecosystem-contract.yml'
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - 'docs/VQ_CROSS_REPO_HANDOFF.md'
+      - 'ecosystem/**'
+      - 'tools/verify_vq_ecosystem.py'
+      - '.github/workflows/vq-ecosystem-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vq-ecosystem-contract-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Offline policy and cross-repo role checks (no Android or uploads)
+        run: python3 tools/verify_vq_ecosystem.py

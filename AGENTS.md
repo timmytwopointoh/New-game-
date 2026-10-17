@@ -14,3 +14,7 @@ Other chats do not receive this file as a direct notification. If a worker is as
 
 ## Repeatable storage relief
 Use the **Storage recovery - safeguarded audit and reclaim** GitHub Actions workflow on `main`. It is manual only and defaults to `apply=false`, which inventories candidates without deleting anything. Review the candidate count and estimated bytes in the job summary. Select `apply=true` manually to remove at most 125 superseded allowlisted artifacts per invocation. Never add protected backups, source, latest emulator-tested APKs, or repair tasks to this delete allowlist.
+
+## Shared VQ ecosystem contract — 2026-10-17-storage-and-nonregression-v1
+
+Before any further changes read `ecosystem/vq_shared_rules_v1.json`, `docs/VQ_CROSS_REPO_HANDOFF.md`, and `ecosystem/repository_role.json`. The Generate Human work, Human 03 clean-room procedural geometry, and VQShape/1 universal language are existing achievements, not throwaway templates. Preserve their independent branches and QA; do not claim unimported GLB files exist in this repository. No generated mesh or game candidate gets user approval automatically. Keep procedural rebuild recipes, exact hashes, proven techniques, tests, and local offline portability. Only Engine-build may evolve the experimental emulator runtime settings on isolated branches. The other repos use manual/review-gated emulator testing. Never delete approved assets, knowledge, source, references, recovery files, or working game builds to save Actions space.

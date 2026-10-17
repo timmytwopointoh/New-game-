@@ -1,0 +1,125 @@
+{
+  "schema_version": "vq-ecosystem-contract/1",
+  "revision": "2026-10-17-storage-and-nonregression-v1",
+  "engine_identity": "VEYLQUORIN (VQ); VEILFORGE is a historical compatibility name",
+  "purpose": "One portable, offline-first model-construction knowledge base with downstream games and emulator QA kept separate",
+  "authoritative_workstreams": {
+    "human_cleanroom": {
+      "repository": "timmytwopointoh/Project-hail",
+      "branch": "feature/vq-human03-cleanroom-technique-library-20261017",
+      "state": "reviewed separately; preserve; do not rebuild over original",
+      "techniques": [
+        "clean-room procedural sculpt",
+        "parameterized body proportions",
+        "smooth union connected anatomy",
+        "hands and pose joints",
+        "topology and UV QA"
+      ]
+    },
+    "universal_language": {
+      "name": "VQShape/1",
+      "state": "reported working in separate Generate Human chat, not yet verified imported into these GitHub mains",
+      "description": "semantic grammar independent of individual object types",
+      "known_primitives": [
+        "shapes",
+        "connections",
+        "growth and branching",
+        "repetition/symmetry",
+        "smooth unions",
+        "materials",
+        "validation"
+      ],
+      "reported_test_cases": [
+        "tree",
+        "chair",
+        "quad-rotor",
+        "crystal",
+        "bridge"
+      ]
+    },
+    "offline_grammar": {
+      "repository": "timmytwopointoh/Engine-build",
+      "branch": "feature/vq-offline-construction-grammar-m2-20261017",
+      "state": "isolated feature implementation; do not downgrade or replace with template"
+    },
+    "offline_game_runtime": {
+      "repository": "timmytwopointoh/Engine-build",
+      "branch": "feature/vq-offline-game-runtime-m1-20261017",
+      "state": "isolated Android runtime testbed; no claims of validated animation support"
+    },
+    "human_anatomy_m37": {
+      "repository": "timmytwopointoh/Project-hail",
+      "branch": "feature/veilbound-m37-shoulder-foot-reference-20261016",
+      "state": "preserve reviewed modeling improvements and QA evidence; never overwrite originals"
+    }
+  },
+  "construction_knowledge": {
+    "always_persist": [
+      "source code and construction grammar",
+      "procedural recipes, seeds, parametric proportions",
+      "reusable techniques with actual QA outcomes",
+      "rigging, UV, material and shape-edit rules",
+      "triangle budgets, integrity checks, deterministic model fingerprints",
+      "compact defects and repair plans"
+    ],
+    "never_assume": [
+      "a GLB binary is needed to remember how to make it",
+      "a green compilation means visual approval",
+      "a grayscale provisional model is user-approved",
+      "a new generic template replaces an earlier verified technique"
+    ],
+    "default_method": "Build from abstract semantics -> controlled geometry/rig -> gray sculpt and smooth before adding triangles -> UV/material/animation -> real geometry or emulator QA -> learn reconstruction recipe -> user review",
+    "no_auto_approval": true
+  },
+  "retention": {
+    "temporary": [
+      "generated OBJ/GLB model candidates",
+      "temporary screenshots and 14-view previews",
+      "debug APKs unless user requests one",
+      "emulator intermediate logs, frames and build products"
+    ],
+    "protected": [
+      "Git source and its history",
+      "semantic language, procedural scripts and recipe records",
+      "test fixtures/known-good approved baselines",
+      "reference material and attribution",
+      "human-reviewed models and golden artifacts",
+      "working game and offline-app source",
+      "manually requested delivery APKs and recovery backups"
+    ],
+    "model_promotion": "explicit human/artist validation with hash, provenance and reconstruction recipe before permanent archival",
+    "cleanup_scope": "Only completed GitHub Actions temporary artifacts, never repository source or user-device files",
+    "cleanup_policy": "daily name-allowlist, protect two newest and newest successful, exclude artifacts younger than 24 hours and approved/release names; no uncontrolled deletion",
+    "cheap_test_artifacts": "0-1 days where upload is necessary",
+    "requested_apk_artifacts": "manual opt-in; short retention; user may designate a permanent approved release",
+    "source_history": "never rewrite/delete history to free GitHub Actions storage",
+    "emulator_jobs": "no frequent unbounded emulator matrices, one vetted pilot per milestone by default"
+  },
+  "architecture": {
+    "target": "offline phone app",
+    "network_assumption": "no internet required by installed game and local construction engine",
+    "cross_repo_exchange": "versioned shape recipe + semantic schema version + digests + bounded local GLB/OBJ candidate, with no remote service requirement",
+    "independence": "Project-hail, ECHOFORM and Trion remain downstream independent; do not auto-mutate one from another",
+    "testing_hierarchy": [
+      "fast pure-language/schema tests",
+      "geometry/UV/rig integrity",
+      "bounded visual geometry evidence",
+      "selected emulator device-tier check",
+      "explicit reviewer acceptance"
+    ]
+  },
+  "repo_roles": {
+    "Project-hail": "legacy game, human/creature model QA and compatibility",
+    "Trion-Assistant-Lab": "offline assistant and paired app client",
+    "New-game-": "independent ECHOFORM game client",
+    "Engine-build": "portable VQ core, model learning and experimental emulator runtime"
+  },
+  "emulator_exception_repository": "Engine-build",
+  "safeguards": {
+    "isolated_feature_branches": true,
+    "game_promotion_requires_review": true,
+    "retain_human03_work": true,
+    "retain_universal_vqshape1_work": true,
+    "no_vendor_sdk_runtime_requirement": true
+  }
+}

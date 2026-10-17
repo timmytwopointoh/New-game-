@@ -1,0 +1,10 @@
+{
+  "repository": "New-game-",
+  "responsibility": "independent ECHOFORM game client",
+  "emulator_lab_exception": false,
+  "emulator_policy": "manual_or_review_gated",
+  "allow_automatic_model_approval": false,
+  "retention_contract_version": "2026-10-17-storage-and-nonregression-v1",
+  "downstream_model_source": "Engine-build",
+  "gameplay_preserve": true
+}
