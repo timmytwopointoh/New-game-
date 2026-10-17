@@ -88,3 +88,5 @@ jobs:
             }
             await core.summary.addRaw('Result: mode='+(doApply?'APPLY':'DRY RUN')+'; deleted='+deleted+'; estimated bytes reclaimed='+mb(freed)+' MiB; errors='+errors+'.\n').write();
             if (doApply && errors) core.setFailed('Some eligible artifact deletions failed; see log for permission or API errors.');
+
+# Explicit authorized cleanup pass; source and backups remain untouched.
