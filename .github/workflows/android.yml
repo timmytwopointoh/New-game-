@@ -1,6 +1,7 @@
 name: Android APK and emulator smoke test
 on:
   push:
+    branches: [main]
   workflow_dispatch:
 jobs:
   build:
@@ -9,7 +10,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
-      - uses: android-actions/setup-android@v3
+      - name: Use preinstalled Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          test -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: Build APK
         run: gradle :app:assembleDebug --no-daemon
@@ -22,7 +26,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
-      - uses: android-actions/setup-android@v3
+      - name: Use preinstalled Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          test -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - uses: reactivecircus/android-emulator-runner@v2
         with:
