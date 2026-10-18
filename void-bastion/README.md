@@ -13,7 +13,7 @@ Open `index.html` in a modern desktop/mobile browser. The same static assets are
 - Unit roster: Legionary (2R), Pathfinder (2R), Iron Guard (4R), Defense Turret (4R).
 - Planning: tap friendly unit, then destination or enemy in range. Orders are queued and can be cancelled by tapping the selected unit again. No action occurs while planning.
 - End Turn: actions resolve sequentially and turret auto-fire triggers; only then is the device handed to the other player via private transition.
-- Victory: destroy the opposing fortress core (26 HP). Each full round awards both players +3 requisition (reserved for future build-phase economy).
+- Victory: destroy the opposing fortress core (26 HP). Each full round awards both players +3 requisition. During planning, tap a unit card to queue reinforcements in your home zone. They spawn only when you end the turn; tapping a queued build tile cancels and refunds it.
 
 ## Android build (requires Android SDK 35, JDK 17 and Gradle 8.9)
 
