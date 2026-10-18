@@ -50,7 +50,7 @@ with open('realm-menu.png','rb') as f:
     print(*struct.unpack('>II',f.read(8)))
 PY
 )
-adb shell input tap "$((W / 2))" "$((H * 47 / 100))"
+adb shell input tap "$((W / 2))" "$((H * 55 / 100))"
 wait_for "FR_INTRO_READY" 18
 adb shell input keyevent 62
 wait_for "FR_PLAY_READY" 18
