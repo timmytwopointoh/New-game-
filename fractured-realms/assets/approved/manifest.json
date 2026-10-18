@@ -1,0 +1,11 @@
+{
+  "schema_version": "vq-approved-assets/1",
+  "state": "NO_APPROVED_ASSETS",
+  "required_fields_for_each_asset": [
+    "review_status=approved",
+    "source_sha256",
+    "recipe"
+  ],
+  "approved_assets": {},
+  "note": "Only reviewer-approved, traceable VQ GLB files may replace procedural preview models. No binary imports ship in this commit."
+}
