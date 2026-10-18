@@ -1,32 +1,46 @@
-# VOID BASTION — first playable local skirmish
+# VOID BASTION 3D — offline tactical skirmish
 
-Original grimdark science-fiction fortress-defense strategy game for **two players on one Android device**. No internet service, login, external graphics, downloaded packages at runtime, or proprietary game assets required. The title and factions are original, with a broad gothic military science-fiction influence. **Not an official Warhammer 40,000 product.**
+A playable, original **3D** grimdark science-fiction defense game for two players sharing one Android device. Inspired by gothic sci-fi aesthetics, but not an official Warhammer 40,000 game. The armies, models, game rules, and meshes are original and built in code.
 
-## Play right now
+## What is actually 3D
 
-Open `index.html` in a modern desktop/mobile browser. The same static assets are bundled in the Android WebView project. In-game instructions are available from the menu.
+The battlefield uses **WebGL 1** with a perspective camera, GPU depth testing, per-fragment lighting, fog and materials. All unit geometry is procedural and local: angular infantry with separate boots, pauldrons, helmets, chest plates and guns; large armored heavy troops, scout units, multi-barrel turrets, stronghold cores, rocky terrain and ruined obstacles. There is a small animated 3D menu diorama. No external 3D library, CDN, downloaded assets or internet is necessary.
 
-## Rules
+These are early low-poly 3D game meshes, **not** fully sculpted AAA characters, not licensed 40K models, and not yet skeletal animation/physically based textures. The rendering foundation allows later VQ/Veilforge mesh upgrades.
 
-- Player 1 controls Iron Wardens (blue left); Player 2 controls Ash Reavers (orange right).
-- Deployment: Each side starts with 14 requisition and must deploy at least two units in their starting 3-column zone.
-- Unit roster: Legionary (2R), Pathfinder (2R), Iron Guard (4R), Defense Turret (4R).
-- Planning: tap friendly unit, then destination or enemy in range. Orders are queued and can be cancelled by tapping the selected unit again. No action occurs while planning.
-- End Turn: actions resolve sequentially and turret auto-fire triggers; only then is the device handed to the other player via private transition.
-- Victory: destroy the opposing fortress core (26 HP). Each full round awards both players +3 requisition. During planning, tap a unit card to queue reinforcements in your home zone. They spawn only when you end the turn; tapping a queued build tile cancels and refunds it.
+## How to play
 
-## Android build (requires Android SDK 35, JDK 17 and Gradle 8.9)
+Open `index.html` (or the single HTML demo file) in a WebGL-capable browser. Select Local Skirmish. Player 1 places at least two units in the blue deployment zone. End deployment, pass device, and Player 2 places at least two in the orange zone. Then alternate turns: tap a friendly unit, tap a tile or enemy to queue a move/attack, and hit End Turn. Queued orders then animate before the secure handoff. Destroy the opposing fortress core (26 HP) to win.
 
-1. From the standalone `android` folder, run `gradle :app:assembleDebug --no-daemon`.
-2. Install `android/app/build/outputs/apk/debug/app-debug.apk` on an Android phone.
-3. The app uses no network permission; all files are packed in `android/app/src/main/assets/`.
+Move camera: **drag** to orbit, **pinch** to zoom, or use the + / − / ↺ buttons. A brief tap selects a tile and never rotates the camera. Troops move only when End Turn is pressed. Different 3D models correspond to different gameplay archetypes.
 
-When modifying any web file, copy `index.html`, `style.css`, `game-core.js`, and `app.js` into the Android assets folder before building. The GitHub CI workflow does this automatically and retains APK/screenshots for **one day** to minimize Actions storage.
+## Rules and economy
 
-## Testing
+- Two armies: Iron Wardens (blue) and Ash Reavers (orange).
+- Four unit types: Legionary 2R, Pathfinder 2R, Iron Guard 4R, Defense Turret 4R.
+- Each faction gets 14R initial placement, +3R per full round.
+- Reinforcements can be ordered in the home zone during planning; they materialize on End Turn.
+- Movement and attacks resolve sequentially, and defensive turrets auto-target enemy units.
+- Offline one-phone hotseat skirmish (not online multiplayer or AI).
 
-Run `node tests/rules.test.js` to check turn sequencing, deployment, legality, delayed execution, victory and turn handoff. This is a first functional 2D tactical rendering, not a finished 3D/AAA game. Its rules engine is separate from rendering so VQ/VEILFORGE 3D units can replace the procedural visuals later without replacing the tactical gameplay.
+## Android APK build
 
-## Isolation
+Requires JDK 17, Android SDK 35 and Gradle 8.9. Run from `android/`:
 
-Created in an isolated folder/branch of `timmytwopointoh/New-game-`. Does **not** modify ECHOFORM's existing app/main source, or `Project-hail` or `Engine-build`. Reuses only general development techniques.
+```bash
+gradle :app:assembleDebug --no-daemon
+```
+
+Install `android/app/build/outputs/apk/debug/app-debug.apk`. Android host WebView uses hardware acceleration, locked landscape orientation and no internet permission. The game assets are bundled under `android/app/src/main/assets/`. Keep assets synced when editing frontend files. The CI workflow builds debug APKs with one-day artifact retention, and runs the emulator only when manually dispatched with `emulator=true`.
+
+## Test
+
+```bash
+node --test tests/*.test.js
+```
+
+Tests cover 43 gameplay assertions, user-interface event wiring and full hotseat deployment, and actual 3D mesh/scenario WebGL method calls with a mocked GL context. **GPU shader execution, real browser visual output, and actual Android installation still require device/emulator verification.**
+
+## Project boundaries
+
+Source is isolated in `void-bastion/` in `timmytwopointoh/New-game-` on its dedicated feature branch. ECHOFORM and Project-hail/Engine-build remain unchanged. No third-party game code/assets are imported.

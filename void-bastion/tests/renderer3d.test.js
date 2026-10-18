@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict');
+const {Scene3D}=require('../renderer3d.js')||global.VoidBastion3D;
+const E=require('../game-core.js');
+class FakeGL{
+constructor(){this.VERTEX_SHADER=35633;this.FRAGMENT_SHADER=35632;this.LINK_STATUS=35714;this.COMPILE_STATUS=35713;this.ARRAY_BUFFER=34962;this.ELEMENT_ARRAY_BUFFER=34963;this.STATIC_DRAW=35044;this.DEPTH_TEST=2929;this.CULL_FACE=2884;this.LEQUAL=515;this.BACK=1029;this.SRC_ALPHA=770;this.ONE_MINUS_SRC_ALPHA=771;this.UNSIGNED_SHORT=5123;this.FLOAT=5126;this.TRIANGLES=4;this.BLEND=3042;this.COLOR_BUFFER_BIT=16384;this.DEPTH_BUFFER_BIT=256;this.calls=0;}
+createShader(){return{};} shaderSource(){}compileShader(){}getShaderParameter(){return true;}createProgram(){return{};}attachShader(){}linkProgram(){}getProgramParameter(){return true;}getAttribLocation(){return 0;}getUniformLocation(){return {};}useProgram(){}createBuffer(){return{};}bindBuffer(){}bufferData(){}uniformMatrix4fv(){}uniform3fv(){}uniform1f(){}viewport(){}enable(){}depthFunc(){}cullFace(){}clearColor(){}clear(){}disable(){}depthMask(){}blendFunc(){}enableVertexAttribArray(){}vertexAttribPointer(){}drawElements(){this.calls++;}}
+const gl=new FakeGL(),canvas={width:0,height:0,getContext(){return gl;},getBoundingClientRect(){return{left:0,top:0,width:1200,height:760}}};
+const scene=new Scene3D(canvas),state=E.newGame();E.start(state);scene.board(E,state,1000,null,null,null,0);assert.ok(gl.calls>100,'3D scene should use GPU draw calls');assert.equal(scene.supports3D,true);const center=scene.pick(600,380);assert.ok(center&&center.x>=0&&center.x<10&&center.y>=0&&center.y<8,'center ray should land on battlefield');const before=scene.dist;scene.zoom(100);assert.ok(scene.dist>before);scene.orbit(100,20);assert.ok(scene.az>1.12);
+E.deploy(state,'trooper',1,1);E.deploy(state,'heavy',2,2);state.active=1;E.deploy(state,'scout',8,1);E.deploy(state,'tower',7,2);scene.board(E,state,1500,1,{x:3,y:3},{type:'shot',from:{x:1,y:1},to:{x:8,y:1},p:0},.45);
+const menus=new Scene3D(canvas,'menu');menus.menu(2400);assert.ok(menus.counters.triangles>1000,'menu should contain thousands of projected mesh triangles');
+console.log('VOID BASTION: offline WebGL mesh construction, 3D scene, picking, controls, shots, menu passed');

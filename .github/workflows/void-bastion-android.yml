@@ -1,4 +1,4 @@
-name: VOID BASTION APK and optional emulator QA
+name: VOID BASTION 3D APK and optional emulator QA
 on:
   workflow_dispatch:
     inputs:
@@ -7,7 +7,7 @@ on:
         description: Run one emulator installation and screenshot smoke test
         default: false
   push:
-    branches: [feature/void-bastion-skirmish-20261018]
+    branches: [feature/void-bastion-skirmish-20261018, feature/void-bastion-3d-20261018]
     paths: ['void-bastion/**', '.github/workflows/void-bastion-android.yml']
 permissions:
   contents: read
@@ -25,6 +25,7 @@ jobs:
         run: |
           node void-bastion/tests/rules.test.js
           node void-bastion/tests/ui-smoke.test.js
+          node void-bastion/tests/renderer3d.test.js
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
       - name: Use Android SDK from runner
@@ -38,7 +39,7 @@ jobs:
         with: {gradle-version: '8.9'}
       - name: Bundle current web gameplay into offline Android assets
         run: |
-          cp void-bastion/{index.html,style.css,game-core.js,app.js} void-bastion/android/app/src/main/assets/
+          cp void-bastion/{index.html,style.css,game-core.js,renderer3d.js,app.js} void-bastion/android/app/src/main/assets/
       - name: Build debug APK
         working-directory: void-bastion/android
         run: gradle :app:assembleDebug --no-daemon
