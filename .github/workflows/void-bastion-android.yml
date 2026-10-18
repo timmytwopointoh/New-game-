@@ -1,0 +1,73 @@
+name: VOID BASTION APK and optional emulator QA
+on:
+  workflow_dispatch:
+    inputs:
+      emulator:
+        type: boolean
+        description: Run one emulator installation and screenshot smoke test
+        default: false
+  push:
+    branches: [feature/void-bastion-skirmish-20261018]
+    paths: ['void-bastion/**', '.github/workflows/void-bastion-android.yml']
+permissions:
+  contents: read
+concurrency:
+  group: void-bastion-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Test turn-based game mechanics
+        run: node void-bastion/tests/rules.test.js
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Use Android SDK from runner
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Bundle current web gameplay into offline Android assets
+        run: |
+          cp void-bastion/{index.html,style.css,game-core.js,app.js} void-bastion/android/app/src/main/assets/
+      - name: Build debug APK
+        working-directory: void-bastion/android
+        run: gradle :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: void-bastion-debug-apk
+          path: void-bastion/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 1
+  emulator-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.emulator }}
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: void-bastion-debug-apk, path: apk}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          script: |
+            adb install -r apk/app-debug.apk
+            adb shell am start -n com.voidbastion.game/.MainActivity
+            sleep 5
+            adb shell screencap -p /sdcard/void-bastion.png
+            adb pull /sdcard/void-bastion.png void-bastion.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: void-bastion-menu-screenshot
+          path: void-bastion.png
+          if-no-files-found: error
+          retention-days: 1
