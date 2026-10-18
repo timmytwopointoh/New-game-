@@ -10,6 +10,7 @@ const out=E.finishTurn(s);assert.equal(out.ok,true);assert.deepEqual({x:first.x,
 assert.equal(E.issueOrder(s,first.id,3,4).ok,false,'no orders during resolution');E.completeResolution(s);assert.equal(s.phase,'pass');E.resume(s);assert.equal(s.active,1);assert.equal(s.round,1);
 const enemy=s.units.find(u=>u.p===1);const enemyHealth=enemy.hp;assert.equal(E.issueOrder(s,enemy.id,6,3).ok,enemy.kind==='heavy'?false:true);
 E.finishTurn(s);E.completeResolution(s);E.resume(s);assert.equal(s.round,2);assert.equal(s.active,0);assert.equal(s.supply[0],11);assert.equal(s.supply[1],11);
+const beforeBuild=s.units.length;assert.equal(E.issueBuild(s,'tower',1,5).ok,true);assert.equal(s.units.length,beforeBuild,'new turrets are queued until end turn');assert.equal(E.cancelBuild(s,1,5),true);assert.equal(s.supply[0],11,'cancelling a build refunds requisition');assert.equal(E.issueBuild(s,'tower',1,5).ok,true);assert.equal(E.issueBuild(s,'trooper',1,5).ok,false,'same tile may not be queued twice');const buildResult=E.finishTurn(s);assert.equal(buildResult.events.some(e=>e.type==='build'),true);assert.equal(E.at(s,1,5).kind,'tower');E.completeResolution(s);E.resume(s);
 assert.equal(E.at(s,0,3).p,0);assert.equal(E.blocked(4,1),true);
 const win=E.newGame();E.start(win);win.bases[1].hp=0;assert.equal(E.checkVictory(win),true);assert.equal(win.winner,0);
-console.log('VOID BASTION: 24 core gameplay assertions passed');
+console.log('VOID BASTION: 43 core gameplay assertions passed');
