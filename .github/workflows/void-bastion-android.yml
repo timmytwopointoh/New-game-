@@ -22,7 +22,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
       - name: Test turn-based game mechanics
-        run: node void-bastion/tests/rules.test.js
+        run: |
+          node void-bastion/tests/rules.test.js
+          node void-bastion/tests/ui-smoke.test.js
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
       - name: Use Android SDK from runner
