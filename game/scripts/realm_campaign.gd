@@ -280,7 +280,7 @@ func _load_level(index: int) -> void:
     damage_flash = 0
     for i in range(3):
         var locations := [Vector3(-6, 0.95, -6), Vector3(7, 0.95, -19), Vector3(-4, 0.95, -31)]
-        var crystal := forge.make_shard()
+        var crystal: Node3D = forge.make_shard()
         crystal.position = locations[i]
         forge.add_child(crystal)
         shards.append({"node": crystal, "collected": false, "y": crystal.position.y})
@@ -298,7 +298,7 @@ func _load_level(index: int) -> void:
     _refresh_hud()
 
 func _spawn_enemy(kind: String, place: Vector3, boss: bool) -> void:
-    var actor := forge.make_actor(kind)
+    var actor: Node3D = forge.make_actor(kind)
     forge.add_child(actor)
     actor.position = place
     enemies.append({
