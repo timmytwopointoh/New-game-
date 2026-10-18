@@ -127,7 +127,7 @@ func _create_ui() -> void:
     overlay = ColorRect.new()
     canvas.add_child(overlay)
     overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    overlay.color = Color(0.015, 0.028, 0.044, 0.87)
+    overlay.color = Color(0.015, 0.028, 0.044, 0.74)
     var center := CenterContainer.new()
     overlay.add_child(center)
     center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -217,6 +217,7 @@ func _open_menu() -> void:
     _show_overlay("FRACTURED REALMS",
         "Five broken realms. One memory to restore.\nA third-person, offline 3D adventure.",
         [["BEGIN JOURNEY", "begin"], ["CONTINUE — REALM %d" % (max_unlocked + 1), "continue"], ["HOW TO PLAY", "help"]])
+    print("FR_MENU_READY")
 
 func _choose(option: String) -> void:
     match option:
@@ -317,6 +318,7 @@ func _begin_intro() -> void:
     letter_top.show()
     letter_bottom.show()
     subtitle.text = "Long ago, the world fractured into echoes..."
+    print("FR_INTRO_READY")
 
 func _start_play() -> void:
     mode = "play"
@@ -326,6 +328,7 @@ func _start_play() -> void:
     hud.show()
     hero.show()
     _refresh_hud()
+    print("FR_PLAY_READY")
 
 func _process(delta: float) -> void:
     game_time += delta

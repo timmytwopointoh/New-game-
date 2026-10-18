@@ -12,6 +12,7 @@ export = (root/"export_presets.cfg").read_text()
 models = json.loads((root/"assets/approved/manifest.json").read_text())
 assert len(re.findall(r'\{"name": ', forge)) == 5
 assert "com.fracturedrealms.game" in export
+assert all(m in campaign for m in ("FR_MENU_READY", "FR_INTRO_READY", "FR_PLAY_READY"))
 assert "window/handheld/orientation=0" in project
 assert 'renderer/rendering_method="mobile"' in project
 assert "ECHOFORM" not in project
