@@ -1,5 +1,5 @@
 extends Node3D
-## ECHOFORM: FRACTURED REALMS — offline five-stage 3D campaign.
+## FRACTURED REALMS — original standalone offline five-stage 3D campaign.
 ## Procedural candidate art; never an automatically approved VQ asset.
 
 const FORGE = preload("res://scripts/forge.gd")
@@ -193,7 +193,7 @@ func _show_overlay(heading: String, description: String, choices: Array) -> void
     for child in overlay_box.get_children():
         child.queue_free()
     var brand := _label(overlay_box, 15, Color("#67dbdc"))
-    brand.text = "V Q   /   E C H O F O R M"
+    brand.text = "V Q   /   F R A C T U R E D"
     brand.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var title := _label(overlay_box, 37, Color("#f2e7cd"))
     title.text = heading
