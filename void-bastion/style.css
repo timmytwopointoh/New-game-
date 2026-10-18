@@ -15,3 +15,18 @@
 @keyframes panelArrival{0%{opacity:0;transform:translateY(22px) scale(.975)}100%{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes heroArrival{0%{opacity:0;transform:translate(-15px,-41%)}100%{opacity:1;transform:translate(0,-44%)}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+/* Fully offline, true 3D WebGL battlefield and interactive camera */
+#menu3d{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;filter:drop-shadow(0 20px 38px #000c)}
+.webgl-ready .illustration .fort,.webgl-ready .illustration .horizon,.webgl-ready .illustration .halo{display:none}
+#board{cursor:crosshair;touch-action:none;outline:none;background:radial-gradient(ellipse at 50% 50%,#1a2a30,#070d13 85%)}
+.camera-controls{position:absolute;z-index:4;right:12px;top:41px;display:flex;gap:5px;align-items:center;max-width:calc(100% - 24px)}
+.camera-caption{font-size:9px;letter-spacing:1.1px;color:#e6d8adcf;margin-right:8px;text-shadow:0 2px 3px #000}
+.camera-controls button{height:32px;min-width:33px;padding:0 9px;color:#e8d4ae;border:1px solid #dabd806c;background:#111921dc;font-size:21px;line-height:1;border-radius:2px;backdrop-filter:blur(3px)}
+.camera-controls button:active{background:#6e5235}
+.battle-toast{position:absolute;left:50%;bottom:44px;transform:translate(-50%,8px);z-index:5;padding:8px 16px;white-space:normal;text-align:center;max-width:min(90%,530px);font-size:11px;font-weight:700;letter-spacing:.4px;background:#08111de0;border:1px solid #dca75a78;color:#ffe2b0;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+.battle-toast.show{opacity:1;transform:translate(-50%,0)}.gpu-error{position:absolute;inset:25%;z-index:5;display:grid;place-items:center;background:#171c23;color:#ffd1ab;padding:25px;border:1px solid #ee967a}
+.gpu-error[hidden]{display:none!important}
+#passScreen{background:#03060b!important;backdrop-filter:none!important}
+#passScreen .handoff-card{background:#080e16;box-shadow:0 0 0 100vmax #02050aeb}
+@media(max-width:700px){.illustration{right:-10%;width:102%;opacity:.75}.camera-caption{display:none}.camera-controls button{min-width:29px;height:29px;padding:0 7px}.camera-controls{right:7px;top:37px}.hero{z-index:4}.menu-footer{z-index:5}}
+@media(max-height:520px){.camera-controls{top:36px}.camera-caption{display:none}}

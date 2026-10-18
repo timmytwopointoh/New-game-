@@ -17,6 +17,7 @@ public final class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         game = new WebView(this);
+        game.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         game.setBackgroundColor(0xff070a0f);
         WebSettings settings = game.getSettings();
         settings.setJavaScriptEnabled(true);
