@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#070b11"><title>VOID BASTION — Skirmish</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="ambient" aria-hidden="true"></canvas>
+<div id="menu" class="screen">
+  <header class="masthead"><span class="crest">◆</span><span>THE OUTER DOMINION</span><span class="edition">TACTICAL DEFENSE / OFFLINE</span></header>
+  <section class="hero">
+    <div class="eyebrow">IN THE SHADOW OF A DYING STAR</div>
+    <h1>VOID<br><em>BASTION</em></h1>
+    <div class="hero-line"></div>
+    <p>The fortress must stand. The enemy must fall.<br>Two commanders. One device. No mercy.</p>
+    <div class="menu-actions"><button id="newGame" class="action primary">⚔ &nbsp; LOCAL SKIRMISH <span>›</span></button><button id="howButton" class="action secondary">HOW TO PLAY <span>↗</span></button></div>
+  </section>
+  <footer class="menu-footer"><span>01 / TWO-PLAYER HOTSEAT</span><span>02 / STRATEGIC DEPLOYMENT</span><span>03 / CINEMATIC RESOLUTION</span></footer>
+  <div class="illustration"><div class="halo"></div><div class="fort"><div class="fort-spire s1"></div><div class="fort-spire s2"></div><div class="fort-spire s3"></div><div class="fort-keep"></div></div><div class="horizon"></div></div>
+</div>
+<div id="game" class="screen hidden">
+  <header class="game-top"><button id="backMenu" class="nav-back" title="Back to menu">‹</button><div class="game-brand">VOID <b>BASTION</b> <small>TACTICAL COMMAND</small></div><div class="round-wrap">ROUND <b id="roundNum">01</b></div></header>
+  <div class="scorebar"><div class="faction faction-blue"><small>PLAYER 01</small><strong>IRON WARDENS</strong><div class="healthbar"><span id="base0bar"></span></div><small id="base0health">CORE 26 / 26</small></div><div class="score-center"><span id="phaseLabel">DEPLOYMENT</span><b id="activeLabel">PLAYER ONE</b><small id="hintLabel">Choose a unit below</small></div><div class="faction faction-orange"><small>PLAYER 02</small><strong>ASH REAVERS</strong><div class="healthbar"><span id="base1bar"></span></div><small id="base1health">CORE 26 / 26</small></div></div>
+  <div class="game-main"><div class="battlefield-frame"><div class="battle-topline"><span>◈ &nbsp; THE ASHEN FRONT</span><span id="battleIndicator">DEPLOYMENT ZONE</span></div><canvas id="board" aria-label="Tactical battlefield. Tap tiles to deploy or order units."></canvas><div class="battle-bottomline">TACTICAL FEED <span id="gameLog">Awaiting your commanders.</span></div></div></div>
+  <div class="command-dock"><div class="dock-title"><span id="dockTitle">UNIT REQUISITION</span><span id="supplyText">SUPPLY 14</span></div><div id="unitCards" class="unit-cards"></div><div class="dock-footer"><div id="selectionText" class="selection-text">Select a unit, then tap an open tile in your zone.</div><button id="endPhase" class="action primary compact">LOCK DEPLOYMENT <span>›</span></button></div></div>
+</div>
+<div id="passScreen" class="overlay hidden"><div class="scanline"></div><div class="handoff-card"><div class="eyebrow">SECURE COMMAND HANDOFF</div><div class="big-chevron">⟡</div><div class="screen-label">PASS THE DEVICE TO</div><h2 id="passTitle">PLAYER TWO</h2><h3 id="passFaction">ASH REAVERS</h3><p>Battlefield orders are hidden until the next commander is ready.</p><button id="readyButton" class="action primary">I'M READY <span>›</span></button><small>YOUR VIEW WILL BE UNLOCKED</small></div></div>
+<div id="victoryScreen" class="overlay hidden"><div class="handoff-card"><div class="eyebrow">ENGAGEMENT COMPLETE</div><div class="big-chevron">✦</div><div class="screen-label">THE FIELD BELONGS TO</div><h2 id="winnerTitle">PLAYER ONE</h2><h3 id="winnerFaction">IRON WARDENS</h3><p>The enemy fortress has fallen. Victory belongs to the last bastion standing.</p><button id="rematch" class="action primary">NEW SKIRMISH <span>›</span></button></div></div>
+<div id="instructions" class="overlay hidden"><div class="rules-panel"><div class="eyebrow">COMMANDER'S FIELD MANUAL</div><h2>HOW TO PLAY</h2><p><strong>1 / Deployment.</strong> Player One places at least two units on the blue side. Pass the device. Player Two deploys on the orange side. Each has 14 requisition.</p><p><strong>2 / Issue orders.</strong> Tap your unit, then an empty tile to move or an enemy in range to attack. Orders stay queued until End Turn; tap a selected unit again to cancel its order. During planning, tap a troop card to queue reinforcements on your home-zone tiles; tap that card again to return to movement orders.</p><p><strong>3 / Execute.</strong> End Turn launches animated moves and fire, including automatic turret fire. Then a privacy screen hands control to your rival.</p><p><strong>4 / Victory.</strong> Destroy the opposing fortress core. Gain 3 requisition every full round to build reinforcements and defenses.</p><button id="closeRules" class="action primary">RETURN <span>›</span></button></div></div>
+<script src="game-core.js"></script><script src="app.js"></script>
+</body></html>
