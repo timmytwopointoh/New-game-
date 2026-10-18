@@ -25,7 +25,20 @@ adb shell settings put secure immersive_mode_confirmations confirmed || true
 adb logcat -c || true
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
 wait_for "FR_MENU_READY" 55
-sleep 3
+# Godot may print the ready marker before Android has presented its first frame.
+# A boot splash on this fixed emulator is far smaller than the textured menu.
+for frame in $(seq 1 40); do
+  adb shell screencap -p /sdcard/realm-menu.png
+  adb pull /sdcard/realm-menu.png realm-menu.png >/dev/null
+  BYTES="$(wc -c < realm-menu.png)"
+  if [ "$BYTES" -gt 65000 ]; then
+    echo "FR_MENU_PIXELS_READY bytes=$BYTES"
+    break
+  fi
+  sleep 2
+done
+test "$(wc -c < realm-menu.png)" -gt 65000 || { echo "MENU_STILL_LOADING_OR_BLANK"; exit 1; }
+sleep 2
 PID="$(adb shell pidof "$PKG" | tr -d '\r' || true)"
 test -n "$PID" || { echo "GAME_PROCESS_NOT_RUNNING"; exit 1; }
 adb shell screencap -p /sdcard/realm-menu.png
