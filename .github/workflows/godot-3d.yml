@@ -39,6 +39,8 @@ jobs:
           wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
           unzip -q Godot_v4.3-stable_export_templates.tpz
           mv templates/* ~/.local/share/godot/export_templates/4.3.stable/
+      - name: Check five-stage campaign source contract
+        run: python3 game/tests/verify_campaign.py
       - name: Validate project
         run: |
           ./Godot_v4.3-stable_linux.x86_64 --headless --path game --editor --quit

@@ -1,9 +1,15 @@
 config_version=5
 
 [application]
-config/name="ECHOFORM"
-run/main_scene="res://scenes/world.tscn"
+config/name="ECHOFORM: Fractured Realms"
+run/main_scene="res://scenes/campaign.tscn"
 config/features=PackedStringArray("4.3", "Mobile")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/handheld/orientation=1
 
 [rendering]
 textures/vram_compression/import_etc2_astc=true
