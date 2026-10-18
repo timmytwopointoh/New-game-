@@ -12,7 +12,8 @@ export = (root/"export_presets.cfg").read_text()
 models = json.loads((root/"assets/approved/manifest.json").read_text())
 assert len(re.findall(r'\{"name": ', forge)) == 5
 assert "com.fracturedrealms.game" in export
-assert "window/handheld/orientation=0" in project, "Landscape should be native on phones"
+assert "window/handheld/orientation=0" in project
+assert 'renderer/rendering_method="mobile"' in project
 assert "ECHOFORM" not in project
 assert 'res://scenes/main.tscn' in project
 assert 'res://scripts/campaign.gd' in scene

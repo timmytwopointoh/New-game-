@@ -9,8 +9,13 @@ trap capture_diagnostics EXIT
 adb install -r apk/fractured-realms-debug.apk
 adb shell pm list packages | grep -q "package:$PKG"
 adb logcat -c || true
+adb shell settings put secure immersive_mode_confirmations confirmed || true
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
 sleep 12
+read -r W H < <(adb shell wm size | tr -d '\r' | python3 -c 'import sys,re; a=re.findall(r"(\d+)x(\d+)",sys.stdin.read()); print(*(a[-1] if a else (1080,1920)))')
+# Dismiss first-run Android immersive instruction if present; harmless in menu.
+adb shell input tap "$((W * 73 / 100))" "$((H * 24 / 100))" || true
+sleep 2
 PID="$(adb shell pidof "$PKG" | tr -d '\r' || true)"
 test -n "$PID" || { echo "GAME_PROCESS_NOT_RUNNING"; exit 1; }
 adb shell screencap -p /sdcard/realm-menu.png
@@ -36,7 +41,7 @@ if cmp -s realm-menu.png realm-play.png; then
   echo "NO_VISUAL_CHANGE_AFTER_MENU_AND_INPUT"
   exit 1
 fi
-if grep -iE 'USER SCRIPT ERROR|SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid set index|Invalid get index|FATAL EXCEPTION|ANR in com.fracturedrealms.game' realm-logcat.txt; then
+if grep -iE 'USER SCRIPT ERROR|SCRIPT ERROR|Parse Error|Failed to load script|SceneShaderGLES3: Program linking failed|Fragment shader active uniforms exceed|_compile_specialization|Invalid call|Invalid set index|Invalid get index|FATAL EXCEPTION|ANR in com.fracturedrealms.game' realm-logcat.txt; then
   echo "GAME_LOG_REPORTED_RUNTIME_ERROR"
   exit 1
 fi
