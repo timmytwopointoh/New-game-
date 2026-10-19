@@ -1,0 +1,41 @@
+name: Cove Capers - Android APK (review build)
+on:
+  push:
+    branches: [feature/pecks-cove-capers-20261018]
+    paths:
+      - 'pecks-cove-capers/**'
+      - '.github/workflows/pecks-cove-capers.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cove-capers-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Configure preinstalled Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - name: Validate JavaScript syntax
+        run: node --check pecks-cove-capers/web/game.js
+      - name: Build standalone debug APK
+        working-directory: pecks-cove-capers/android
+        run: gradle :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pecks-cove-capers-debug
+          path: pecks-cove-capers/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 1
