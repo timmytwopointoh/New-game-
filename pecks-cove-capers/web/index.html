@@ -82,6 +82,24 @@ html,body,#shell,#gameScreen,#controls,#controls *,#world{user-select:none!impor
 #titleScreen .crewCard{border-color:#8ee0d1}#frontPlay{background:#ffda67}
 #hud{border-color:#90e3cf}#miniCanvas{border-color:#fff7bb}
 @media(max-width:700px){#abilityBars{width:100%;max-width:none;grid-template-columns:repeat(4,1fr)}.perk{grid-column:1/-1}.ability{font-size:9px}.ability span{width:35px}.bottomRow{gap:6px!important}}
+
+/* v0.10: large touch minigames on landscape phones and tablets */
+#minigameOverlay{padding:5px 9px;align-items:center;justify-content:center}
+#minigameOverlay .miniPanel{width:min(96vw,1020px);height:auto;max-height:98dvh;padding:7px 14px;overflow-y:auto;display:flex;flex-direction:column;justify-content:center}
+#minigameOverlay .miniPanel h2{font-size:clamp(16px,3.2vh,28px);line-height:1.1}
+#minigameOverlay .miniPanel p{margin:2px 0 5px;font-size:clamp(10px,2.2vh,15px)}
+#minigameOverlay #miniCanvas{width:100%;height:min(64dvh,calc(96vw * 280 / 460));max-height:none;min-height:135px;aspect-ratio:auto;object-fit:fill;border-width:3px;flex:1 1 auto}
+#minigameOverlay .miniBar{height:12px;min-height:12px;margin-top:6px;flex-shrink:0}
+#minigameOverlay .miniFoot{margin-top:6px;min-height:33px;flex-shrink:0}
+#minigameOverlay #quitMini{padding:6px 12px}
+@media(orientation:landscape) and (max-height:520px){
+ #minigameOverlay .miniPanel{width:min(96vw,1020px);padding:5px 12px;gap:0}
+ #minigameOverlay #miniCanvas{height:61dvh;min-height:0}
+ #minigameOverlay .miniPanel h2{font-size:17px}
+ #minigameOverlay .miniPanel p{font-size:11px}
+ #minigameOverlay .miniBar{height:9px;min-height:9px;margin-top:4px}
+ #minigameOverlay .miniFoot{min-height:29px;margin-top:4px}
+}
 </style></head><body><div id="shell"><canvas id="sky" width="480" height="270"></canvas><canvas id="menuWorld" width="960" height="540" aria-hidden="true"></canvas><section id="frontMenu" aria-label="Main menu"><div class="frontShell"><div class="brandCrab" aria-hidden="true">🦀</div><div class="tag">★ WELCOME TO THE WATERFRONT ★</div><h1 class="logo">PEK'S PLUNDER<small>THE GHOST SHIFT</small></h1><p class="frontSubtitle">A wild day of seafood, teamwork, and a very mischievous ghost!</p><div id="frontWallet" class="frontInfo">🪙 0 · DAY 1</div><div class="frontButtons">
  <button id="frontPlay" class="bigButton">▶ NEW GAME</button>
  <button id="frontContinue" class="bigButton">▶ CONTINUE SHIFT</button>

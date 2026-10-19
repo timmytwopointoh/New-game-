@@ -117,12 +117,12 @@ function ellipseCollision(x,y,t,margin=0){const dx=(x-t.x)/(TABLE_COLLISION.rx+m
 function canStand(x,y){
  if(!(WALK_ROOMS.some(r=>inRect(x,y,r))||inRect(x,y,{x:232,y:990,w:62,h:220})))return false;
  for(const t of DINER_TABLES)if(ellipseCollision(x,y,t,5))return false;
- for(const b of WALL_ZONES)if(inRect(x,y,b,12))return false;
- // Wall boundaries are collidable except at designated pressure doors and open cold storage.
- if(x>843&&x<875&&y>715&&y<1330 && Math.abs(y-860)>45 && Math.abs(y-1113)>48)return false; // bar/kitchen
- if(y>687&&y<714&&x>863&&x<1447 && Math.abs(x-1262)>49)return false; // galley/chowder
- if(x>1415&&x<1450&&y>829&&y<1326 && Math.abs(y-1100)>48)return false; // kitchen/employee hall
- if(x>1435&&x<1459&&y>355&&y<802 && Math.abs(y-573)>49)return false; // chowder/tiki
+ for(const b of WALL_ZONES)if(inRect(x,y,b,10))return false;
+ if(x>840&&x<865&&y>851&&y<1333&&Math.abs(y-899)>51)return false;
+ if(y>697&&y<721&&x>1040&&x<1570&&Math.abs(x-1262)>52)return false;
+ if(x>1423&&x<1441&&y>811&&y<1329&&Math.abs(y-1170)>51)return false;
+ if(x>1569&&x<1589&&y>358&&y<807&&Math.abs(y-574)>51)return false;
+ if(y>1043&&y<1064&&x>1440&&x<1585&&Math.abs(x-1515)>49)return false;
  for(const d of DOORS){
   if(game?.doors&&game.doors[d.id]!==undefined&&game.doors[d.id]<.67){
    const inside=d.axis==='h'?Math.abs(y-d.y)<13&&Math.abs(x-d.x)<42:Math.abs(x-d.x)<13&&Math.abs(y-d.y)<42;
@@ -131,6 +131,7 @@ function canStand(x,y){
  }
  return true;
 }
+
 function updateDoors(dt){if(!game)return;game.doors=game.doors||{};
  for(const d of DOORS){const pressure=Math.hypot(game.x-d.x,game.y-d.y)<64;
   const old=game.doors[d.id]||0;game.doors[d.id]=Math.min(1,Math.max(0,old+(pressure?8:-1.7)*dt));
@@ -138,6 +139,65 @@ function updateDoors(dt){if(!game)return;game.doors=game.doors||{};
 }
 // Find an accessible standing point near each drawn station, including table edges.
 // The furniture itself remains solid; interaction happens at its front edge.
+
+/* V0.10 player-requested restaurant routing: bar east of the galley, chowder
+ room north-east, waterfront tiki boardwalk, right-back staff entrance. */
+PICKUP.x=1380;PICKUP.y=1000;EXIT.x=344;EXIT.y=1085;
+DINER_TABLES.splice(0,DINER_TABLES.length,
+ {x:495,y:961},{x:737,y:969},{x:495,y:1200},{x:740,y:1195},
+ {x:1160,y:502},{x:1405,y:511},{x:1715,y:526},{x:1913,y:550});
+WALK_ROOMS.splice(0,WALK_ROOMS.length,
+ {id:'customer',x:281,y:842,w:568,h:506},
+ {id:'dining-upper-walk',x:760,y:705,w:310,h:198},
+ {id:'bar',x:1431,y:817,w:158,h:241},
+ {id:'kitchen',x:865,y:713,w:568,h:618},
+ {id:'chowder',x:1040,y:359,w:540,h:376},
+ {id:'tiki',x:1570,y:354,w:483,h:455},
+ {id:'hall',x:1431,y:1035,w:180,h:325},
+ {id:'prep',x:1590,y:810,w:236,h:270},
+ {id:'fridge',x:1812,y:1035,w:227,h:296},
+ {id:'freezer',x:1812,y:792,w:227,h:253},
+ {id:'staff-passage',x:810,y:1317,w:850,h:150},
+ {id:'employee-backyard',x:1540,y:1300,w:380,h:185},
+ {id:'pier',x:210,y:290,w:196,h:795},
+ {id:'entrance-bridge',x:281,y:825,w:131,h:125});
+WALL_ZONES.splice(0,WALL_ZONES.length,
+ {x:893,y:752,w:313,h:73},
+ {x:901,y:884,w:460,h:70},
+ {x:1482,y:866,w:66,h:151},
+ {x:1635,y:374,w:235,h:45},
+ {x:1670,y:1030,w:110,h:35});
+DOORS.splice(0,DOORS.length,
+ {id:'chowder',x:1262,y:719,axis:'h',name:'CHOWDER ROOM'},
+ {id:'employee',x:1432,y:1170,axis:'v',name:'KITCHEN'},
+ {id:'customer',x:856,y:899,axis:'v',name:'DINING'},
+ {id:'bar',x:1515,y:1056,axis:'h',name:'BAR / HALL'},
+ {id:'public',x:281,y:1085,axis:'v',name:'MAIN ENTRANCE'},
+ {id:'staff',x:1551,y:1349,axis:'h',name:'STAFF ENTRY'},
+ {id:'tiki',x:1580,y:574,axis:'v',name:'TIKI DECK'},
+ {id:'prep',x:1639,y:1065,axis:'h',name:'PREP'});
+NO_DOOR_OPENINGS.splice(0,NO_DOOR_OPENINGS.length,{x:1814,y:1128},{x:1930,y:1034});
+const STATIONS_V10=[
+ [[510,965],[1010,850],[1130,835],[505,1170],[1106,845],[945,850]],
+ [[1665,990],[945,925],[1375,993],[1164,970],[1084,970],[1358,970]],
+ [[1380,1000],[1150,503],[1405,515],[737,1050],[520,1190],[1375,1005]],
+ [[1640,1050],[1330,1120],[760,820],[1680,985],[1920,1070],[1490,1260]],
+ [[355,1080],[510,962],[740,965],[320,1140],[1160,530],[330,1065]],
+ [[1460,872],[1545,930],[1780,600],[1550,1012],[1650,760],[1970,685]],
+ [[520,958],[740,960],[740,1192],[742,1160],[1490,1079],[1540,1400]],
+ [[305,455],[1910,1160],[1720,955],[1670,965],[1900,1170],[1920,880]],
+ [[1650,650],[370,420],[1970,700],[1405,580],[290,400],[357,1290]],
+ [[1290,600],[1690,950],[1510,1280],[948,970],[1900,1170],[300,550]]
+];
+for(let i=0;i<BASE_ROLE_COUNT;i++)for(let k=0;k<6;k++){
+ roles[i].tasks[k][2]=STATIONS_V10[i][k][0];
+ roles[i].tasks[k][3]=STATIONS_V10[i][k][1];
+}
+CREW_SPOTS.splice(0,CREW_SPOTS.length,[1085,851],[1040,999],[722,916],[1244,1123],[358,1109],
+ [1515,918],[648,1109],[1680,945],[1645,642],[1510,1282]);
+sites.splice(0,sites.length,{x:743,y:943},{x:1020,y:893},{x:1300,y:558},
+ {x:1720,y:613},{x:1670,y:960},{x:515,y:1190},{x:1500,y:1300});
+
 function alignRoleStations(){
  const find=(x,y)=>{if(canStand(x,y))return [x,y];
   for(let r=18;r<=135;r+=9)for(let a=0;a<32;a++){
@@ -334,7 +394,7 @@ function refreshTaskBoard(){if(!game)return;
 function toggleBoard(force){if(!game||state!=='playing')return;game.boardOpen=typeof force==='boolean'?force:!game.boardOpen;
  $('taskBoard').classList.toggle('hidden',!game.boardOpen);if(game.boardOpen){game.work=false;keys={};dpad=null;refreshTaskBoard()}}
 
-function startingSpot(role){return {x:1501,y:1340}}
+function startingSpot(role){return {x:1595,y:1390}}
 function openFront(){
  state='front';game=null;keys={};dpad=null;introDone=true;introStarted=0;
  $('sunriseIntro').classList.add('hidden');$('sunriseIntro').classList.remove('introFade');
@@ -400,10 +460,10 @@ function update(dt){
  if(state==='walkin'){
   game.introWalk=(game.introWalk||0)+dt;
   const t=game.introWalk;
-  if(t<1.25){game.x=1501;game.y=1340-210*t;}
-  else if(t<2.25){game.x=1501-(t-1.25)*110;game.y=1077;}
-  else if(t<3.15){game.x=1391-(t-2.25)*65;game.y=1077;}
-  else {game.x=1332;game.y=1077;state='playing';game.paused=false;toast('🦀 CLOCKED IN — LET’S WORK!');}
+  if(t<1.1){game.x=1595;game.y=1390-t*160;}
+  else if(t<2.1){game.x=1595-(t-1.1)*110;game.y=1214;}
+  else if(t<3.15){game.x=1485-(t-2.1)*111;game.y=1170;}
+  else {game.x=1368;game.y=1170;state='playing';game.paused=false;toast('🦀 CLOCKED IN — LET’S WORK!');}
   game.camX=game.x;game.camY=game.y;updateDoors(dt);return;
  }
  if(game.paused||game.boardOpen||game.mini||state!=='playing')return;
@@ -586,12 +646,58 @@ function wallsAndDoors(t){
  // Open cold storage portals are framed without door objects.
  for(const d of NO_DOOR_OPENINGS)text(ctx,'↔',d.x,d.y,22,'#60d1ba','center',false);
 }
-function world(t){
- pierAndOutside(t);bar(t);dining(t);chowder(t);tiki(t);kitchen(t);employeeHall(t);coldStorage(t);
- // Connect chowder wall to galley only to the RIGHT of the three sinks.
+
+function chowderV10(t){
+ colorfulRoom(1040,359,540,370,'#ffebb9','#c98776','',0,0);
+ table(1160,502);table(1405,511);
+ for(let j=0;j<5;j++){ellipse(ctx,1085+j*102,395,16,8,'#ffcf7c');ellipse(ctx,1085+j*102,395,8,4,'#fff7b0')}
  pRect(1218,703,91,21,'#fff2c5');
- // No door at prep/refrigerator/freezer room thresholds by design.
- wallsAndDoors(t);labels();
+}
+function barV10(t){
+ colorfulRoom(1435,817,148,241,'#c8eff2','#46aabb','',0,0);
+ shinySteel(1483,858,65,166);
+ for(let i=0;i<6;i++){let y=870+i*24;pRect(1497,y,18,16,['#f9a7a3','#ffc86d','#a1e6c4','#93ceef'][i%4]);ellipse(ctx,1508,y,9,4,'#fff7dc')}
+ rounded(ctx,1411,899,26,139,5,'#fff2bc');pRect(1419,911,9,112,'#43a6a7');
+ text(ctx,'PICKUP',1374,1018,14,'#20526b','center',false);
+}
+function tikiV10(t){
+ colorfulRoom(1590,354,446,453,'#f8d7bd','#df8b94','',0,0);
+ table(1715,526);table(1913,550);
+ shinySteel(1665,388,281,52);
+ for(let i=0;i<9;i++){pRect(1675+i*29,399,18,30,['#fa9c96','#f5d575','#73ddd5','#9fc9f0'][i%4]);ellipse(ctx,1683+i*29,399,9,5,'#fff6dc')}
+ for(let x=1598;x<2022;x+=45){line(ctx,x,364,x+18,382,'#8f8b97',2);pRect(x,383,22,13,['#ffc872','#fc94a2','#89edcf'][Math.floor(x/45)%3])}
+}
+function coldStorageV10(t){
+ colorfulRoom(1590,810,236,265,'#e7e9c4','#80b6a4','',0,0);
+ for(let i=0;i<4;i++)shinySteel(1615+i*45,832,33,30);
+ colorfulRoom(1812,1035,227,296,'#caeff0','#659eb2','',0,0);
+ for(let i=0;i<4;i++){rounded(ctx,1842+i*43,1230,31,53,5,'#9bc5d5');pRect(1847+i*43,1235,21,12,'#fff9dc')}
+ colorfulRoom(1812,792,227,244,'#d6eaff','#82adce','',0,0);
+ for(let i=0;i<5;i++)text(ctx,'❄',1838+i*39,870+(i%2)*65,25,'#e4faff','center',false);
+ pRect(1801,1090,29,117,'#b5e9d6');pRect(1850,1024,150,24,'#bdebf9');
+ text(ctx,'OPEN',1816,1140,12,'#2b856a','center',false);text(ctx,'❄ FREEZER OPENING',1922,1038,11,'#2b7385','center',false);
+}
+function employeeHallV10(t){
+ floorPattern(815,1330,875,120,'#daf3dc','#88c8bd');
+ pRect(829,1336,848,8,'#75baa8');pRect(829,1445,848,6,'#75baa8');
+ colorfulRoom(1434,1057,162,282,'#daf2dc','#72b9b1','',0,0);
+ floorPattern(1570,1294,280,162,'#b9e0b7','#7cb896');pRect(1595,1333,13,88,'#d9f9cc');
+ sign(1490,1300,176,'STAFF HALL');
+ text(ctx,'← KITCHEN',1493,1206,12,'#235d65','center',false);
+ text(ctx,'↑ PREP',1530,1092,12,'#235d65','center',false);
+ text(ctx,'↓ DINING',1480,1388,12,'#235d65','center',false);
+}
+function labelsV10(){
+ sign(940,640,230,'🫧 DISH PIT');sign(1180,326,225,'CHOWDER ROOM');
+ sign(975,1280,240,'★ CENTRAL KITCHEN');sign(1426,783,154,'🍹 BAR');
+ sign(335,801,250,'FRONT DINING');sign(1661,328,200,'TIKI DECK');
+ sign(1598,782,194,'PREP ROOM');sign(1815,1307,194,'WALK-IN COOLER');
+ sign(1808,779,200,'FREEZER');sign(1520,1440,190,'STAFF ENTRANCE');
+}
+function world(t){
+ pierAndOutside(t);dining(t);chowderV10(t);tikiV10(t);kitchen(t);
+ barV10(t);employeeHallV10(t);coldStorageV10(t);
+ wallsAndDoors(t);labelsV10();
  for(let i=0;i<17;i++){const x=225+i*99;ellipse(ctx,x,311+Math.sin(t*2+i)*3,4,4,'#fff7c0')}
 }
 function workMarker(x,y,label,t,color='#ffcc73'){
