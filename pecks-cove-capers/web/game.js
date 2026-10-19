@@ -1,9 +1,10 @@
-/* Peck's Cove Capers: original procedural pixel art and offline mini-game. */
+/* Cove Clatter: original procedural pixel-art restaurant game and animated attract demo. */
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
-const cvs = $('world'), ctx = cvs.getContext('2d'), sky=$('sky'), sc=sky.getContext('2d');
-ctx.imageSmoothingEnabled=false;sc.imageSmoothingEnabled=false;
+const cvs = $('world'), mainCtx = cvs.getContext('2d'), sky=$('sky'), sc=sky.getContext('2d'), demoCanvas=$('menuWorld'), demoCtx=demoCanvas.getContext('2d');
+let ctx=mainCtx;
+ctx.imageSmoothingEnabled=false;sc.imageSmoothingEnabled=false;demoCtx.imageSmoothingEnabled=false;
 const W=960,H=540,MAP_W=1480,MAP_H=850,TAU=Math.PI*2;
 const C={sea:'#318aa0',sea2:'#6aafaf',sand:'#dfbd81',plank:'#ab7754',plank2:'#c39268',plankLine:'#8b5c4e',wall:'#f5dea9',wallShadow:'#a77c5d',floor:'#d4ac7c',seaDark:'#205e78',mint:'#b4e4bd',foam:'#def7d6',yellow:'#ffe4a0',coral:'#e98a70',ink:'#1b3e4b',white:'#fff2d3'};
 const roles=[
@@ -344,8 +345,81 @@ function render(t){
  drawObjectiveCompass(camX,camY,zoom);
  if(game?.paused&&state==='playing'){rect(ctx,0,0,W,H,'#092f3eac');rounded(ctx,350,182,260,120,18,'#245d68');text(ctx,'PAUSED',480,244,39,'#ffe9a8','center');text(ctx,'Tap Ⅱ to continue',480,274,17,'#d1f2e9','center')}
 }
+/* Zero-input attract mode: the actual restaurant scene renderer and shared character sprites
+   keep bustling behind the main menu. Entirely independent of the player's active shift.
+   Guests and workers repeatedly enter, move, cook, eat, clean and wave. */
+const DEMO_PERIOD=40;
+const DEMO_ROUTES=[
+ [[150,500],[245,515],[206,351],[310,371],[155,500]],
+ [[235,355],[310,352],[307,255],[220,351],[235,355]],
+ [[930,410],[935,455],[1014,463],[1215,520],[1321,536],[1018,448],[930,410]],
+ [[540,420],[700,414],[924,438],[938,260],[540,420]],
+ [[1220,252],[1244,439],[1213,460],[1220,252]],
+ [[1367,446],[1314,473],[1367,446]],
+ [[745,532],[912,525],[924,443],[741,535]],
+ [[1377,677],[1250,671],[1068,615],[1377,677]],
+ [[1163,646],[1200,626],[1090,661],[1163,646]],
+ [[1035,461],[1024,510],[1350,476],[1035,461]]
+];
+function demoPath(nodes,t,duration=19,offset=0){
+ let phase=((t+offset)%duration+duration)%duration / duration * nodes.length;
+ const a=Math.floor(phase), f=phase-a, x=nodes[a%nodes.length], y=nodes[(a+1)%nodes.length];
+ const smooth=f*f*(3-2*f);return [x[0]+(y[0]-x[0])*smooth,x[1]+(y[1]-x[1])*smooth];
+}
+function menuAttract(t){
+ if(state!=='menu')return;
+ // Simulated shift is not the player's game object; it can never award or save points.
+ const oldCtx=ctx,oldGame=game;
+ const m=t%DEMO_PERIOD;
+ ctx=demoCtx;
+ try{
+  ctx.clearRect(0,0,W,H);
+  ctx.save();ctx.translate(W/2,H/2);ctx.scale(.97,.97);
+  const camX=760+195*Math.sin(t*.075),camY=451+48*Math.sin(t*.11);
+  ctx.translate(-camX,-camY);
+  world(t);
+  for(let i=0;i<roles.length;i++){
+   const r=roles[i],nodes=DEMO_ROUTES[i],moving=i!==5;
+   const [x,y]=demoPath(nodes,t,13+i%4*3,i*3.17);
+   sprite(ctx,x,y,r,i===2?1.20:.99,t,moving?'walk':'work');
+   if(i===2){ // waiter carrying a fresh plate
+    ellipse(ctx,x+29,y-29,16,6,'#fff5d3');text(ctx,'🍤',x+29,y-29,16,'#28566a','center',false)
+   }
+   if(i===1){ // chef cooking: rising steam and golden pan sparks
+    for(let k=0;k<4;k++){ellipse(ctx,x+Math.cos(t*3+k*2)*14,y-51-(t*21+k*17)%50,3,7,'#f8efce95')}
+   }
+   if(i===6){text(ctx,'✦',x-15,y-42+Math.sin(t*3)*4,17,'#ffe09d','center',false)}
+  }
+  const colors=['#e9bf9e','#a5cfd8','#e8a6a0','#dbd6a7'];
+  DINER_TABLES.forEach((table,i)=>{
+   const phase=(m+(i*5.3))%DEMO_PERIOD;
+   let x=table.x+(i%2===0?-85:85),y=table.y-1;
+   let bubble='';
+   if(phase<5){const start=[EXIT.x,EXIT.y],target=[x,y];const a=phase/5;x=start[0]+(target[0]-start[0])*a;y=start[1]+(target[1]-start[1])*a;bubble='…';}
+   else if(phase<16){bubble='🍲';}
+   else if(phase<28){bubble='♥';}
+   else if(phase<34){const a=(phase-28)/6;x=x+(EXIT.x-x)*a;y=y+(EXIT.y-y)*a;bubble='';}
+   else{ x=EXIT.x+(i%3)*19;y=EXIT.y+12; }
+   ellipse(ctx,x,y+12,14,4,'#1b394a70');rect(ctx,x-9,y-16,18,24,colors[i%4]);
+   rect(ctx,x-8,y-33,16,19,['#d7a17a','#c6a38b','#a66d55','#e1c0a2'][i%4]);rect(ctx,x-9,y-35,18,5,'#665450');
+   if(bubble){rounded(ctx,x-18,y-64,36,25,7,'#fff2c5');text(ctx,bubble,x,y-45,17,'#285369','center',false)}
+  });
+  if((m>10&&m<23)||(m>31&&m<38)){
+   const x=680+130*Math.sin(t*1.25),y=265+56*Math.sin(t*.6);
+   ghost(x,y,t);
+   for(let k=0;k<5;k++){const a=t*4+k*TAU/5;ellipse(ctx,x+Math.cos(a)*35,y+Math.sin(a)*30,4,5,'#c5f8ffa0')}
+  }
+  // Dining bustle: steam, little service sparkle, occasional job urgency.
+  for(let i=0;i<8;i++){const xx=151+i%4*16,yy=320-Math.abs((t*22+i*16)%69);ellipse(ctx,xx,yy,2+i%2,6,'#fff4d1a2')}
+  if(m>22&&m<29){text(ctx,'!',845,245+Math.sin(t*5)*4,34,'#ffe4a3','center');}
+  ctx.restore();
+  // Small non-intrusive demonstration label; menu remains fully interactive.
+  rounded(ctx,734,505,215,26,8,'#0b3946c8');text(ctx,'● LIVE DINNER RUSH',842,524,15,'#ffe6aa','center',false);
+ }finally{ctx=oldCtx;game=oldGame}
+}
+
 function drawSky(t){sc.clearRect(0,0,480,270);const g=sc.createLinearGradient(0,0,0,270);g.addColorStop(0,'#529aab');g.addColorStop(.63,'#f3b385');g.addColorStop(1,'#144e64');sc.fillStyle=g;sc.fillRect(0,0,480,270);ellipse(sc,370,82,47,47,'#fceab5');cloud(41+Math.sin(t/5)*10,65,1.3);cloud(247-Math.sin(t/9)*9,25,.8);for(let i=0;i<8;i++){line(sc,0,193+i*10,480,193+i*10,i%2?'#7bc9b2':'#52979e',3)}for(let i=0;i<10;i++)line(sc,340+i*3,190+i*4,402-i*5,193+i*4,'#ebd7a1',3);palm(30,215,2.1);palm(470,260,2)}
-function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='playing')update(dt);if(state!=='menu')render(tick);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
+function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='menu')menuAttract(tick);if(state==='playing')update(dt);if(state!=='menu')render(tick);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
 function nearbyDialogue(){
  if(!game)return false;
  const spots=CREW_SPOTS;
@@ -377,5 +451,5 @@ window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
 for(const e of ['contextmenu','selectstart','dragstart'])document.addEventListener(e,event=>{if(event.target.closest?.('#controls, #world, #frame'))event.preventDefault()});
 for(const e of ['touchstart','touchmove'])document.querySelector('#controls').addEventListener(e,event=>event.preventDefault(),{passive:false});
 window.addEventListener('blur',()=>{keys={};dpad=null;if(game)game.work=false});
-window.__coveTest={roles,DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
+window.__coveTest={roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
 })();
