@@ -2,8 +2,8 @@
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const canvasCtx={fillRect(){},strokeRect(){},beginPath(){},ellipse(){},arc(){},fill(){},stroke(){},moveTo(){},lineTo(){},fillText(){},roundRect(){},clearRect(){},save(){},restore(){},translate(){},scale(){},setLineDash(){},quadraticCurveTo(){},closePath(){},createLinearGradient(){return {addColorStop(){}}}};
 const ids=new Map(),cards=[];
-function el(id){if(!ids.has(id)){const e={id,dataset:{},classList:{add(){},remove(){},toggle(){}},textContent:'',innerHTML:'',listeners:{},appendChild(x){cards.push(x)},replaceChildren(){cards.length=0},querySelector(){return el('portrait')},getContext(){return canvasCtx},addEventListener(t,f){this.listeners[t]=f},setAttribute(){},getBoundingClientRect(){return {left:0,top:0,width:960,height:540}}};ids.set(id,e)}return ids.get(id)}
-global.document={addEventListener(){},querySelector:el,getElementById:el,createElement:()=>({classList:{add(){},remove(){},toggle(){}},querySelector(){return el('portrait')},setAttribute(){},innerHTML:'',onclick:null}),querySelectorAll:q=>q==='#dpad button'?[]:cards};
+function el(id){if(!ids.has(id)){const e={id,dataset:{},style:{setProperty(){}},offsetWidth:960,remove(){},classList:{add(){},remove(){},toggle(){}},textContent:'',innerHTML:'',listeners:{},appendChild(x){cards.push(x)},replaceChildren(){cards.length=0},querySelector(){return el('portrait')},getContext(){return canvasCtx},addEventListener(t,f){this.listeners[t]=f},setAttribute(){},getBoundingClientRect(){return {left:0,top:0,width:960,height:540}}};ids.set(id,e)}return ids.get(id)}
+global.document={addEventListener(){},querySelector:el,getElementById:el,createElement:()=>({style:{setProperty(){}},remove(){},classList:{add(){},remove(){},toggle(){}},querySelector(){return el('portrait')},setAttribute(){},innerHTML:'',onclick:null}),querySelectorAll:q=>q==='#dpad button'?[]:cards};
 global.window={addEventListener(){}};global.localStorage={getItem(){return null},setItem(){}};global.performance={now:()=>0};global.requestAnimationFrame=()=>{};
 eval(fs.readFileSync(__dirname+'/web/game.js','utf8'));
 const h=window.__coveTest;

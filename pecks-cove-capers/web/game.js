@@ -1,4 +1,4 @@
-/* Cove Clatter: original procedural pixel-art restaurant game and animated attract demo. */
+/* Pek's Plunder: offline pixel-art restaurant game, day cycle and manual tactile work. */
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
@@ -9,7 +9,7 @@ const W=960,H=540,MAP_W=1480,MAP_H=850,TAU=Math.PI*2;
 const C={sea:'#318aa0',sea2:'#6aafaf',sand:'#dfbd81',plank:'#ab7754',plank2:'#c39268',plankLine:'#8b5c4e',wall:'#f5dea9',wallShadow:'#a77c5d',floor:'#d4ac7c',seaDark:'#205e78',mint:'#b4e4bd',foam:'#def7d6',yellow:'#ffe4a0',coral:'#e98a70',ink:'#1b3e4b',white:'#fff2d3'};
 const roles=[
  {id:'dishes',name:'Dizzy Dishes',short:'Dizzy',job:'Dish Runner',emoji:'🍽️',skin:'#d5a277',hair:'#5e3b31',shirt:'#ffc16b',hat:'#ffe5a3',accent:'#ef6e68',desc:'Scoop up stray dishes, dodge guests, and race them to the bubbling dish pit.',tasks:[['Grab the plates','Collect dirty plates at table 2',490,304,'🍽',1.1],['Scrub-a-dub','Rush the plates to the dish pit',151,351,'🫧',1.5],['Stack the sparkle','Put clean plates on the service shelf',302,230,'✨',1.2]]},
- {id:'cook',name:'Crispin Skillet',short:'Crispin',job:'Seafood Cook',emoji:'🍳',skin:'#9b634f',hair:'#3e3743',shirt:'#fff0bd',hat:'#ffffff',accent:'#dc765a',desc:'Chop the catch, stir the chowder, and plate a five-star seafood feast.',tasks:[['Fresh catch!','Collect fish at the prep station',245,401,'🐟',1.0],['Chowder time','Stir the simmering soup on the stove',127,204,'🍲',1.7],['Order up!','Plate the special at the service hatch',312,257,'🍤',1.2]]},
+ {id:'cook',name:'Crispin Skillet',short:'Crispin',job:'Seafood Cook',emoji:'🍳',skin:'#9b634f',hair:'#3e3743',shirt:'#fff0bd',hat:'#ffffff',accent:'#dc765a',desc:'Chop the catch, stir the chowder, and plate a five-star seafood feast.',tasks:[['Fresh catch!','Collect fish at the prep station',245,401,'🐟',1.0],['Fryer rescue','Loosen crumbs and drain the fryer safely',127,204,'🧽',1.7],['Order up!','Plate the special at the service hatch',312,257,'🍤',1.2]]},
  {id:'waiter',name:'Tilly Tray',short:'Tilly',job:'Waiter',emoji:'🧑‍🍳',skin:'#e3b891',hair:'#8d4650',shirt:'#77c8b5',hat:'#f8e0a2',accent:'#ffe2a0',desc:'Balance a packed tray, serve patio guests, and collect cheerful tips.',tasks:[['Pick up order','Collect a freshly cooked order',315,254,'🍛',1.0],['Table service','Bring dinner to the sea-view table',804,284,'🍤',1.4],['Happy guests','Pick up the tip and a big thank-you',804,284,'⭐',.9]]},
  {id:'boss',name:'Captain Cleo',short:'Cleo',job:'The Boss',emoji:'⭐',skin:'#bd8361',hair:'#403c52',shirt:'#9fc3d4',hat:'#315c7a',accent:'#ffc875',desc:'Run a tight ship: check supplies, encourage the crew, and approve the rush.',tasks:[['Supply check','Check the inventory in cold storage',254,398,'📦',1.1],['Crew huddle','Cheer on the team near the kitchen',361,243,'📋',1.4],['Shipshape!','Balance the register at the front desk',706,194,'💰',1.2]]},
  {id:'host',name:'Hattie Hello',short:'Hattie',job:'Greeter',emoji:'👋',skin:'#8f5945',hair:'#2e4247',shirt:'#ff9c91',hat:'#ffc46a',accent:'#fce6ae',desc:'Welcome hungry visitors, find sunny seats, and make everyone feel at home.',tasks:[['Warm welcome','Greet the party at the entrance',705,187,'👋',1.1],['Find a seat','Show guests to the dining table',521,204,'🪑',1.4],['Menus, please','Place menus on the table',521,204,'📖',.9]]},
@@ -27,6 +27,12 @@ const EXIT={x:1231,y:187};
 const CREW_SPOTS=[[181,490],[234,335],[842,424],[568,469],[1172,242],[1350,469],[765,609],[318,495],[1110,566],[561,295]];
 const sites=[{x:721,y:423},{x:184,y:486},{x:1224,y:487},{x:760,y:438},{x:1176,y:673},{x:555,y:305},{x:876,y:627}];
 let chosen=0, state='menu',game=null,stars=[],sound=true,audio=null,tick=0,last=0,keys={},dpad=null,toastDeadline=0;
+const SHIFT_LENGTH=720,DAILY_JOBS=8,DAILY_GUESTS=6;
+const shiftDifficulty=t=>t<240?0:t<480?1:2;
+const phaseName=t=>['SUNRISE','LUNCH RUSH','SUNSET RUSH'][shiftDifficulty(t)];
+const crowdDelay=t=>[49,29,16][shiftDifficulty(t)];
+const prankDelay=t=>[120,82,48][shiftDifficulty(t)];
+let introStarted=0,introDone=false,miniPointerActive=false;
 const DINER_TABLES=[{x:656,y:304},{x:847,y:306},{x:672,y:559},{x:850,y:561},{x:1146,y:315},{x:1335,y:315},{x:1152,y:551},{x:1346,y:553}];
 const TABLE_COLLISION={rx:73,ry:65};
 const WALL_ZONES=[
@@ -126,18 +132,18 @@ function activeTask(){
  if(served&&near(served.tx,served.ty,109))return {kind:'serve',x:served.tx,y:served.ty,duration:.65,label:'Serve '+served.order[0],guest:served};
  if(customersWaiting().length&&!game.carryMeal&&near(PICKUP.x,PICKUP.y,84))return {kind:'pickup',x:PICKUP.x,y:PICKUP.y,duration:.75,label:'Pick up dinner'};
  if(game.mess&&near(game.mess.x,game.mess.y,78))return {...game.mess,kind:'ghost'};
- const g=target();if(game.done<6&&near(g.x,g.y,72))return {...g,kind:'job'};
+ const g=target();if(near(g.x,g.y,72))return {...g,kind:'job'};
  return null;
 }
 function spawnCustomer(){
- if(!game||game.spawned>=7||game.customers.filter(c=>c.state!=='leaving').length>=6)return;
+ if(!game||game.customers.filter(c=>c.state!=='leaving').length>=8)return;
  const id=game.spawned++,table=DINER_TABLES.find(t=>!game.customers.some(c=>c.table===t&&c.state!=='leaving'))||null;
  const guest={id,name:DINER_NAMES[id%DINER_NAMES.length],x:EXIT.x,y:EXIT.y,tx:table?.x||1250,ty:table?.y||280,table,state:table?'entering':'queue',order:DISHES[id%DISHES.length],wait:0,eat:0,route:0,pathIndex:0};game.customers.push(guest);
  if(table){toast(`${guest.name.toUpperCase()} ARRIVED!`);say(`Hattie: Welcome, ${guest.name}! Grab a seat by the water.`)}
 }
 function moveGuest(c,x,y,dt,speed=64){const dx=x-c.x,dy=y-c.y,dist=Math.hypot(dx,dy);if(dist<speed*dt){c.x=x;c.y=y;return true}c.x+=dx/dist*dt*speed;c.y+=dy/dist*dt*speed;return false}
 function updateCustomers(dt){
- if(game.elapsed>game.nextCustomer){spawnCustomer();game.nextCustomer=game.elapsed+8.5}
+ if(game.elapsed>game.nextCustomer){spawnCustomer();game.nextCustomer=game.elapsed+crowdDelay(game.elapsed)}
  for(const c of game.customers){
   if(c.state==='queue'){
    const table=DINER_TABLES.find(t=>!game.customers.some(o=>o!==c&&o.table===t&&o.state!=='leaving'));
@@ -165,14 +171,32 @@ function nextDialogue(t){if(!game||game.elapsed<game.nextSpeech)return;game.next
  const spots=CREW_SPOTS;
  if(i!==game.role&&Math.hypot(spots[i][0]-game.x,spots[i][1]-game.y)<265){const messages=CREW_DIALOGUE[roles[i].id];game.speech={role:i,text:messages[Math.floor(game.elapsed/8)%messages.length],until:game.elapsed+3.7};}
 }
-function updateHud(){if(!game)return;const r=roles[game.role],t=target();$('roleEmoji').textContent=r.emoji;$('roleJob').textContent=r.job.toUpperCase();$('roleHudName').textContent=r.short;$('time').textContent=`${Math.floor(game.elapsed/60)}:${String(Math.floor(game.elapsed%60)).padStart(2,'0')}`;$('done').textContent=`${game.done}/6 · 🍽${game.served}/3`;$('score').textContent=game.score;$('progressText').textContent=game.mess?'👻 FIX THE PRANK!':game.carryMeal?'🍽 DELIVER TO '+game.carryMeal.name.toUpperCase():game.done>=6?'🍤 SERVE 3 GUESTS':('❗ '+t.label.toUpperCase());}
+function updateHud(){
+ if(!game)return;
+ const r=roles[game.role],t=target(),remaining=Math.max(0,Math.ceil(SHIFT_LENGTH-game.elapsed));
+ $('roleEmoji').textContent=r.emoji;$('roleJob').textContent=r.job.toUpperCase();$('roleHudName').textContent=r.short;
+ $('time').textContent=`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`;
+ $('done').textContent=`${Math.min(game.done,DAILY_JOBS)}/${DAILY_JOBS} · 🍽${Math.min(game.served,DAILY_GUESTS)}/${DAILY_GUESTS}`;
+ $('score').textContent=game.score;
+ $('dayLabel').textContent=phaseName(game.elapsed);
+ $('dayMeterFill').style.width=`${Math.min(100,game.elapsed/SHIFT_LENGTH*100)}%`;
+ $('progressText').textContent=game.mess?'👻 GHOST PRANK!':game.carryMeal?'🍽 DELIVER TO '+game.carryMeal.name.toUpperCase():('❗ '+t.label.toUpperCase());
+ if(game.boardOpen)refreshTaskBoard();
+}
+function refreshTaskBoard(){if(!game)return;const r=roles[game.role],completed=Math.min(game.done,DAILY_JOBS);
+ $('taskItems').innerHTML=`<li>${completed>=DAILY_JOBS?'✅':'⬜'} Job tasks: ${completed}/${DAILY_JOBS}</li><li>${game.served>=DAILY_GUESTS?'✅':'⬜'} Serve guests: ${Math.min(game.served,DAILY_GUESTS)}/${DAILY_GUESTS}</li><li>✨ Ghosts cleaned: ${game.ghostCount}</li><li>💰 Coins collected: ${game.score}</li><li>📍 Next: ${r.tasks[game.done%r.tasks.length][0]}</li>`;
+ $('boardHint').textContent=`${phaseName(game.elapsed)} · ${Math.max(0,Math.ceil((SHIFT_LENGTH-game.elapsed)/60))} min left · Tasks never auto-complete`;
+}
+function toggleBoard(force){if(!game||state!=='playing')return;game.boardOpen=typeof force==='boolean'?force:!game.boardOpen;
+ $('taskBoard').classList.toggle('hidden',!game.boardOpen);if(game.boardOpen){game.work=false;keys={};dpad=null;refreshTaskBoard()}}
+
 function startingSpot(role){const choices=[[700,375],[350,431],[829,448],[445,468],[1050,270],[1263,647],[936,455],[1240,668],[1265,664],[937,264]];const [x,y]=choices[role];return canStand(x,y)?{x,y}:{x:567,y:464}}
-function begin(){const r=roles[chosen],spawn=startingSpot(chosen);game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:18,elapsed:0,particles:[],paused:false,ghostCount:0,streak:0,carry:null,carryMeal:null,served:0,spawned:0,nextCustomer:2,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0};state='playing';$('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');$('finish').classList.add('hidden');$('pauseBtn').textContent='Ⅱ';say(`${r.name}: ${CREW_DIALOGUE[r.id][0]} Follow the ! to your next station. Hold WORK when close.`);toast('WELCOME TO THE COVE!');beep(660,.1);updateHud()}
-function finish(won){if(state!=='playing')return;state='finish';game.paused=true;saveBest(game.score);$('finish').classList.remove('hidden');$('finishIcon').textContent=won?'🏆':'🌅';$('finishTitle').textContent=won?'YOU SAVED THE SHIFT!':'SUNSET AT THE COVE';$('finishBody').textContent=`${roles[game.role].name} finished ${game.done} jobs, served ${game.served} guests, fixed ${game.ghostCount} ghost pranks, and earned ${game.score} coins. ${won?'The crew wants an encore!':'Try another shift and beat your score.'}`;beep(won?880:420,.3)}
+function begin(){const r=roles[chosen],spawn=startingSpot(chosen);game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:115,elapsed:0,particles:[],paused:false,ghostCount:0,streak:0,carry:null,carryMeal:null,served:0,spawned:0,nextCustomer:8,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0,mini:null,boardOpen:false,peakPhase:0};state='playing';$('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');$('finish').classList.add('hidden');$('taskBoard').classList.add('hidden');screenFade();$('pauseBtn').textContent='Ⅱ';say(`${r.name}: ${CREW_DIALOGUE[r.id][0]} Follow the ! to your next station. Hold WORK when close.`);toast('🌅 THE MORNING SHIFT BEGINS!');beep(660,.1);updateHud()}
+function finish(won){if(state!=='playing')return;state='finish';game.paused=true;saveBest(game.score);$('finish').classList.remove('hidden');$('finishIcon').textContent=won?'🏆':'🌅';$('finishTitle').textContent=won?'THE COVE WAS SAVED!':'THE DAY IS DONE!';$('finishBody').textContent=`${roles[game.role].name} finished ${game.done} jobs, served ${game.served} guests, fixed ${game.ghostCount} ghost pranks, and earned ${game.score} coins. ${won?'The crew wants an encore!':'Complete your job checklist and serve more diners next time.'}`;beep(won?880:420,.3)}
 function ghostPrank(){if(!game||game.mess||state!=='playing')return;const s=sites[Math.floor(rnd(0,sites.length))];game.ghost={x:s.x,y:s.y-52,t:0};game.mess={x:s.x,y:s.y,label:['Ghostly spill!','Flying cutlery!','Mysterious mess!'][Math.floor(rnd(0,3))],sub:'Clean up the ghost prank before it spreads',icon:'👻',duration:1.5,isMess:true,ttl:22};game.progress=0;say('BOO! The cove ghost made a mess. Hurry over and clean it!');toast('👻 GHOST IN THE RESTAURANT!');beep(244,.3,'sawtooth')}
 function completeTask(action=activeTask()){
  if(!game||!action)return false;
- confetti(action.x,action.y,17,action.kind==='ghost'?'#bdedff':'#ffdf82');
+ confetti(action.x,action.y,48,action.kind==='ghost'?'#bdedff':'#ffdf82');burstConfetti();
  game.progress=0;game.work=false;const role=roles[game.role];
  if(action.kind==='ghost'){
   game.mess=null;game.ghost=null;game.ghostCount++;game.score+=50;game.floats.push({x:action.x,y:action.y-95,label:'CLEAN! +50',life:1.8});
@@ -189,16 +213,19 @@ function completeTask(action=activeTask()){
   game.completedStations.push({x:action.x,y:action.y,icon:action.icon,role:role.id,stage,cycle:Math.floor((game.done-1)/3),doneAt:game.elapsed});
   game.jobVisuals[role.id]=Math.max(game.jobVisuals[role.id]||0,stage+1);
   game.floats.push({x:action.x,y:action.y-95,label:'+100  '+action.icon,life:1.7});
-  say(`${role.short}: ${CREW_DIALOGUE[role.id][game.done%3]} ${game.done<6?'Find the next ! marker.':'Our job board is finished—keep serving guests!'}`);
+  say(`${role.short}: ${CREW_DIALOGUE[role.id][game.done%3]} ${game.done<DAILY_JOBS?'Find the next ! marker.':'The daily job goal is done—extra work earns more coins!'}`);
   toast('+'+100+' · '+action.label.toUpperCase()+' ✓');beep(640+stage*100,.16);
  }
- if(game.done>=6&&game.served>=3){finish(true);return true}
+ if(game.done===DAILY_JOBS||game.served===DAILY_GUESTS){confetti(game.x,game.y,55,'#ffdc84');toast('🎉 DAILY GOAL COMPLETE! KEEP GOING!')}
  updateHud();return true;
 }
 function update(dt){
- if(!game||game.paused||state!=='playing')return;
- game.elapsed+=dt;updateCustomers(dt);
- if(game.elapsed>=game.nextGhost){ghostPrank();game.nextGhost=game.elapsed+rnd(25,34)}
+ if(!game||game.paused||game.boardOpen||game.mini||state!=='playing')return;
+ game.elapsed=Math.min(SHIFT_LENGTH,game.elapsed+dt);
+ if(game.elapsed>=SHIFT_LENGTH){finish(game.done>=DAILY_JOBS&&game.served>=DAILY_GUESTS);return}
+ const phase=shiftDifficulty(game.elapsed);if(phase>game.peakPhase){game.peakPhase=phase;toast(phase===1?'🍽 LUNCH RUSH! MORE DINERS!':'🌙 DINNER RUSH! ALL HANDS!');beep(780,.16)}
+ updateCustomers(dt);
+ if(game.elapsed>=game.nextGhost){ghostPrank();game.nextGhost=game.elapsed+prankDelay(game.elapsed)+rnd(-6,7)}
  if(game.ghost){game.ghost.t+=dt;if(game.ghost.t>5)game.ghost=null}
  let dx=0,dy=0;const speed=195;
  if(keys['arrowleft']||keys['a']||dpad==='left')dx-=1;
@@ -210,6 +237,7 @@ function update(dt){
  // A held button only works while the player is standing next to a marked task.
  const task=activeTask(),working=game.work||keys['e']||keys[' ']||keys['enter'];
  if(working&&task){
+  const kind=miniKind(task);if(kind){startMini(task,kind);return}
   if(game.workKind!==task.kind||game.workRef!==task.guest?.id){game.progress=0;game.workKind=task.kind;game.workRef=task.guest?.id}
   game.progress+=dt/(task.duration||1.2);
   if(game.progress>=1)completeTask(task);
@@ -291,7 +319,7 @@ function drawWorkResults(t){
 function drawFloatingResults(t){if(!game)return;for(const f of game.floats){const opacity=Math.min(1,f.life);ctx.save();ctx.globalAlpha=opacity;rounded(ctx,f.x-82,f.y-(1.7-f.life)*31,164,27,8,'#2b735df0');text(ctx,f.label,f.x,f.y+18-(1.7-f.life)*31,16,'#ffedb3','center',false);ctx.restore()}}
 function drawPickup(t){
  if(!game)return;
- if(game.done<6){const q=target();workMarker(q.x,q.y,q.label,t)}
+ {const q=target();workMarker(q.x,q.y,q.label,t)}
  if(game.mess)workMarker(game.mess.x,game.mess.y,'GHOST MESS',t,'#b6dcff');
  const waiting=customersWaiting();if(waiting.length&&!game.carryMeal)workMarker(PICKUP.x,PICKUP.y,'PICK UP MEAL',t,'#b5ecd5');
  const c=serviceTarget();if(c)workMarker(c.tx,c.ty,'SERVE '+c.name,t,'#f5e5a0');
@@ -327,7 +355,7 @@ function drawCrewDialogue(t){
 }
 function drawParticles(dt){if(!game)return;for(const p of game.particles)rect(ctx,p.x,p.y,p.size,p.size,p.col)}
 function drawObjectiveCompass(camX,camY,zoom){
- if(!game||game.done>=6)return;const q=target(),px=(q.x-camX)*zoom+W/2,py=(q.y-camY)*zoom+H/2;
+ if(!game)return;const q=target(),px=(q.x-camX)*zoom+W/2,py=(q.y-camY)*zoom+H/2;
  const edge=78;if(px>edge&&px<W-edge&&py>edge&&py<H-edge)return;
  const x=clamp(px,edge,W-edge),y=clamp(py,edge,H-edge),ang=Math.atan2(py-H/2,px-W/2);
  rounded(ctx,x-52,y-16,104,34,10,'#184b59e8');text(ctx,'!  '+Math.round(Math.hypot(q.x-game.x,q.y-game.y))+'m',x,y+6,17,'#ffe7a1','center',false);
@@ -342,6 +370,7 @@ function render(t){
  if(game?.ghost)ghost(game.ghost.x,game.ghost.y,game.ghost.t);
  drawCharacter(t);drawCrewDialogue(t);drawParticles(t);drawFloatingResults(t);
  ctx.restore();
+ drawDaylight(game?.elapsed||0);
  drawObjectiveCompass(camX,camY,zoom);
  if(game?.paused&&state==='playing'){rect(ctx,0,0,W,H,'#092f3eac');rounded(ctx,350,182,260,120,18,'#245d68');text(ctx,'PAUSED',480,244,39,'#ffe9a8','center');text(ctx,'Tap Ⅱ to continue',480,274,17,'#d1f2e9','center')}
 }
@@ -418,8 +447,15 @@ function menuAttract(t){
  }finally{ctx=oldCtx;game=oldGame}
 }
 
+function drawDaylight(elapsed){
+ const d=clamp(elapsed/SHIFT_LENGTH,0,1);
+ if(d>.44){const dark=(d-.44)/.56;ctx.save();ctx.fillStyle=`rgba(19,32,75,${(dark*.44).toFixed(3)})`;ctx.fillRect(0,0,W,H);ctx.restore()}
+ else if(d<.22){ctx.save();ctx.fillStyle=`rgba(255,208,129,${(.18*(1-d/.22)).toFixed(3)})`;ctx.fillRect(0,0,W,H);ctx.restore()}
+ // Warm dusk glows and window lights when the evening gets busy.
+ if(d>.66){ctx.save();ctx.globalAlpha=Math.min(.7,(d-.66)*2);for(let i=0;i<5;i++){const x=94+i*192;ellipse(ctx,x,70,33,11,'#f4c975')}ctx.restore()}
+}
 function drawSky(t){sc.clearRect(0,0,480,270);const g=sc.createLinearGradient(0,0,0,270);g.addColorStop(0,'#529aab');g.addColorStop(.63,'#f3b385');g.addColorStop(1,'#144e64');sc.fillStyle=g;sc.fillRect(0,0,480,270);ellipse(sc,370,82,47,47,'#fceab5');cloud(41+Math.sin(t/5)*10,65,1.3);cloud(247-Math.sin(t/9)*9,25,.8);for(let i=0;i<8;i++){line(sc,0,193+i*10,480,193+i*10,i%2?'#7bc9b2':'#52979e',3)}for(let i=0;i<10;i++)line(sc,340+i*3,190+i*4,402-i*5,193+i*4,'#ebd7a1',3);palm(30,215,2.1);palm(470,260,2)}
-function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='menu')menuAttract(tick);if(state==='playing')update(dt);if(state!=='menu')render(tick);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
+function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='menu')menuAttract(tick);if(state==='playing')update(dt);if(state!=='menu'&&game)render(tick);if(game?.mini)paintMini();if(!introDone)drawIntro(now);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
 function nearbyDialogue(){
  if(!game)return false;
  const spots=CREW_SPOTS;
@@ -431,12 +467,88 @@ function nearbyDialogue(){
  }
  return false;
 }
-function pressWork(){if(!game||game.paused||state!=='playing')return;
- if(activeTask()){game.work=true;return}
+function pressWork(){if(!game||game.paused||game.boardOpen||game.mini||state!=='playing')return;
+ if(activeTask()){const a=activeTask(),kind=miniKind(a);if(kind){startMini(a,kind);return}game.work=true;return}
  if(nearbyDialogue())return;
  toast('FIND A ! MARKER AND MOVE CLOSE');
 }
-$('play').onclick=begin;$('again').onclick=begin;$('change').onclick=()=>{state='menu';game=null;$('finish').classList.add('hidden');$('titleScreen').classList.remove('hidden');$('gameScreen').classList.add('hidden');choose(chosen)};$('menuBtn').onclick=()=>{if(!game)return;state='menu';game=null;$('gameScreen').classList.add('hidden');$('titleScreen').classList.remove('hidden');choose(chosen)};
+
+/* Scene presentation: short fade curtain plus a scripted 3.8-second sunrise over the cove. */
+function screenFade(){const el=$('sceneFade');el.classList.remove('wipe');void el.offsetWidth;el.classList.add('wipe')}
+function replayIntro(){introDone=false;introStarted=0;$('sunriseIntro').classList.remove('hidden','introFade')}
+function finishIntro(){if(introDone)return;introDone=true;const el=$('sunriseIntro');el.classList.add('introFade');setTimeout(()=>el.classList.add('hidden'),540)}
+function drawIntro(now){if(!introStarted)introStarted=now;const elapsed=now-introStarted,p=clamp(elapsed/3800,0,1),c=$('sunriseCanvas').getContext('2d');if(!c)return;
+ const w=640,h=360;c.clearRect(0,0,w,h);
+ const bg=c.createLinearGradient(0,0,0,h);bg.addColorStop(0,p<.35?'#162f59':'#3c8faa');bg.addColorStop(.57,'#f4a776');bg.addColorStop(1,'#f4dcac');c.fillStyle=bg;c.fillRect(0,0,w,h);
+ const sunY=220-p*161;c.fillStyle='#ffecac';c.beginPath();c.arc(426,sunY,46,0,TAU);c.fill();c.fillStyle='#fffcdf88';c.beginPath();c.arc(426,sunY,64,0,TAU);c.fill();
+ for(let i=0;i<8;i++){c.fillStyle=i%2?'#4fa6b0':'#77c1bd';c.fillRect(0,249+i*15,w,15)}
+ for(let i=0;i<15;i++){c.fillStyle=i%2?'#f7d18c':'#d3f0c6';c.fillRect(315+i*11,255+i*4,110-i*6,3)}
+ c.fillStyle='#513b45';c.fillRect(42,188,330,90);c.fillRect(352,228,160,45);c.fillStyle='#b57553';c.fillRect(55,202,300,62);c.fillStyle='#244b5e';c.beginPath();c.moveTo(29,190);c.lineTo(206,129);c.lineTo(390,192);c.fill();
+ for(let i=0;i<6;i++){c.fillStyle='#ffd38e';c.fillRect(70+i*49,219,28,28);c.fillStyle='#3f5964';c.fillRect(74+i*49,225,19,17)}
+ c.fillStyle='#f6dc99';c.fillRect(111,151,192,30);c.font='bold 20px sans-serif';c.textAlign='center';c.fillStyle='#284458';c.fillText("PEK'S PLUNDER",206,173);
+ for(let i=0;i<10;i++){c.fillStyle='#4d3d43';c.fillRect(350+i*27,265,8,60)}c.fillStyle='#947259';c.fillRect(342,273,295,14);
+ c.fillStyle='#d6f1d4';c.font='bold 20px sans-serif';c.fillText(p<.5?'A NEW DAY AT THE COVE…':'TIME TO GET TO WORK!',320,331);
+ $('introMeter').style.width=`${Math.round(p*100)}%`;if(p>=1)finishIntro();
+}
+/* Confetti is pinned to the game viewport; it cannot block touches. */
+function burstConfetti(){const layer=$('celebrateFX');if(!layer)return;const colors=['#ffd66d','#ff8c8f','#9fe6d4','#b6abfc','#fff6cd'];
+ for(let n=0;n<26;n++){const p=document.createElement('i');p.className='confettiPiece';p.style.left=(22+Math.random()*56)+'%';p.style.top=(20+Math.random()*30)+'%';p.style.backgroundColor=colors[n%colors.length];p.style.setProperty('--flyX',`${(Math.random()-.5)*360}px`);p.style.setProperty('--flyY',`${90+Math.random()*210}px`);p.style.animationDelay=(n%7*25)+'ms';layer.appendChild(p);setTimeout(()=>p.remove(),1450)}
+}
+/* Optional tiny interactive stations; game clock pauses until the player succeeds or exits. */
+function miniKind(action){if(!game||action?.kind!=='job')return null;const id=roles[game.role].id,stage=game.done%roles[game.role].tasks.length;
+ return id==='dishes'&&stage===1?'dish':id==='cook'&&stage===1?'fryer':null;
+}
+function startMini(action,kind){if(!game||game.mini||!action||!kind||game.boardOpen)return;
+ game.mini={action,kind,progress:0,grime:Array.from({length:7},(_,i)=>({x:180+Math.cos(i*TAU/7)*70,y:147+Math.sin(i*TAU/7)*63,dirty:1})),last:null,lastDir:0,swing:0,switches:0};
+ game.work=false;keys={};dpad=null;miniPointerActive=false;
+ $('minigameTitle').textContent=kind==='dish'?'🫧 SCRUB THE PLATE':'🧹 CLEAN THE FRYER';
+ $('minigameHelp').textContent=kind==='dish'?'Tap and swipe across the brown spots until the plate sparkles.':'Swipe the long cleaning pole left and right, reversing direction to knock loose the burnt crumbs.';
+ $('minigameProgress').style.width='0%';$('minigameStatus').textContent=kind==='dish'?'Dirt remaining':'Fryer blockage';
+ $('minigameOverlay').classList.remove('hidden');screenFade();paintMini();
+}
+function exitMini(success=false){if(!game?.mini)return;const mini=game.mini;game.mini=null;miniPointerActive=false;$('minigameOverlay').classList.add('hidden');screenFade();
+ if(success){completeTask(mini.action);toast(mini.kind==='dish'?'🌟 SPARKLING CLEAN!':'🌟 FRYER FLOWING!');beep(990,.23)}else toast('TASK NOT FINISHED — COME BACK!')
+}
+function miniPos(e){const bounds=$('miniCanvas').getBoundingClientRect();return {x:(e.clientX-bounds.left)/bounds.width*460,y:(e.clientY-bounds.top)/bounds.height*280}}
+function applyMini(x,y,tap=false){const m=game?.mini;if(!m)return;const prev=m.last;
+ if(m.kind==='dish'){
+  const travel=prev?Math.hypot(x-prev.x,y-prev.y):0;
+  if(tap||travel>=2){for(const dirt of m.grime){const dist=Math.hypot(x-dirt.x,y-dirt.y);if(dist<37)dirt.dirty=Math.max(0,dirt.dirty-(tap?.17:.09+Math.min(travel,35)*.011))}}
+  m.progress=1-m.grime.reduce((a,d)=>a+d.dirty,0)/m.grime.length;
+ }else if(prev){const dx=x-prev.x;m.swing+=dx;
+  if(Math.abs(m.swing)>=18){const dir=Math.sign(m.swing);if(m.lastDir&&dir!==m.lastDir){m.switches++;beep(240+m.switches*22,.04,'triangle')}m.lastDir=dir;m.swing=0}
+  m.progress=Math.min(1,m.switches/10);
+ }
+ m.last={x,y};$('minigameProgress').style.width=`${Math.min(100,Math.round(m.progress*100))}%`;
+ $('minigameStatus').textContent=m.kind==='dish'?`${Math.round(m.progress*100)}% CLEAN`:`${m.switches}/10 WIGGLES · DRAINING`;
+ if(m.progress>=.99)exitMini(true);
+}
+function paintMini(){const m=game?.mini;if(!m)return;const c=$('miniCanvas').getContext('2d');if(!c)return;
+ c.clearRect(0,0,460,280);c.fillStyle='#d5b28a';c.fillRect(0,0,460,280);
+ for(let y=0;y<280;y+=22){c.fillStyle=y%44?'#e3c69e':'#e8d1a9';c.fillRect(0,y,460,2)}
+ if(m.kind==='dish'){
+  c.fillStyle='#2e6774';c.fillRect(18,30,424,220);c.fillStyle='#5e9ca8';c.fillRect(28,40,404,200);
+  c.fillStyle='#bde3e6';c.beginPath();c.ellipse(180,147,129,97,0,0,TAU);c.fill();c.fillStyle='#f9f8de';c.beginPath();c.ellipse(180,147,108,78,0,0,TAU);c.fill();
+  c.fillStyle='#c9dad0';c.beginPath();c.ellipse(180,147,78,54,0,0,TAU);c.fill();c.fillStyle='#fff9e9';c.beginPath();c.ellipse(180,147,69,47,0,0,TAU);c.fill();
+  for(const dirt of m.grime){if(dirt.dirty<=0)continue;c.globalAlpha=dirt.dirty;c.fillStyle='#9b6c45';c.beginPath();c.arc(dirt.x,dirt.y,10+6*dirt.dirty,0,TAU);c.fill();c.globalAlpha=1}
+  c.fillStyle='#fff9de';c.font='bold 17px sans-serif';c.fillText('TAP + SWIPE',290,110);c.font='15px sans-serif';c.fillText('CLEAN THE SPOTS',283,140);
+  for(let i=0;i<11;i++){c.globalAlpha=.25+.4*Math.sin(tick*4+i);c.fillStyle='#fff';c.beginPath();c.arc(62+i*20,80+Math.sin(tick*3+i)*23,4+i%4,0,TAU);c.fill()}c.globalAlpha=1;
+ }else{
+  c.fillStyle='#4e6370';c.fillRect(50,45,365,199);c.fillStyle='#282e34';c.fillRect(65,58,337,162);c.fillStyle='#986842';c.fillRect(71,64,325,143);
+  c.fillStyle='#4d321f';c.fillRect(71,172,325,40*(1-m.progress));c.fillStyle='#e2a362';for(let i=0;i<16;i++){const xx=82+i*18,yy=78+(i%4)*23;c.fillRect(xx,yy,7,4)}
+  const px=m.last?clamp(m.last.x,110,365):250;c.strokeStyle='#e4edec';c.lineWidth=17;c.beginPath();c.moveTo(250,0);c.lineTo(px,190);c.stroke();c.strokeStyle='#9ca9af';c.lineWidth=5;c.beginPath();c.moveTo(250,0);c.lineTo(px,190);c.stroke();
+  c.fillStyle='#f8dfb1';c.font='bold 17px sans-serif';c.fillText('⇆ WIGGLE THE CLEANING POLE',78,263);
+  c.fillStyle='#b2f0da';c.fillRect(73,224,325*m.progress,7);
+ }
+}
+const miniCanvas=$('miniCanvas');
+miniCanvas.addEventListener('pointerdown',e=>{e.preventDefault();miniPointerActive=true;miniCanvas.setPointerCapture?.(e.pointerId);const p=miniPos(e);if(game?.mini)game.mini.last=null;applyMini(p.x,p.y,true)});
+miniCanvas.addEventListener('pointermove',e=>{if(!miniPointerActive)return;e.preventDefault();const p=miniPos(e);applyMini(p.x,p.y)});
+for(const k of ['pointerup','pointercancel','lostpointercapture'])miniCanvas.addEventListener(k,()=>{miniPointerActive=false;if(game?.mini)game.mini.last=null});
+$('quitMini').onclick=()=>exitMini(false);
+
+$('play').onclick=begin;$('again').onclick=begin;$('change').onclick=()=>{state='menu';game=null;$('finish').classList.add('hidden');$('titleScreen').classList.remove('hidden');$('gameScreen').classList.add('hidden');choose(chosen);screenFade();replayIntro()};$('menuBtn').onclick=()=>{if(!game)return;state='menu';game=null;$('gameScreen').classList.add('hidden');$('titleScreen').classList.remove('hidden');$('taskBoard').classList.add('hidden');choose(chosen);screenFade()};
+$('taskBtn').onclick=()=>toggleBoard();$('closeBoard').onclick=()=>toggleBoard(false);$('skipIntro').onclick=finishIntro;
 $('pauseBtn').onclick=()=>{if(!game)return;game.paused=!game.paused;$('pauseBtn').textContent=game.paused?'▶':'Ⅱ';say(game.paused?'Shift paused. Tap play to continue.':'Back to work!')};$('soundBtn').onclick=()=>{sound=!sound;$('soundBtn').textContent=sound?'♪':'♪̸';if(sound)beep(600,.08)};
 // No screen-tap movement or task autopathing; use physical controls only.
 $('action').addEventListener('pointerdown',e=>{e.preventDefault();pressWork();$('action').setPointerCapture?.(e.pointerId)});
@@ -445,11 +557,11 @@ for(const b of document.querySelectorAll('#dpad button')){
  b.addEventListener('pointerdown',e=>{e.preventDefault();dpad=b.dataset.dir;b.setPointerCapture?.(e.pointerId)});
  for(const a of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(a,()=>{if(dpad===b.dataset.dir)dpad=null});
 }
-window.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' ','enter'].includes(k))e.preventDefault();keys[k]=true;if((k==='e'||k===' '||k==='enter')&&game&&!game.paused&&state==='playing'&&!activeTask())nearbyDialogue();if(k==='escape'&&game&&state==='playing')$('pauseBtn').click()});
+window.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' ','enter'].includes(k))e.preventDefault();keys[k]=true;if((k==='e'||k===' '||k==='enter')&&game&&!game.paused&&state==='playing'&&!game.boardOpen&&!game.mini){if(activeTask()){const a=activeTask(),kind=miniKind(a);if(kind){startMini(a,kind);return}}else nearbyDialogue();}if(k==='escape'&&game&&state==='playing')$('pauseBtn').click()});
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
 // Android long-press accessibility still works elsewhere; gameplay control surfaces never select/copy text.
 for(const e of ['contextmenu','selectstart','dragstart'])document.addEventListener(e,event=>{if(event.target.closest?.('#controls, #world, #frame'))event.preventDefault()});
 for(const e of ['touchstart','touchmove'])document.querySelector('#controls').addEventListener(e,event=>event.preventDefault(),{passive:false});
 window.addEventListener('blur',()=>{keys={};dpad=null;if(game)game.work=false});
-window.__coveTest={roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
+window.__coveTest={SHIFT_LENGTH,DAILY_JOBS,DAILY_GUESTS,shiftDifficulty,phaseName,crowdDelay,prankDelay,miniKind,get introDone(){return introDone},get mini(){return game?.mini||null},toggleBoard,finishIntro,startMini,applyMini,roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
 })();

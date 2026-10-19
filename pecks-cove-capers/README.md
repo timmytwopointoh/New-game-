@@ -1,22 +1,23 @@
-# Cove Clatter: The Ghost Shift (v0.5)
+# Pek's Plunder · The Ghost Shift (v0.6)
 
-Working title for a bright offline pixel-art restaurant mini-game inspired by the waterfront feel of Peck's Old Port Cove in Crystal River, Florida. This is an **unofficial, unaffiliated prototype**; no restaurant logos, photos, or third-party game assets are embedded. Working title subject to trademark and distribution clearance.
+An original, offline-first pixel-art game **unofficially inspired** by the waterfront atmosphere of Peck's Old Port Cove, Florida. Not affiliated with or endorsed by the restaurant. *Pek's Plunder* is a provisional title awaiting appropriate trademark clearance before any release.
 
-## Playable features
+## Play
 
-- 10 selectable staff roles, each with distinct work routes, tools, dialogue, and task results.
-- Spacious room/deck map with table collisions and a following camera.
-- Manual D-pad/keyboard movement and manual !-marker interactions; no tap-to-move or automated tasks.
-- Customers arrive, order, remain seated until served, eat, and leave.
-- Random ghost pranks to clean up; score, effects, and game progression.
-- **Animated main menu attract mode** uses the *actual world render functions and staff sprite shapes*, simulating a looping busy dinner rush (staff walking, carrying meals, steam, diners entering/eating/leaving, occasional ghost). Menu simulation is independent of the player's game save or score.
-- **Crab-chef launcher icon** generated specifically for this game, bundled locally in Android `res/drawable-nodpi/ic_launcher.png`; Android app display name and HTML title are Cove Clatter.
+Open `web/standalone.html` in a browser or build the Android app. Ten selectable crew members have job-specific manual tasks and restaurant dialogue. D-pad/arrow keys and WORK replace tap-to-walk. Furniture has enlarged collision; the camera follows the active worker.
 
-Open `web/standalone.html` offline in a browser. Android debug APK: `cd android && gradle :app:assembleDebug --no-daemon` (Java 17, Gradle 8.9, Android SDK 35). No internet or dynamic asset service required by the installed app. Updating retains package ID `com.peckscove.capers` for upgrade compatibility.
+A full shift lasts **12 minutes of active play**: easy sunrise, busier lunch, intense sunset/dinner. The task-board shows progress toward eight job tasks and six served customers. Players can keep working past these goals until closing time. Guests arrive and wait until served; ghosts make messes that persist until repaired. Completing tasks grants coins, world effects and a visible confetti burst.
 
-## Review / provenance
+The Dish Runner's sink opens a **scrub minigame**, clearing seven stains with taps or swipes. The Cook's second workstation opens a **fryer minigame**, cleaning by wiggling the pole back and forth ten times. Neither minigame completes automatically, and both pause the shift clock. Cancellation returns without task credit. Game/menu/minigame transitions use short fades and the app starts with a 3.8-second animated sunrise over the restaurant before crew selection; it can be skipped.
 
-- Keep ECHOFORM and shared VQ source untouched. This is a separate game subdirectory and isolated feature branch.
-- Visual smoke checked with Chromium on mobile portrait and landscape; source logic checks cover manual actions and customer persistence.
-- CI artifact is a debug APK, not a signed release. Emulator outcomes must be checked independently.
-- Generic terms such as *Crab Rush* have existing gaming uses. *Cove Clatter* is a candidate name, not a legal determination or registered mark. Complete formal clearance before public launch.
+Android icon is the previously approved original crab-chef illustration. Existing package `com.peckscove.capers` remains to allow updates. There are no network permissions or external runtime asset downloads.
+
+## Validation / limitations
+
+- `node --check web/game.js`
+- `node test_logic.cjs`
+- `python3 test_v06.py` (local only, needs Playwright and Chromium): intro, UI, HUD, checklist, both gesture minigames, timer phases, and timeout
+- `gradle :app:assembleDebug --no-daemon` from `android/` (requires Android SDK/Java 17)
+- The CI workflow builds a debug APK and performs one Android emulator smoke run. A successful compilation is not equivalent to an emulator graphics pass; inspect the screenshots/logcat and keep the existing v0.5 APK until tested.
+
+This version is developed on an isolated feature branch. It leaves ECHOFORM, Project-hail, Trion, and VQ model engine sources unchanged.
