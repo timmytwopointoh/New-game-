@@ -66,19 +66,10 @@ jobs:
             adb shell am start -n com.peckscove.capers/.MainActivity
             sleep 7
             mkdir -p screenshots
-            adb exec-out screencap -p > screenshots/cove-menu.png
-            python3 - <<'PY'
-            import struct
-            data=open('screenshots/cove-menu.png','rb').read()
-            assert data[:8]==b'\x89PNG\r\n\x1a\n'
-            w,h=struct.unpack('>II', data[16:24]);print('Emulator menu screenshot',w,h)
-            open('screenshots/size.txt','w').write(f'{w} {h}')
-            PY
-            read w h < screenshots/size.txt
-            adb shell input tap "$((w*84/100))" "$((h*66/100))"
-            sleep 5
+            adb logcat -d -s AndroidRuntime:E ActivityManager:E > screenshots/startup-logcat.txt || true\n            adb exec-out screencap -p > screenshots/cove-menu.png
+            python3 -c 'import struct,subprocess; d=open("screenshots/cove-menu.png","rb").read(); assert d[:8]==bytes([137,80,78,71,13,10,26,10]); w,h=struct.unpack(">II",d[16:24]); print("Emulator menu",w,h); subprocess.run(["adb","shell","input","tap",str(w*84//100),str(h*66//100)],check=True)'\n            sleep 5
             adb exec-out screencap -p > screenshots/cove-gameplay.png
-            adb shell input swipe "$((w*10/100))" "$((h*81/100))" "$((w*10/100))" "$((h*81/100))" 600
+            python3 -c 'import struct,subprocess; d=open("screenshots/cove-menu.png","rb").read(); w,h=struct.unpack(">II",d[16:24]); x=str(w*10//100); y=str(h*81//100); subprocess.run(["adb","shell","input","swipe",x,y,x,y,"600"],check=True)'
             sleep 2
             adb exec-out screencap -p > screenshots/cove-after-controls.png
             adb logcat -d -s chromium:E cr_WebView:E AndroidRuntime:E > screenshots/cove-logcat.txt || true
