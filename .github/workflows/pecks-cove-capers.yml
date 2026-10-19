@@ -1,7 +1,7 @@
-name: Cove Capers - Android APK (review build)
+name: Cove Capers - manual service APK + one emulator check
 on:
   push:
-    branches: [feature/pecks-cove-capers-20261018]
+    branches: [feature/pecks-cove-manual-service-20261018]
     paths:
       - 'pecks-cove-capers/**'
       - '.github/workflows/pecks-cove-capers.yml'
@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cove-capers-${{ github.ref }}
+  group: cove-manual-service-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   android:
@@ -21,21 +21,71 @@ jobs:
         with: {distribution: temurin, java-version: '17'}
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
-      - name: Configure preinstalled Android SDK
+      - name: Use hosted Android SDK
         run: |
           set -euo pipefail
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
           "$SDK/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
-      - name: Validate JavaScript syntax
-        run: node --check pecks-cove-capers/web/game.js
-      - name: Build standalone debug APK
+      - name: Validate game logic offline
+        run: |
+          node --check pecks-cove-capers/web/game.js
+          node pecks-cove-capers/test_logic.cjs
+      - name: Build Android APK
         working-directory: pecks-cove-capers/android
         run: gradle :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: pecks-cove-capers-debug
+          name: pecks-cove-capers-v03-apk
           path: pecks-cove-capers/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 3
+  emulator:
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pecks-cove-capers-v03-apk
+          path: apk
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: One Android WebView emulator visual smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            set -euo pipefail
+            adb install -r apk/app-debug.apk
+            adb shell am start -n com.peckscove.capers/.MainActivity
+            sleep 7
+            mkdir -p screenshots
+            adb exec-out screencap -p > screenshots/cove-menu.png
+            python3 - <<'PY'
+            import struct
+            data=open('screenshots/cove-menu.png','rb').read()
+            assert data[:8]==b'\x89PNG\r\n\x1a\n'
+            w,h=struct.unpack('>II', data[16:24]);print('Emulator menu screenshot',w,h)
+            open('screenshots/size.txt','w').write(f'{w} {h}')
+            PY
+            read w h < screenshots/size.txt
+            adb shell input tap "$((w*84/100))" "$((h*66/100))"
+            sleep 5
+            adb exec-out screencap -p > screenshots/cove-gameplay.png
+            adb shell input swipe "$((w*10/100))" "$((h*81/100))" "$((w*10/100))" "$((h*81/100))" 600
+            sleep 2
+            adb exec-out screencap -p > screenshots/cove-after-controls.png
+            adb logcat -d -s chromium:E cr_WebView:E AndroidRuntime:E > screenshots/cove-logcat.txt || true
+            test -s screenshots/cove-gameplay.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pecks-cove-v03-emulator-evidence
+          path: screenshots/
+          retention-days: 3
