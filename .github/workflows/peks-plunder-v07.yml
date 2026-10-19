@@ -1,0 +1,44 @@
+name: Pek's Plunder v0.7 - APK build (manual reviewed branch)
+on:
+  push:
+    branches: [feature/peks-plunder-single-task-cheers-v07-20261018]
+    paths:
+      - 'pecks-cove-capers/**'
+      - '.github/workflows/peks-plunder-v07.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: peks-plunder-v07-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Configure Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - name: Validate source and task progression
+        run: |
+          node --check pecks-cove-capers/web/game.js
+          node pecks-cove-capers/test_logic.cjs
+          test -s pecks-cove-capers/android/app/src/main/res/drawable-nodpi/ic_launcher.png
+      - name: Assemble offline Android APK
+        working-directory: pecks-cove-capers/android
+        run: gradle :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Peks-Plunder-v07-APK
+          path: pecks-cove-capers/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error

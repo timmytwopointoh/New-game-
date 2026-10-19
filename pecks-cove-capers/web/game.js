@@ -26,13 +26,13 @@ const PICKUP={x:937,y:403};
 const EXIT={x:1231,y:187};
 const CREW_SPOTS=[[181,490],[234,335],[842,424],[568,469],[1172,242],[1350,469],[765,609],[318,495],[1110,566],[561,295]];
 const sites=[{x:721,y:423},{x:184,y:486},{x:1224,y:487},{x:760,y:438},{x:1176,y:673},{x:555,y:305},{x:876,y:627}];
-let chosen=0, state='menu',game=null,stars=[],sound=true,audio=null,tick=0,last=0,keys={},dpad=null,toastDeadline=0;
+let chosen=0, state='front',game=null,stars=[],sound=true,audio=null,tick=0,last=0,keys={},dpad=null,toastDeadline=0;
 const SHIFT_LENGTH=720,DAILY_JOBS=8,DAILY_GUESTS=6;
 const shiftDifficulty=t=>t<240?0:t<480?1:2;
 const phaseName=t=>['SUNRISE','LUNCH RUSH','SUNSET RUSH'][shiftDifficulty(t)];
 const crowdDelay=t=>[49,29,16][shiftDifficulty(t)];
 const prankDelay=t=>[120,82,48][shiftDifficulty(t)];
-let introStarted=0,introDone=false,miniPointerActive=false;
+let introStarted=0,introDone=true,miniPointerActive=false;
 const DINER_TABLES=[{x:656,y:304},{x:847,y:306},{x:672,y:559},{x:850,y:561},{x:1146,y:315},{x:1335,y:315},{x:1152,y:551},{x:1346,y:553}];
 const TABLE_COLLISION={rx:73,ry:65};
 const WALL_ZONES=[
@@ -75,18 +75,18 @@ function rounded(c,x,y,w,h,r,color){const q=Math.min(r,w/2,h/2);c.fillStyle=colo
 function sprite(c,x,y,r,s=1,t=0,pose='idle'){
  c.save();c.translate(Math.round(x),Math.round(y));c.scale(s,s);
  const moving=pose==='walk',step=moving?Math.sin(t*13)*2:0,bob=Math.sin(t*3+(roles.indexOf(r)))*.6;
- const wave=pose==='cheer'&&['host','boss','decor','drinks'].includes(r.id);
+ const wave=pose==='cheer';
  const workPose=pose==='work' ? Math.sin(t*18)*3 : 0;
- c.translate(0,Math.round(bob));
+ c.translate(0,Math.round(bob+(wave?-8-Math.abs(Math.sin(t*10))*9:0)));
  ellipse(c,0,10,17,5,'#173e4a55');
  // legs and boots
  rect(c,-10,6+step,8,11,'#3e5460');rect(c,2,6-step,8,11,'#3e5460');rect(c,-11,13+step,9,5,'#263c4e');rect(c,2,13-step,9,5,'#263c4e');
  // arms with pose
- rect(c,-17,-18-(wave?11:0)+workPose,7,21,r.skin);rect(c,10,-17-workPose,7,21,r.skin);
+ rect(c,-17,-18-(wave?22:0)+workPose,7,21,r.skin);rect(c,10,-17-(wave?22:0)-workPose,7,21,r.skin);
  rect(c,-13,-21,27,31,r.shirt);rect(c,-13,-21,27,5,r.accent);rect(c,-6,-14,13,22,'#fff2d77a');
  rect(c,-5,-16,10,3,r.accent); // apron bow
  rect(c,-11,-44,23,24,r.skin);rect(c,-12,-42,3,15,'#ae6e52');rect(c,-9,-44,23,7,r.hair);
- rect(c,-5,-35,3,3,'#2f414d');rect(c,5,-35,3,3,'#2f414d');rect(c,0,-29,6,2,'#973f45');
+ rect(c,-5,-35,3,3,'#2f414d');rect(c,5,-35,3,3,'#2f414d');if(wave){rect(c,-6,-35,4,2,'#2f414d');rect(c,5,-35,4,2,'#2f414d');rect(c,-2,-28,7,5,'#993b48');rect(c,0,-26,3,1,'#ffe1ca')}else rect(c,0,-29,6,2,'#973f45');
  // character-specific accessories, chunky pixel silhouette
  switch(r.id){
  case 'cook':rect(c,-12,-59,25,14,'#faf4dc');rect(c,-7,-67,18,13,'#fff');rect(c,-15,-49,30,5,'#d6e1d9');break;
@@ -122,18 +122,38 @@ function say(msg){$('message').textContent=msg}
 function beep(note=520,len=.1,type='sine'){if(!sound)return;try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();const oscillator=audio.createOscillator(),gain=audio.createGain(),now=audio.currentTime;oscillator.type=type;oscillator.frequency.setValueAtTime(note,now);oscillator.frequency.exponentialRampToValueAtTime(Math.max(60,note*.78),now+len);gain.gain.setValueAtTime(.045,now);gain.gain.exponentialRampToValueAtTime(.001,now+len);oscillator.connect(gain).connect(audio.destination);oscillator.start(now);oscillator.stop(now+len)}catch{}}
 function confetti(x,y,n=17,col='#ffe0a2'){if(!game)return;for(let i=0;i<n;i++)game.particles.push({x,y,vx:rnd(-65,65),vy:rnd(-110,-22),life:rnd(.6,1.2),max:1.2,col:Math.random()<.35?'#9fe1ba':col,size:rnd(3,7)})}
 function goal(){const r=roles[game.role];return r.tasks[game.done%r.tasks.length]}
-function target(){if(!game)return null;const g=goal();return {x:g[2],y:g[3],label:g[0],sub:g[1],icon:g[4],duration:g[5],isMess:false}}
 function customersWaiting(){return game?game.customers.filter(c=>c.state==='ordered'):[]}
 function serviceTarget(){return game&&game.carryMeal?game.customers.find(c=>c.id===game.carryMeal.id&&c.state==='ordered'):null}
 function near(x,y,d=73){return Math.hypot(game.x-x,game.y-y)<d}
+/* One non-ghost objective at a time. A complete guest delivery is two sequential
+ * steps: collect the order, THEN serve that guest. Background orders remain
+ * visible but cannot steal WORK input or spawn extra ! markers. */
+function target(){
+ if(!game)return null;
+ if(game.serviceStage==='pickup'){
+  const guest=customersWaiting()[0];
+  if(guest)return {kind:'pickup',x:PICKUP.x,y:PICKUP.y,label:'Pick up '+guest.order[0],sub:'Collect '+guest.name+"'s meal",icon:guest.order[1],duration:.75,guest};
+  game.serviceStage=null;
+ }
+ if(game.serviceStage==='serve'){
+  const c=serviceTarget();if(c)return {kind:'serve',x:c.tx,y:c.ty,label:'Serve '+c.name,sub:'Deliver '+c.order[0],icon:c.order[1],duration:.65,guest:c};
+  game.serviceStage=null;game.carryMeal=null;
+ }
+ const g=goal();return {kind:'job',x:g[2],y:g[3],label:g[0],sub:g[1],icon:g[4],duration:g[5],isMess:false};
+}
 function activeTask(){
  if(!game)return null;
- const served=serviceTarget();
- if(served&&near(served.tx,served.ty,109))return {kind:'serve',x:served.tx,y:served.ty,duration:.65,label:'Serve '+served.order[0],guest:served};
- if(customersWaiting().length&&!game.carryMeal&&near(PICKUP.x,PICKUP.y,84))return {kind:'pickup',x:PICKUP.x,y:PICKUP.y,duration:.75,label:'Pick up dinner'};
+ // Ghost events may be completed during ANY job or customer delivery.
  if(game.mess&&near(game.mess.x,game.mess.y,78))return {...game.mess,kind:'ghost'};
- const g=target();if(near(g.x,g.y,72))return {...g,kind:'job'};
- return null;
+ const t=target();
+ if(!t)return null;
+ const radius=t.kind==='serve'?109:t.kind==='pickup'?84:72;
+ return near(t.x,t.y,radius)?t:null;
+}
+function maybeScheduleService(){
+ if(!game||game.serviceStage||game.carryMeal||!customersWaiting().length)return false;
+ if(game.done>0&&(game.done%2===0||game.done>=DAILY_JOBS)&&game.served<DAILY_GUESTS){game.serviceStage='pickup';return true}
+ return false;
 }
 function spawnCustomer(){
  if(!game||game.customers.filter(c=>c.state!=='leaving').length>=8)return;
@@ -180,36 +200,71 @@ function updateHud(){
  $('score').textContent=game.score;
  $('dayLabel').textContent=phaseName(game.elapsed);
  $('dayMeterFill').style.width=`${Math.min(100,game.elapsed/SHIFT_LENGTH*100)}%`;
- $('progressText').textContent=game.mess?'👻 GHOST PRANK!':game.carryMeal?'🍽 DELIVER TO '+game.carryMeal.name.toUpperCase():('❗ '+t.label.toUpperCase());
+ $('progressText').textContent=game.mess?'👻 GHOST PRANK! · '+t.label.toUpperCase():('❗ '+t.label.toUpperCase());
  if(game.boardOpen)refreshTaskBoard();
 }
-function refreshTaskBoard(){if(!game)return;const r=roles[game.role],completed=Math.min(game.done,DAILY_JOBS);
- $('taskItems').innerHTML=`<li>${completed>=DAILY_JOBS?'✅':'⬜'} Job tasks: ${completed}/${DAILY_JOBS}</li><li>${game.served>=DAILY_GUESTS?'✅':'⬜'} Serve guests: ${Math.min(game.served,DAILY_GUESTS)}/${DAILY_GUESTS}</li><li>✨ Ghosts cleaned: ${game.ghostCount}</li><li>💰 Coins collected: ${game.score}</li><li>📍 Next: ${r.tasks[game.done%r.tasks.length][0]}</li>`;
- $('boardHint').textContent=`${phaseName(game.elapsed)} · ${Math.max(0,Math.ceil((SHIFT_LENGTH-game.elapsed)/60))} min left · Tasks never auto-complete`;
+function refreshTaskBoard(){if(!game)return;
+ const r=roles[game.role],completed=Math.min(game.done,DAILY_JOBS),current=target();
+ const rows=[`<li>🎯 ACTIVE TASK: ${current.icon||'❗'} ${current.label} — ${current.sub||''}</li>`,
+ `<li>${completed>=DAILY_JOBS?'✅':'⬜'} ${r.job}: ${completed}/${DAILY_JOBS} tasks</li>`,
+ `<li>${game.served>=DAILY_GUESTS?'✅':'⬜'} Guests served: ${Math.min(game.served,DAILY_GUESTS)}/${DAILY_GUESTS}</li>`,
+ `<li>👻 Ghost pranks fixed: ${game.ghostCount}</li>`,
+ `<li>💰 Coins earned: ${game.score}</li>`];
+ if(game.mess)rows.splice(1,0,'<li>👻 BONUS INTERRUPT: Clean up the ghost mess!</li>');
+ $('taskItems').innerHTML=rows.join('');
+ $('boardHint').textContent=`${phaseName(game.elapsed)} · ${Math.max(0,Math.ceil((SHIFT_LENGTH-game.elapsed)/60))} min left · Finish a task to unlock the next`;
 }
 function toggleBoard(force){if(!game||state!=='playing')return;game.boardOpen=typeof force==='boolean'?force:!game.boardOpen;
  $('taskBoard').classList.toggle('hidden',!game.boardOpen);if(game.boardOpen){game.work=false;keys={};dpad=null;refreshTaskBoard()}}
 
 function startingSpot(role){const choices=[[700,375],[350,431],[829,448],[445,468],[1050,270],[1263,647],[936,455],[1240,668],[1265,664],[937,264]];const [x,y]=choices[role];return canStand(x,y)?{x,y}:{x:567,y:464}}
-function begin(){const r=roles[chosen],spawn=startingSpot(chosen);game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:115,elapsed:0,particles:[],paused:false,ghostCount:0,streak:0,carry:null,carryMeal:null,served:0,spawned:0,nextCustomer:8,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0,mini:null,boardOpen:false,peakPhase:0};state='playing';$('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');$('finish').classList.add('hidden');$('taskBoard').classList.add('hidden');screenFade();$('pauseBtn').textContent='Ⅱ';say(`${r.name}: ${CREW_DIALOGUE[r.id][0]} Follow the ! to your next station. Hold WORK when close.`);toast('🌅 THE MORNING SHIFT BEGINS!');beep(660,.1);updateHud()}
-function finish(won){if(state!=='playing')return;state='finish';game.paused=true;saveBest(game.score);$('finish').classList.remove('hidden');$('finishIcon').textContent=won?'🏆':'🌅';$('finishTitle').textContent=won?'THE COVE WAS SAVED!':'THE DAY IS DONE!';$('finishBody').textContent=`${roles[game.role].name} finished ${game.done} jobs, served ${game.served} guests, fixed ${game.ghostCount} ghost pranks, and earned ${game.score} coins. ${won?'The crew wants an encore!':'Complete your job checklist and serve more diners next time.'}`;beep(won?880:420,.3)}
+function openFront(){
+ state='front';game=null;keys={};dpad=null;introDone=true;introStarted=0;
+ $('sunriseIntro').classList.add('hidden');$('sunriseIntro').classList.remove('introFade');
+ $('finish').classList.add('hidden');$('gameScreen').classList.add('hidden');$('titleScreen').classList.add('hidden');
+ $('frontMenu').classList.remove('hidden');$('taskBoard').classList.add('hidden');$('minigameOverlay').classList.add('hidden');screenFade();
+}
+function openCrew(){
+ state='menu';game=null;keys={};dpad=null;introDone=true;
+ $('sunriseIntro').classList.add('hidden');$('sunriseIntro').classList.remove('introFade');
+ $('finish').classList.add('hidden');$('gameScreen').classList.add('hidden');$('frontMenu').classList.add('hidden');
+ $('titleScreen').classList.remove('hidden');$('taskBoard').classList.add('hidden');$('minigameOverlay').classList.add('hidden');
+ choose(chosen);screenFade();
+}
+function begin(){
+ const r=roles[chosen],spawn=startingSpot(chosen);
+ game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:115,elapsed:0,particles:[],paused:true,ghostCount:0,streak:0,carry:null,carryMeal:null,serviceStage:null,served:0,spawned:0,nextCustomer:8,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0,mini:null,boardOpen:false,peakPhase:0,cheerUntil:0};
+ state='intro';$('frontMenu').classList.add('hidden');$('titleScreen').classList.add('hidden');
+ $('gameScreen').classList.remove('hidden');$('finish').classList.add('hidden');$('taskBoard').classList.add('hidden');
+ $('pauseBtn').textContent='Ⅱ';say(`${r.name}: ${CREW_DIALOGUE[r.id][0]} Follow the ! to your first job.`);
+ updateHud();replayIntro();
+}
+function finish(won){
+ if(state!=='playing')return;state='finish';game.paused=true;game.cheerUntil=tick+6;
+ saveBest(game.score);$('finish').classList.remove('hidden');
+ $('finishIcon').textContent=won?'🏆':'🌅';$('finishTitle').textContent=won?'HOORAY! SHIFT COMPLETE!':'SUNSET CELEBRATION!';
+ $('finishBody').textContent=`${roles[game.role].name} finished ${game.done} jobs, served ${game.served} guests, fixed ${game.ghostCount} ghost pranks, and earned ${game.score} coins. ${won?'An incredible day at the cove!':'The crew is proud of your hard work! Try again to reach every goal.'}`;
+ confetti(game.x,game.y,95,'#fff09b');burstConfetti();burstConfetti();screenFade();beep(won?920:740,.32);
+}
 function ghostPrank(){if(!game||game.mess||state!=='playing')return;const s=sites[Math.floor(rnd(0,sites.length))];game.ghost={x:s.x,y:s.y-52,t:0};game.mess={x:s.x,y:s.y,label:['Ghostly spill!','Flying cutlery!','Mysterious mess!'][Math.floor(rnd(0,3))],sub:'Clean up the ghost prank before it spreads',icon:'👻',duration:1.5,isMess:true,ttl:22};game.progress=0;say('BOO! The cove ghost made a mess. Hurry over and clean it!');toast('👻 GHOST IN THE RESTAURANT!');beep(244,.3,'sawtooth')}
 function completeTask(action=activeTask()){
  if(!game||!action)return false;
+ if(action.kind==='ghost'&&!game.mess)return false;
+ if(action.kind!=='ghost'&&target().kind!==action.kind)return false;
  confetti(action.x,action.y,48,action.kind==='ghost'?'#bdedff':'#ffdf82');burstConfetti();
- game.progress=0;game.work=false;const role=roles[game.role];
+ game.progress=0;game.work=false;game.cheerUntil=tick+1.85;const role=roles[game.role];
  if(action.kind==='ghost'){
   game.mess=null;game.ghost=null;game.ghostCount++;game.score+=50;game.floats.push({x:action.x,y:action.y-95,label:'CLEAN! +50',life:1.8});
   say('Wade: Whew! That pesky ghost made a fine mess. Thanks for fixing it!');toast('+50 · PRANK FIXED!');beep(750,.17);
  }else if(action.kind==='pickup'){
-  const c=customersWaiting()[0];if(!c)return false;
-  game.carryMeal={id:c.id,name:c.name,icon:c.order[1]};say(`${role.short}: ${c.order[0]} for ${c.name}, coming right up!`);toast('TAKE DINNER TO THE ! TABLE');beep(630,.13);
+  const c=action.guest||customersWaiting()[0];if(!c)return false;
+  game.carryMeal={id:c.id,name:c.name,icon:c.order[1]};game.serviceStage='serve';say(`${role.short}: ${c.order[0]} for ${c.name}, coming right up!`);toast('TAKE DINNER TO THE ! TABLE');beep(630,.13);
  }else if(action.kind==='serve'){
   const c=action.guest;if(!game.carryMeal||game.carryMeal.id!==c.id)return false;
-  c.state='eating';c.eat=0;game.carryMeal=null;game.served++;game.score+=150;game.floats.push({x:action.x,y:action.y-97,label:'THANK YOU! +150',life:1.7});
+  c.state='eating';c.eat=0;game.carryMeal=null;game.serviceStage=null;game.served++;game.score+=150;game.floats.push({x:action.x,y:action.y-97,label:'THANK YOU! +150',life:1.7});
   say(`${c.name}: Thank you! This ${c.order[0].toLowerCase()} looks wonderful!`);toast('+150 · HAPPY GUEST!');beep(880,.14);
  }else if(action.kind==='job'){
-  const stage=game.done%3;game.carry=stage===2?null:role.tasks[stage][4];game.done++;game.score+=100;
+  const stage=game.done%3;game.carry=stage===2?null:role.tasks[stage][4];game.done++;game.score+=100;maybeScheduleService();
   game.completedStations.push({x:action.x,y:action.y,icon:action.icon,role:role.id,stage,cycle:Math.floor((game.done-1)/3),doneAt:game.elapsed});
   game.jobVisuals[role.id]=Math.max(game.jobVisuals[role.id]||0,stage+1);
   game.floats.push({x:action.x,y:action.y-95,label:'+100  '+action.icon,life:1.7});
@@ -319,15 +374,13 @@ function drawWorkResults(t){
 function drawFloatingResults(t){if(!game)return;for(const f of game.floats){const opacity=Math.min(1,f.life);ctx.save();ctx.globalAlpha=opacity;rounded(ctx,f.x-82,f.y-(1.7-f.life)*31,164,27,8,'#2b735df0');text(ctx,f.label,f.x,f.y+18-(1.7-f.life)*31,16,'#ffedb3','center',false);ctx.restore()}}
 function drawPickup(t){
  if(!game)return;
- {const q=target();workMarker(q.x,q.y,q.label,t)}
+ const q=target();if(q)workMarker(q.x,q.y,q.label,t,q.kind==='job'?'#ffcc73':'#b4ebd3');
  if(game.mess)workMarker(game.mess.x,game.mess.y,'GHOST MESS',t,'#b6dcff');
- const waiting=customersWaiting();if(waiting.length&&!game.carryMeal)workMarker(PICKUP.x,PICKUP.y,'PICK UP MEAL',t,'#b5ecd5');
- const c=serviceTarget();if(c)workMarker(c.tx,c.ty,'SERVE '+c.name,t,'#f5e5a0');
  const task=activeTask();if(task&&game.progress>0){rounded(ctx,task.x-39,task.y+24,78,12,4,'#1b5261');rounded(ctx,task.x-37,task.y+26,74*game.progress,8,3,'#f5d990');for(let i=0;i<5;i++){const bx=task.x-22+i*11,by=task.y-4-Math.sin(t*6+i)*15;ellipse(ctx,bx,by,3+game.progress*3,3+game.progress*3,task.kind==='ghost'?'#c9f6ffb9':'#fffae0b9')}}
 }
 function ghost(x,y,t){for(let i=0;i<5;i++){const a=t*3+i*TAU/5;ellipse(ctx,x+Math.cos(a)*31,y+Math.sin(a)*24,3+i%2,3+i%2,'#d0f5ff90')}ctx.save();ctx.translate(x,y+Math.sin(t*4)*6);ellipse(ctx,0,23,18,6,'#1d576052');ellipse(ctx,0,0,24,29,'#bbf6ec55');ellipse(ctx,0,-5,17,22,'#e2faf2');pRect(-17,-2,34,18,'#d6fcf3');pRect(-17,12,10,11,'#d6fcf3');pRect(-1,15,10,14,'#d6fcf3');pRect(12,9,6,15,'#d6fcf3');pRect(-8,-13,5,7,'#34526b');pRect(6,-13,5,7,'#34526b');pRect(-2,-4,6,5,'#f2929c');ctx.restore()}
 function npcCharacters(t){if(!game)return;roles.forEach((r,i)=>{if(i===game.role)return;const spots=CREW_SPOTS;const [x,y]=CREW_SPOTS[i];const sway=Math.sin(t*.65+i*7)*5;sprite(ctx,x+sway,y+Math.cos(t*.8+i)*2,r,.77,t,'idle')})}
-function drawCharacter(t){const r=roles[game.role],moving=(keys['arrowleft']||keys['arrowright']||keys['arrowup']||keys['arrowdown']||keys['a']||keys['d']||keys['w']||keys['s']||dpad);sprite(ctx,game.x,game.y,r,1.17,t,moving?'walk':game.work?'work':'idle');
+function drawCharacter(t){const r=roles[game.role],moving=(keys['arrowleft']||keys['arrowright']||keys['arrowup']||keys['arrowdown']||keys['a']||keys['d']||keys['w']||keys['s']||dpad);const cheering=game.cheerUntil>t;sprite(ctx,game.x,game.y,r,cheering?1.32:1.17,t,cheering?'cheer':moving?'walk':game.work?'work':'idle');if(cheering){for(let i=0;i<5;i++){const a=i*TAU/5+t*3;const xx=game.x+Math.cos(a)*36,yy=game.y-68-Math.abs(Math.sin(a))*28;text(ctx,i%2?'♥':'✦',xx,yy,18,i%2?'#ffb4c0':'#ffeb92','center',false)}}
  if(game.carry){const bob=Math.sin(t*5)*2;rounded(ctx,game.x+12,game.y-106+bob,29,26,7,'#fff2cd');text(ctx,game.carry,game.x+26,game.y-86+bob,17,'#345868','center',false)}
  rounded(ctx,game.x-36,game.y-86,72,19,6,'#1e5361');text(ctx,r.short,game.x,game.y-72,13,'#ffe7aa','center',false)
 }
@@ -396,7 +449,7 @@ function demoPath(nodes,t,duration=19,offset=0){
  const smooth=f*f*(3-2*f);return [x[0]+(y[0]-x[0])*smooth,x[1]+(y[1]-x[1])*smooth];
 }
 function menuAttract(t){
- if(state!=='menu')return;
+ if(state!=='menu'&&state!=='front')return;
  // Simulated shift is not the player's game object; it can never award or save points.
  const oldCtx=ctx,oldGame=game;
  const m=t%DEMO_PERIOD;
@@ -455,7 +508,17 @@ function drawDaylight(elapsed){
  if(d>.66){ctx.save();ctx.globalAlpha=Math.min(.7,(d-.66)*2);for(let i=0;i<5;i++){const x=94+i*192;ellipse(ctx,x,70,33,11,'#f4c975')}ctx.restore()}
 }
 function drawSky(t){sc.clearRect(0,0,480,270);const g=sc.createLinearGradient(0,0,0,270);g.addColorStop(0,'#529aab');g.addColorStop(.63,'#f3b385');g.addColorStop(1,'#144e64');sc.fillStyle=g;sc.fillRect(0,0,480,270);ellipse(sc,370,82,47,47,'#fceab5');cloud(41+Math.sin(t/5)*10,65,1.3);cloud(247-Math.sin(t/9)*9,25,.8);for(let i=0;i<8;i++){line(sc,0,193+i*10,480,193+i*10,i%2?'#7bc9b2':'#52979e',3)}for(let i=0;i<10;i++)line(sc,340+i*3,190+i*4,402-i*5,193+i*4,'#ebd7a1',3);palm(30,215,2.1);palm(470,260,2)}
-function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='menu')menuAttract(tick);if(state==='playing')update(dt);if(state!=='menu'&&game)render(tick);if(game?.mini)paintMini();if(!introDone)drawIntro(now);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
+function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='menu'||state==='front')menuAttract(tick);if(state==='playing')update(dt);if(state!=='menu'&&state!=='front'&&game)render(tick);if(state==='finish')drawVictory(tick);if(game?.mini)paintMini();if(!introDone)drawIntro(now);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
+function drawVictory(t){
+ if(!game||state!=='finish')return;
+ const canvas=$('victoryCanvas');if(!canvas)return;const c=canvas.getContext('2d');if(!c)return;
+ c.clearRect(0,0,360,190);c.save();
+ for(let i=0;i<12;i++){const a=i*TAU/12+t*.35;ellipse(c,180+Math.cos(a)*118,92+Math.sin(a)*72,4,4,i%2?'#ffdd81':'#b3eed5')}
+ ellipse(c,180,150,81,17,'#123d4a55');
+ sprite(c,180,141,roles[game.role],2.16,t,'cheer');
+ for(let i=0;i<7;i++){let x=180+Math.cos(t*1.8+i)*82,y=68+Math.sin(t*1.8+i*1.3)*31;text(c,i%2?'♥':'✦',x,y,21,i%2?'#ff8c9e':'#fff0a0','center',false)}
+ c.restore();
+}
 function nearbyDialogue(){
  if(!game)return false;
  const spots=CREW_SPOTS;
@@ -476,7 +539,7 @@ function pressWork(){if(!game||game.paused||game.boardOpen||game.mini||state!=='
 /* Scene presentation: short fade curtain plus a scripted 3.8-second sunrise over the cove. */
 function screenFade(){const el=$('sceneFade');el.classList.remove('wipe');void el.offsetWidth;el.classList.add('wipe')}
 function replayIntro(){introDone=false;introStarted=0;$('sunriseIntro').classList.remove('hidden','introFade')}
-function finishIntro(){if(introDone)return;introDone=true;const el=$('sunriseIntro');el.classList.add('introFade');setTimeout(()=>el.classList.add('hidden'),540)}
+function finishIntro(){if(introDone)return;introDone=true;const el=$('sunriseIntro');el.classList.add('introFade');if(state==='intro'&&game){state='playing';game.paused=false;screenFade();toast('☀️ THE SHIFT BEGINS!');beep(660,.1)}setTimeout(()=>{if(introDone)el.classList.add('hidden')},540)}
 function drawIntro(now){if(!introStarted)introStarted=now;const elapsed=now-introStarted,p=clamp(elapsed/3800,0,1),c=$('sunriseCanvas').getContext('2d');if(!c)return;
  const w=640,h=360;c.clearRect(0,0,w,h);
  const bg=c.createLinearGradient(0,0,0,h);bg.addColorStop(0,p<.35?'#162f59':'#3c8faa');bg.addColorStop(.57,'#f4a776');bg.addColorStop(1,'#f4dcac');c.fillStyle=bg;c.fillRect(0,0,w,h);
@@ -547,7 +610,7 @@ miniCanvas.addEventListener('pointermove',e=>{if(!miniPointerActive)return;e.pre
 for(const k of ['pointerup','pointercancel','lostpointercapture'])miniCanvas.addEventListener(k,()=>{miniPointerActive=false;if(game?.mini)game.mini.last=null});
 $('quitMini').onclick=()=>exitMini(false);
 
-$('play').onclick=begin;$('again').onclick=begin;$('change').onclick=()=>{state='menu';game=null;$('finish').classList.add('hidden');$('titleScreen').classList.remove('hidden');$('gameScreen').classList.add('hidden');choose(chosen);screenFade();replayIntro()};$('menuBtn').onclick=()=>{if(!game)return;state='menu';game=null;$('gameScreen').classList.add('hidden');$('titleScreen').classList.remove('hidden');$('taskBoard').classList.add('hidden');choose(chosen);screenFade()};
+$('frontPlay').onclick=openCrew;$('crewBack').onclick=openFront;$('play').onclick=begin;$('again').onclick=begin;$('change').onclick=openCrew;$('menuBtn').onclick=openCrew;
 $('taskBtn').onclick=()=>toggleBoard();$('closeBoard').onclick=()=>toggleBoard(false);$('skipIntro').onclick=finishIntro;
 $('pauseBtn').onclick=()=>{if(!game)return;game.paused=!game.paused;$('pauseBtn').textContent=game.paused?'▶':'Ⅱ';say(game.paused?'Shift paused. Tap play to continue.':'Back to work!')};$('soundBtn').onclick=()=>{sound=!sound;$('soundBtn').textContent=sound?'♪':'♪̸';if(sound)beep(600,.08)};
 // No screen-tap movement or task autopathing; use physical controls only.
@@ -563,5 +626,5 @@ window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
 for(const e of ['contextmenu','selectstart','dragstart'])document.addEventListener(e,event=>{if(event.target.closest?.('#controls, #world, #frame'))event.preventDefault()});
 for(const e of ['touchstart','touchmove'])document.querySelector('#controls').addEventListener(e,event=>event.preventDefault(),{passive:false});
 window.addEventListener('blur',()=>{keys={};dpad=null;if(game)game.work=false});
-window.__coveTest={SHIFT_LENGTH,DAILY_JOBS,DAILY_GUESTS,shiftDifficulty,phaseName,crowdDelay,prankDelay,miniKind,get introDone(){return introDone},get mini(){return game?.mini||null},toggleBoard,finishIntro,startMini,applyMini,roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
+window.__coveTest={SHIFT_LENGTH,DAILY_JOBS,DAILY_GUESTS,shiftDifficulty,phaseName,crowdDelay,prankDelay,miniKind,get introDone(){return introDone},get mini(){return game?.mini||null},toggleBoard,openCrew,openFront,finishIntro,startMini,applyMini,roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'||state==='front'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,maybeScheduleService,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
 })();

@@ -29,7 +29,7 @@ html,body,#shell,#gameScreen,#controls,#controls *,#world{user-select:none!impor
 #skipIntro{background:#204d5c;border:1px solid #f9d69c;border-radius:8px;color:#fff3d9;font-size:12px;padding:6px 12px;margin-top:10px}
 .dayBlock{width:99px;text-align:center;flex-shrink:0}.dayBlock b{color:#fce6ab;font-size:11px}.dayMeter{display:block;height:5px;background:#356577;border-radius:10px;overflow:hidden}.dayMeter span{display:block;width:0;height:100%;background:linear-gradient(90deg,#ffe1a4,#e78a83,#798ed2)}
 #taskBtn{background:#3d756f;border:1px solid #99ccb5;border-radius:7px;color:#ffeec3;font-size:11px;font-weight:bold;padding:9px 8px;white-space:nowrap}
-#celebrateFX{position:absolute;inset:0;z-index:53;pointer-events:none;overflow:hidden}.confettiPiece{position:absolute;width:11px;height:15px;box-shadow:1px 1px #344852;animation:confettiFly 1.1s ease-out both}
+#celebrateFX{position:absolute;inset:0;z-index:19;pointer-events:none;overflow:hidden}.confettiPiece{position:absolute;width:11px;height:15px;box-shadow:1px 1px #344852;animation:confettiFly 1.1s ease-out both}
 @keyframes confettiFly{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--flyX),var(--flyY)) rotate(560deg)}}
 #minigameOverlay,#taskBoard{position:absolute;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;padding:12px;background:#0a2c40d9;backdrop-filter:blur(3px);animation:screenPop .33s ease-out both}
 @keyframes screenPop{from{opacity:0;transform:scale(.965)}to{opacity:1;transform:scale(1)}}
@@ -41,9 +41,25 @@ html,body,#shell,#gameScreen,#controls,#controls *,#world{user-select:none!impor
 #taskItems{text-align:left;list-style:none;padding:0;margin:10px 0}#taskItems li{background:#144357dd;border:1px solid #6da9a0;border-radius:9px;padding:9px 12px;margin:6px 0;font-weight:850}.boardFoot{font-size:12px!important}
 @media(max-width:800px){.dayBlock{width:72px}.dayBlock b{font-size:9px}#taskBtn{font-size:10px;padding:7px 5px}.miniPanel{max-height:98%;padding:8px 11px}#miniCanvas{max-height:45vh}}
 @media(max-width:620px){.dayBlock{display:none}#taskBtn{padding:6px 4px}}
-</style></head><body><div id="shell"><canvas id="sky" width="480" height="270"></canvas><canvas id="menuWorld" width="960" height="540" aria-hidden="true"></canvas><section id="titleScreen"><div class="tag">★ SUNRISE • SEAFOOD • SPECTRAL MISCHIEF ★</div><h1 class="logo">PEK'S PLUNDER<small>THE GHOST SHIFT</small></h1><div class="subtitle">Sunrise to midnight: one wild seaside shift! Ten jobs, hungry guests, and a mischievous ghost. Inspired by Peck's Old Port Cove.</div><div class="hrow"><div><h2>CHOOSE YOUR CREW MEMBER</h2><p>Each friend has their own shift to save.</p></div><div id="best" class="tag">★ TOP SCORE 0</div></div><div id="crew" aria-label="Select character"></div><div class="bottomRow"><div class="roleText"><h3 id="roleTitle">Dizzy Dishes</h3><p id="roleDesc">Scoop up plates and hustle them to the dish pit.</p></div><button id="play" class="bigButton">START THE SHIFT →</button></div><div class="tiny">MOVE: arrows / WASD / D-pad • HOLD WORK near ! markers • 100% offline</div></section><section id="gameScreen" class="hidden"><div id="hud"><div class="hudBlock"><div style="font-size:25px" id="roleEmoji">🍽️</div><div><small id="roleJob">DISH RUNNER</small><strong id="roleHudName">Dizzy</strong></div></div><div class="hudBlock"><div><small>SHIFT ELAPSED</small><strong class="hudBig" id="time">12:00</strong></div></div><div class="hudBlock"><div><small>COMPLETED</small><strong class="hudBig" id="done">0/8 · 🍽0/6</strong></div></div><div class="hudBlock hudOptional"><div><small>COINS</small><strong class="hudBig" id="score">0</strong></div></div><div id="progressText">Find the ! marker!</div><div class="dayBlock"><b id="dayLabel">SUNRISE</b><span class="dayMeter"><span id="dayMeterFill"></span></span></div><button id="taskBtn" aria-label="View shift task checklist">☷ TASKS</button><button id="pauseBtn" aria-label="Pause game">Ⅱ</button><button id="soundBtn" aria-label="Toggle audio">♪</button></div><div id="frame"><canvas id="world" width="960" height="540" aria-label="Top-down restaurant gameplay. Move using arrow keys or D-pad; hold WORK near exclamation markers to interact."></canvas><div id="controls"><div id="dpad"><span></span><button data-dir="up">▲</button><span></span><button data-dir="left">◀</button><span></span><button data-dir="right">▶</button><span></span><button data-dir="down">▼</button><span></span></div><button id="action" aria-label="Work at nearby station">WORK<small>HOLD / E</small></button></div><div id="toast" role="status"></div></div><div id="ticker">⚓ <span id="message">Welcome to the cove! A shift full of adventure awaits.</span><button id="menuBtn" style="margin-left:auto">CREW</button></div></section><div id="finish" class="hidden"><div class="finishPanel"><div style="font-size:64px" id="finishIcon">🏆</div><h2 id="finishTitle">SHIFT SAVED!</h2><p id="finishBody"></p><button id="again" class="bigButton">PLAY AGAIN</button><button id="change" class="bigButton" style="background:#c0e4d0;border-color:#648d9c">CHANGE CREW</button></div></div>
+
+/* 0.7: dedicated launch screen; crew selection is a second scene. */
+#frontMenu{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:22px;background:linear-gradient(180deg,#0c3442a8,#102c38e5);z-index:4}
+#frontMenu .frontShell{display:flex;flex-direction:column;gap:11px;align-items:center;max-width:660px;width:100%;padding:12px 20px;border-radius:20px;background:#103c4788;border:1px solid #b1dcbd77;box-shadow:0 13px 36px #061d3070}
+.brandCrab{font-size:clamp(42px,7vw,72px);line-height:1;filter:drop-shadow(0 5px 1px #1a3b40)}
+#frontMenu .logo{font-size:clamp(32px,7vw,69px);line-height:.98;filter:drop-shadow(2px 5px 1px #153c46)}
+#frontMenu .logo small{font-size:clamp(13px,2.5vw,21px)}
+.frontSubtitle{max-width:480px;color:#ffefcf;font-weight:bold;margin:0;font-size:clamp(12px,2vw,17px)}
+#frontPlay{font-size:clamp(15px,2vw,21px);margin:9px;padding:12px 38px;min-height:50px}
+.frontInfo{font-size:12px;color:#ffe6aa;font-weight:900}
+.frontHint{font-size:11px;color:#d8f3e3}
+#titleScreen{z-index:5}
+.backButton{padding:8px 12px;border:2px solid #a5d9ca;background:#24566a;color:#fff0c9;border-radius:9px;font-size:12px;font-weight:900}
+#victoryCanvas{display:block;width:min(340px,73vw);max-height:26vh;object-fit:contain;image-rendering:pixelated;margin:0 auto}
+#finish .finishPanel{max-height:96vh;overflow:auto}
+@media(max-height:480px){#frontMenu .frontShell{gap:4px;padding:7px}.brandCrab{font-size:34px}#frontMenu .logo{font-size:35px}#frontPlay{padding:8px 25px;min-height:38px}}
+</style></head><body><div id="shell"><canvas id="sky" width="480" height="270"></canvas><canvas id="menuWorld" width="960" height="540" aria-hidden="true"></canvas><section id="frontMenu" aria-label="Main menu"><div class="frontShell"><div class="brandCrab" aria-hidden="true">🦀</div><div class="tag">★ WELCOME TO THE WATERFRONT ★</div><h1 class="logo">PEK'S PLUNDER<small>THE GHOST SHIFT</small></h1><p class="frontSubtitle">A wild day of seafood, teamwork, and a very mischievous ghost!</p><button id="frontPlay" class="bigButton">▶ START NEW SHIFT</button><div class="frontInfo">🌊 Busy cove · 10 crew members · 12-minute shifts</div><div class="frontHint">Select a crew member, watch the sunrise, and start your day!</div></div></section><section id="titleScreen" class="hidden"><div class="tag">★ SUNRISE • SEAFOOD • SPECTRAL MISCHIEF ★</div><h1 class="logo">PEK'S PLUNDER<small>THE GHOST SHIFT</small></h1><div class="subtitle">Sunrise to midnight: one wild seaside shift! Ten jobs, hungry guests, and a mischievous ghost. Inspired by Peck's Old Port Cove.</div><div class="hrow"><button id="crewBack" class="backButton">‹ MAIN MENU</button><div><h2>CHOOSE YOUR CREW MEMBER</h2><p>Each friend has their own shift to save.</p></div><div id="best" class="tag">★ TOP SCORE 0</div></div><div id="crew" aria-label="Select character"></div><div class="bottomRow"><div class="roleText"><h3 id="roleTitle">Dizzy Dishes</h3><p id="roleDesc">Scoop up plates and hustle them to the dish pit.</p></div><button id="play" class="bigButton">START THE SHIFT →</button></div><div class="tiny">MOVE: arrows / WASD / D-pad • HOLD WORK near ! markers • 100% offline</div></section><section id="gameScreen" class="hidden"><div id="hud"><div class="hudBlock"><div style="font-size:25px" id="roleEmoji">🍽️</div><div><small id="roleJob">DISH RUNNER</small><strong id="roleHudName">Dizzy</strong></div></div><div class="hudBlock"><div><small>SHIFT ELAPSED</small><strong class="hudBig" id="time">12:00</strong></div></div><div class="hudBlock"><div><small>COMPLETED</small><strong class="hudBig" id="done">0/8 · 🍽0/6</strong></div></div><div class="hudBlock hudOptional"><div><small>COINS</small><strong class="hudBig" id="score">0</strong></div></div><div id="progressText">Find the ! marker!</div><div class="dayBlock"><b id="dayLabel">SUNRISE</b><span class="dayMeter"><span id="dayMeterFill"></span></span></div><button id="taskBtn" aria-label="View shift task checklist">☷ TASKS</button><button id="pauseBtn" aria-label="Pause game">Ⅱ</button><button id="soundBtn" aria-label="Toggle audio">♪</button></div><div id="frame"><canvas id="world" width="960" height="540" aria-label="Top-down restaurant gameplay. Move using arrow keys or D-pad; hold WORK near exclamation markers to interact."></canvas><div id="controls"><div id="dpad"><span></span><button data-dir="up">▲</button><span></span><button data-dir="left">◀</button><span></span><button data-dir="right">▶</button><span></span><button data-dir="down">▼</button><span></span></div><button id="action" aria-label="Work at nearby station">WORK<small>HOLD / E</small></button></div><div id="toast" role="status"></div></div><div id="ticker">⚓ <span id="message">Welcome to the cove! A shift full of adventure awaits.</span><button id="menuBtn" style="margin-left:auto">CREW</button></div></section><div id="finish" class="hidden"><div class="finishPanel"><div style="font-size:58px" id="finishIcon">🏆</div><canvas id="victoryCanvas" width="360" height="190" aria-label="Your chosen worker jumping for joy"></canvas><h2 id="finishTitle">SHIFT SAVED!</h2><p id="finishBody"></p><button id="again" class="bigButton">PLAY AGAIN</button><button id="change" class="bigButton" style="background:#c0e4d0;border-color:#648d9c">CHANGE CREW</button></div></div>
 <div id="celebrateFX" aria-hidden="true"></div><div id="sceneFade" aria-hidden="true"></div>
-<section id="sunriseIntro" role="presentation"><canvas id="sunriseCanvas" width="640" height="360" aria-label="The sunrise over Pek's Old Port Cove"></canvas><div class="introPanel"><h1>PEK'S PLUNDER</h1><p>A new day. A fresh catch. A whole lot of trouble!</p><div class="introTrack"><span id="introMeter"></span></div><button id="skipIntro">SKIP INTRO ›</button></div></section>
+<section id="sunriseIntro" class="hidden" role="presentation"><canvas id="sunriseCanvas" width="640" height="360" aria-label="The sunrise over Pek's Old Port Cove"></canvas><div class="introPanel"><h1>PEK'S PLUNDER</h1><p>A new day. A fresh catch. A whole lot of trouble!</p><div class="introTrack"><span id="introMeter"></span></div><button id="skipIntro">SKIP INTRO ›</button></div></section>
 <section id="minigameOverlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="minigameTitle"><div class="miniPanel"><h2 id="minigameTitle">SCRUB THE PLATE</h2><p id="minigameHelp">Tap and swipe!</p><canvas id="miniCanvas" width="460" height="280" aria-label="Interactive dishwashing or fryer-cleaning surface"></canvas><div class="miniBar"><span id="minigameProgress"></span></div><div class="miniFoot"><span id="minigameStatus">0%</span><button id="quitMini">BACK TO RESTAURANT</button></div></div></section>
 <section id="taskBoard" class="hidden" role="dialog" aria-modal="true" aria-label="Shift task checklist"><div class="boardPanel"><h2>📋 TODAY'S JOB BOARD</h2><p id="boardHint">Enjoy your shift!</p><ul id="taskItems"></ul><p class="boardFoot">The day lasts 12 minutes. Every role completes its own tasks; guests only leave when fed.</p><button id="closeBoard" class="bigButton">BACK TO WORK</button></div></section>
 </div><script>
@@ -75,13 +91,13 @@ const PICKUP={x:937,y:403};
 const EXIT={x:1231,y:187};
 const CREW_SPOTS=[[181,490],[234,335],[842,424],[568,469],[1172,242],[1350,469],[765,609],[318,495],[1110,566],[561,295]];
 const sites=[{x:721,y:423},{x:184,y:486},{x:1224,y:487},{x:760,y:438},{x:1176,y:673},{x:555,y:305},{x:876,y:627}];
-let chosen=0, state='menu',game=null,stars=[],sound=true,audio=null,tick=0,last=0,keys={},dpad=null,toastDeadline=0;
+let chosen=0, state='front',game=null,stars=[],sound=true,audio=null,tick=0,last=0,keys={},dpad=null,toastDeadline=0;
 const SHIFT_LENGTH=720,DAILY_JOBS=8,DAILY_GUESTS=6;
 const shiftDifficulty=t=>t<240?0:t<480?1:2;
 const phaseName=t=>['SUNRISE','LUNCH RUSH','SUNSET RUSH'][shiftDifficulty(t)];
 const crowdDelay=t=>[49,29,16][shiftDifficulty(t)];
 const prankDelay=t=>[120,82,48][shiftDifficulty(t)];
-let introStarted=0,introDone=false,miniPointerActive=false;
+let introStarted=0,introDone=true,miniPointerActive=false;
 const DINER_TABLES=[{x:656,y:304},{x:847,y:306},{x:672,y:559},{x:850,y:561},{x:1146,y:315},{x:1335,y:315},{x:1152,y:551},{x:1346,y:553}];
 const TABLE_COLLISION={rx:73,ry:65};
 const WALL_ZONES=[
@@ -124,18 +140,18 @@ function rounded(c,x,y,w,h,r,color){const q=Math.min(r,w/2,h/2);c.fillStyle=colo
 function sprite(c,x,y,r,s=1,t=0,pose='idle'){
  c.save();c.translate(Math.round(x),Math.round(y));c.scale(s,s);
  const moving=pose==='walk',step=moving?Math.sin(t*13)*2:0,bob=Math.sin(t*3+(roles.indexOf(r)))*.6;
- const wave=pose==='cheer'&&['host','boss','decor','drinks'].includes(r.id);
+ const wave=pose==='cheer';
  const workPose=pose==='work' ? Math.sin(t*18)*3 : 0;
- c.translate(0,Math.round(bob));
+ c.translate(0,Math.round(bob+(wave?-8-Math.abs(Math.sin(t*10))*9:0)));
  ellipse(c,0,10,17,5,'#173e4a55');
  // legs and boots
  rect(c,-10,6+step,8,11,'#3e5460');rect(c,2,6-step,8,11,'#3e5460');rect(c,-11,13+step,9,5,'#263c4e');rect(c,2,13-step,9,5,'#263c4e');
  // arms with pose
- rect(c,-17,-18-(wave?11:0)+workPose,7,21,r.skin);rect(c,10,-17-workPose,7,21,r.skin);
+ rect(c,-17,-18-(wave?22:0)+workPose,7,21,r.skin);rect(c,10,-17-(wave?22:0)-workPose,7,21,r.skin);
  rect(c,-13,-21,27,31,r.shirt);rect(c,-13,-21,27,5,r.accent);rect(c,-6,-14,13,22,'#fff2d77a');
  rect(c,-5,-16,10,3,r.accent); // apron bow
  rect(c,-11,-44,23,24,r.skin);rect(c,-12,-42,3,15,'#ae6e52');rect(c,-9,-44,23,7,r.hair);
- rect(c,-5,-35,3,3,'#2f414d');rect(c,5,-35,3,3,'#2f414d');rect(c,0,-29,6,2,'#973f45');
+ rect(c,-5,-35,3,3,'#2f414d');rect(c,5,-35,3,3,'#2f414d');if(wave){rect(c,-6,-35,4,2,'#2f414d');rect(c,5,-35,4,2,'#2f414d');rect(c,-2,-28,7,5,'#993b48');rect(c,0,-26,3,1,'#ffe1ca')}else rect(c,0,-29,6,2,'#973f45');
  // character-specific accessories, chunky pixel silhouette
  switch(r.id){
  case 'cook':rect(c,-12,-59,25,14,'#faf4dc');rect(c,-7,-67,18,13,'#fff');rect(c,-15,-49,30,5,'#d6e1d9');break;
@@ -171,18 +187,38 @@ function say(msg){$('message').textContent=msg}
 function beep(note=520,len=.1,type='sine'){if(!sound)return;try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();const oscillator=audio.createOscillator(),gain=audio.createGain(),now=audio.currentTime;oscillator.type=type;oscillator.frequency.setValueAtTime(note,now);oscillator.frequency.exponentialRampToValueAtTime(Math.max(60,note*.78),now+len);gain.gain.setValueAtTime(.045,now);gain.gain.exponentialRampToValueAtTime(.001,now+len);oscillator.connect(gain).connect(audio.destination);oscillator.start(now);oscillator.stop(now+len)}catch{}}
 function confetti(x,y,n=17,col='#ffe0a2'){if(!game)return;for(let i=0;i<n;i++)game.particles.push({x,y,vx:rnd(-65,65),vy:rnd(-110,-22),life:rnd(.6,1.2),max:1.2,col:Math.random()<.35?'#9fe1ba':col,size:rnd(3,7)})}
 function goal(){const r=roles[game.role];return r.tasks[game.done%r.tasks.length]}
-function target(){if(!game)return null;const g=goal();return {x:g[2],y:g[3],label:g[0],sub:g[1],icon:g[4],duration:g[5],isMess:false}}
 function customersWaiting(){return game?game.customers.filter(c=>c.state==='ordered'):[]}
 function serviceTarget(){return game&&game.carryMeal?game.customers.find(c=>c.id===game.carryMeal.id&&c.state==='ordered'):null}
 function near(x,y,d=73){return Math.hypot(game.x-x,game.y-y)<d}
+/* One non-ghost objective at a time. A complete guest delivery is two sequential
+ * steps: collect the order, THEN serve that guest. Background orders remain
+ * visible but cannot steal WORK input or spawn extra ! markers. */
+function target(){
+ if(!game)return null;
+ if(game.serviceStage==='pickup'){
+  const guest=customersWaiting()[0];
+  if(guest)return {kind:'pickup',x:PICKUP.x,y:PICKUP.y,label:'Pick up '+guest.order[0],sub:'Collect '+guest.name+"'s meal",icon:guest.order[1],duration:.75,guest};
+  game.serviceStage=null;
+ }
+ if(game.serviceStage==='serve'){
+  const c=serviceTarget();if(c)return {kind:'serve',x:c.tx,y:c.ty,label:'Serve '+c.name,sub:'Deliver '+c.order[0],icon:c.order[1],duration:.65,guest:c};
+  game.serviceStage=null;game.carryMeal=null;
+ }
+ const g=goal();return {kind:'job',x:g[2],y:g[3],label:g[0],sub:g[1],icon:g[4],duration:g[5],isMess:false};
+}
 function activeTask(){
  if(!game)return null;
- const served=serviceTarget();
- if(served&&near(served.tx,served.ty,109))return {kind:'serve',x:served.tx,y:served.ty,duration:.65,label:'Serve '+served.order[0],guest:served};
- if(customersWaiting().length&&!game.carryMeal&&near(PICKUP.x,PICKUP.y,84))return {kind:'pickup',x:PICKUP.x,y:PICKUP.y,duration:.75,label:'Pick up dinner'};
+ // Ghost events may be completed during ANY job or customer delivery.
  if(game.mess&&near(game.mess.x,game.mess.y,78))return {...game.mess,kind:'ghost'};
- const g=target();if(near(g.x,g.y,72))return {...g,kind:'job'};
- return null;
+ const t=target();
+ if(!t)return null;
+ const radius=t.kind==='serve'?109:t.kind==='pickup'?84:72;
+ return near(t.x,t.y,radius)?t:null;
+}
+function maybeScheduleService(){
+ if(!game||game.serviceStage||game.carryMeal||!customersWaiting().length)return false;
+ if(game.done>0&&(game.done%2===0||game.done>=DAILY_JOBS)&&game.served<DAILY_GUESTS){game.serviceStage='pickup';return true}
+ return false;
 }
 function spawnCustomer(){
  if(!game||game.customers.filter(c=>c.state!=='leaving').length>=8)return;
@@ -229,36 +265,71 @@ function updateHud(){
  $('score').textContent=game.score;
  $('dayLabel').textContent=phaseName(game.elapsed);
  $('dayMeterFill').style.width=`${Math.min(100,game.elapsed/SHIFT_LENGTH*100)}%`;
- $('progressText').textContent=game.mess?'👻 GHOST PRANK!':game.carryMeal?'🍽 DELIVER TO '+game.carryMeal.name.toUpperCase():('❗ '+t.label.toUpperCase());
+ $('progressText').textContent=game.mess?'👻 GHOST PRANK! · '+t.label.toUpperCase():('❗ '+t.label.toUpperCase());
  if(game.boardOpen)refreshTaskBoard();
 }
-function refreshTaskBoard(){if(!game)return;const r=roles[game.role],completed=Math.min(game.done,DAILY_JOBS);
- $('taskItems').innerHTML=`<li>${completed>=DAILY_JOBS?'✅':'⬜'} Job tasks: ${completed}/${DAILY_JOBS}</li><li>${game.served>=DAILY_GUESTS?'✅':'⬜'} Serve guests: ${Math.min(game.served,DAILY_GUESTS)}/${DAILY_GUESTS}</li><li>✨ Ghosts cleaned: ${game.ghostCount}</li><li>💰 Coins collected: ${game.score}</li><li>📍 Next: ${r.tasks[game.done%r.tasks.length][0]}</li>`;
- $('boardHint').textContent=`${phaseName(game.elapsed)} · ${Math.max(0,Math.ceil((SHIFT_LENGTH-game.elapsed)/60))} min left · Tasks never auto-complete`;
+function refreshTaskBoard(){if(!game)return;
+ const r=roles[game.role],completed=Math.min(game.done,DAILY_JOBS),current=target();
+ const rows=[`<li>🎯 ACTIVE TASK: ${current.icon||'❗'} ${current.label} — ${current.sub||''}</li>`,
+ `<li>${completed>=DAILY_JOBS?'✅':'⬜'} ${r.job}: ${completed}/${DAILY_JOBS} tasks</li>`,
+ `<li>${game.served>=DAILY_GUESTS?'✅':'⬜'} Guests served: ${Math.min(game.served,DAILY_GUESTS)}/${DAILY_GUESTS}</li>`,
+ `<li>👻 Ghost pranks fixed: ${game.ghostCount}</li>`,
+ `<li>💰 Coins earned: ${game.score}</li>`];
+ if(game.mess)rows.splice(1,0,'<li>👻 BONUS INTERRUPT: Clean up the ghost mess!</li>');
+ $('taskItems').innerHTML=rows.join('');
+ $('boardHint').textContent=`${phaseName(game.elapsed)} · ${Math.max(0,Math.ceil((SHIFT_LENGTH-game.elapsed)/60))} min left · Finish a task to unlock the next`;
 }
 function toggleBoard(force){if(!game||state!=='playing')return;game.boardOpen=typeof force==='boolean'?force:!game.boardOpen;
  $('taskBoard').classList.toggle('hidden',!game.boardOpen);if(game.boardOpen){game.work=false;keys={};dpad=null;refreshTaskBoard()}}
 
 function startingSpot(role){const choices=[[700,375],[350,431],[829,448],[445,468],[1050,270],[1263,647],[936,455],[1240,668],[1265,664],[937,264]];const [x,y]=choices[role];return canStand(x,y)?{x,y}:{x:567,y:464}}
-function begin(){const r=roles[chosen],spawn=startingSpot(chosen);game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:115,elapsed:0,particles:[],paused:false,ghostCount:0,streak:0,carry:null,carryMeal:null,served:0,spawned:0,nextCustomer:8,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0,mini:null,boardOpen:false,peakPhase:0};state='playing';$('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');$('finish').classList.add('hidden');$('taskBoard').classList.add('hidden');screenFade();$('pauseBtn').textContent='Ⅱ';say(`${r.name}: ${CREW_DIALOGUE[r.id][0]} Follow the ! to your next station. Hold WORK when close.`);toast('🌅 THE MORNING SHIFT BEGINS!');beep(660,.1);updateHud()}
-function finish(won){if(state!=='playing')return;state='finish';game.paused=true;saveBest(game.score);$('finish').classList.remove('hidden');$('finishIcon').textContent=won?'🏆':'🌅';$('finishTitle').textContent=won?'THE COVE WAS SAVED!':'THE DAY IS DONE!';$('finishBody').textContent=`${roles[game.role].name} finished ${game.done} jobs, served ${game.served} guests, fixed ${game.ghostCount} ghost pranks, and earned ${game.score} coins. ${won?'The crew wants an encore!':'Complete your job checklist and serve more diners next time.'}`;beep(won?880:420,.3)}
+function openFront(){
+ state='front';game=null;keys={};dpad=null;introDone=true;introStarted=0;
+ $('sunriseIntro').classList.add('hidden');$('sunriseIntro').classList.remove('introFade');
+ $('finish').classList.add('hidden');$('gameScreen').classList.add('hidden');$('titleScreen').classList.add('hidden');
+ $('frontMenu').classList.remove('hidden');$('taskBoard').classList.add('hidden');$('minigameOverlay').classList.add('hidden');screenFade();
+}
+function openCrew(){
+ state='menu';game=null;keys={};dpad=null;introDone=true;
+ $('sunriseIntro').classList.add('hidden');$('sunriseIntro').classList.remove('introFade');
+ $('finish').classList.add('hidden');$('gameScreen').classList.add('hidden');$('frontMenu').classList.add('hidden');
+ $('titleScreen').classList.remove('hidden');$('taskBoard').classList.add('hidden');$('minigameOverlay').classList.add('hidden');
+ choose(chosen);screenFade();
+}
+function begin(){
+ const r=roles[chosen],spawn=startingSpot(chosen);
+ game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:115,elapsed:0,particles:[],paused:true,ghostCount:0,streak:0,carry:null,carryMeal:null,serviceStage:null,served:0,spawned:0,nextCustomer:8,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0,mini:null,boardOpen:false,peakPhase:0,cheerUntil:0};
+ state='intro';$('frontMenu').classList.add('hidden');$('titleScreen').classList.add('hidden');
+ $('gameScreen').classList.remove('hidden');$('finish').classList.add('hidden');$('taskBoard').classList.add('hidden');
+ $('pauseBtn').textContent='Ⅱ';say(`${r.name}: ${CREW_DIALOGUE[r.id][0]} Follow the ! to your first job.`);
+ updateHud();replayIntro();
+}
+function finish(won){
+ if(state!=='playing')return;state='finish';game.paused=true;game.cheerUntil=tick+6;
+ saveBest(game.score);$('finish').classList.remove('hidden');
+ $('finishIcon').textContent=won?'🏆':'🌅';$('finishTitle').textContent=won?'HOORAY! SHIFT COMPLETE!':'SUNSET CELEBRATION!';
+ $('finishBody').textContent=`${roles[game.role].name} finished ${game.done} jobs, served ${game.served} guests, fixed ${game.ghostCount} ghost pranks, and earned ${game.score} coins. ${won?'An incredible day at the cove!':'The crew is proud of your hard work! Try again to reach every goal.'}`;
+ confetti(game.x,game.y,95,'#fff09b');burstConfetti();burstConfetti();screenFade();beep(won?920:740,.32);
+}
 function ghostPrank(){if(!game||game.mess||state!=='playing')return;const s=sites[Math.floor(rnd(0,sites.length))];game.ghost={x:s.x,y:s.y-52,t:0};game.mess={x:s.x,y:s.y,label:['Ghostly spill!','Flying cutlery!','Mysterious mess!'][Math.floor(rnd(0,3))],sub:'Clean up the ghost prank before it spreads',icon:'👻',duration:1.5,isMess:true,ttl:22};game.progress=0;say('BOO! The cove ghost made a mess. Hurry over and clean it!');toast('👻 GHOST IN THE RESTAURANT!');beep(244,.3,'sawtooth')}
 function completeTask(action=activeTask()){
  if(!game||!action)return false;
+ if(action.kind==='ghost'&&!game.mess)return false;
+ if(action.kind!=='ghost'&&target().kind!==action.kind)return false;
  confetti(action.x,action.y,48,action.kind==='ghost'?'#bdedff':'#ffdf82');burstConfetti();
- game.progress=0;game.work=false;const role=roles[game.role];
+ game.progress=0;game.work=false;game.cheerUntil=tick+1.85;const role=roles[game.role];
  if(action.kind==='ghost'){
   game.mess=null;game.ghost=null;game.ghostCount++;game.score+=50;game.floats.push({x:action.x,y:action.y-95,label:'CLEAN! +50',life:1.8});
   say('Wade: Whew! That pesky ghost made a fine mess. Thanks for fixing it!');toast('+50 · PRANK FIXED!');beep(750,.17);
  }else if(action.kind==='pickup'){
-  const c=customersWaiting()[0];if(!c)return false;
-  game.carryMeal={id:c.id,name:c.name,icon:c.order[1]};say(`${role.short}: ${c.order[0]} for ${c.name}, coming right up!`);toast('TAKE DINNER TO THE ! TABLE');beep(630,.13);
+  const c=action.guest||customersWaiting()[0];if(!c)return false;
+  game.carryMeal={id:c.id,name:c.name,icon:c.order[1]};game.serviceStage='serve';say(`${role.short}: ${c.order[0]} for ${c.name}, coming right up!`);toast('TAKE DINNER TO THE ! TABLE');beep(630,.13);
  }else if(action.kind==='serve'){
   const c=action.guest;if(!game.carryMeal||game.carryMeal.id!==c.id)return false;
-  c.state='eating';c.eat=0;game.carryMeal=null;game.served++;game.score+=150;game.floats.push({x:action.x,y:action.y-97,label:'THANK YOU! +150',life:1.7});
+  c.state='eating';c.eat=0;game.carryMeal=null;game.serviceStage=null;game.served++;game.score+=150;game.floats.push({x:action.x,y:action.y-97,label:'THANK YOU! +150',life:1.7});
   say(`${c.name}: Thank you! This ${c.order[0].toLowerCase()} looks wonderful!`);toast('+150 · HAPPY GUEST!');beep(880,.14);
  }else if(action.kind==='job'){
-  const stage=game.done%3;game.carry=stage===2?null:role.tasks[stage][4];game.done++;game.score+=100;
+  const stage=game.done%3;game.carry=stage===2?null:role.tasks[stage][4];game.done++;game.score+=100;maybeScheduleService();
   game.completedStations.push({x:action.x,y:action.y,icon:action.icon,role:role.id,stage,cycle:Math.floor((game.done-1)/3),doneAt:game.elapsed});
   game.jobVisuals[role.id]=Math.max(game.jobVisuals[role.id]||0,stage+1);
   game.floats.push({x:action.x,y:action.y-95,label:'+100  '+action.icon,life:1.7});
@@ -368,15 +439,13 @@ function drawWorkResults(t){
 function drawFloatingResults(t){if(!game)return;for(const f of game.floats){const opacity=Math.min(1,f.life);ctx.save();ctx.globalAlpha=opacity;rounded(ctx,f.x-82,f.y-(1.7-f.life)*31,164,27,8,'#2b735df0');text(ctx,f.label,f.x,f.y+18-(1.7-f.life)*31,16,'#ffedb3','center',false);ctx.restore()}}
 function drawPickup(t){
  if(!game)return;
- {const q=target();workMarker(q.x,q.y,q.label,t)}
+ const q=target();if(q)workMarker(q.x,q.y,q.label,t,q.kind==='job'?'#ffcc73':'#b4ebd3');
  if(game.mess)workMarker(game.mess.x,game.mess.y,'GHOST MESS',t,'#b6dcff');
- const waiting=customersWaiting();if(waiting.length&&!game.carryMeal)workMarker(PICKUP.x,PICKUP.y,'PICK UP MEAL',t,'#b5ecd5');
- const c=serviceTarget();if(c)workMarker(c.tx,c.ty,'SERVE '+c.name,t,'#f5e5a0');
  const task=activeTask();if(task&&game.progress>0){rounded(ctx,task.x-39,task.y+24,78,12,4,'#1b5261');rounded(ctx,task.x-37,task.y+26,74*game.progress,8,3,'#f5d990');for(let i=0;i<5;i++){const bx=task.x-22+i*11,by=task.y-4-Math.sin(t*6+i)*15;ellipse(ctx,bx,by,3+game.progress*3,3+game.progress*3,task.kind==='ghost'?'#c9f6ffb9':'#fffae0b9')}}
 }
 function ghost(x,y,t){for(let i=0;i<5;i++){const a=t*3+i*TAU/5;ellipse(ctx,x+Math.cos(a)*31,y+Math.sin(a)*24,3+i%2,3+i%2,'#d0f5ff90')}ctx.save();ctx.translate(x,y+Math.sin(t*4)*6);ellipse(ctx,0,23,18,6,'#1d576052');ellipse(ctx,0,0,24,29,'#bbf6ec55');ellipse(ctx,0,-5,17,22,'#e2faf2');pRect(-17,-2,34,18,'#d6fcf3');pRect(-17,12,10,11,'#d6fcf3');pRect(-1,15,10,14,'#d6fcf3');pRect(12,9,6,15,'#d6fcf3');pRect(-8,-13,5,7,'#34526b');pRect(6,-13,5,7,'#34526b');pRect(-2,-4,6,5,'#f2929c');ctx.restore()}
 function npcCharacters(t){if(!game)return;roles.forEach((r,i)=>{if(i===game.role)return;const spots=CREW_SPOTS;const [x,y]=CREW_SPOTS[i];const sway=Math.sin(t*.65+i*7)*5;sprite(ctx,x+sway,y+Math.cos(t*.8+i)*2,r,.77,t,'idle')})}
-function drawCharacter(t){const r=roles[game.role],moving=(keys['arrowleft']||keys['arrowright']||keys['arrowup']||keys['arrowdown']||keys['a']||keys['d']||keys['w']||keys['s']||dpad);sprite(ctx,game.x,game.y,r,1.17,t,moving?'walk':game.work?'work':'idle');
+function drawCharacter(t){const r=roles[game.role],moving=(keys['arrowleft']||keys['arrowright']||keys['arrowup']||keys['arrowdown']||keys['a']||keys['d']||keys['w']||keys['s']||dpad);const cheering=game.cheerUntil>t;sprite(ctx,game.x,game.y,r,cheering?1.32:1.17,t,cheering?'cheer':moving?'walk':game.work?'work':'idle');if(cheering){for(let i=0;i<5;i++){const a=i*TAU/5+t*3;const xx=game.x+Math.cos(a)*36,yy=game.y-68-Math.abs(Math.sin(a))*28;text(ctx,i%2?'♥':'✦',xx,yy,18,i%2?'#ffb4c0':'#ffeb92','center',false)}}
  if(game.carry){const bob=Math.sin(t*5)*2;rounded(ctx,game.x+12,game.y-106+bob,29,26,7,'#fff2cd');text(ctx,game.carry,game.x+26,game.y-86+bob,17,'#345868','center',false)}
  rounded(ctx,game.x-36,game.y-86,72,19,6,'#1e5361');text(ctx,r.short,game.x,game.y-72,13,'#ffe7aa','center',false)
 }
@@ -445,7 +514,7 @@ function demoPath(nodes,t,duration=19,offset=0){
  const smooth=f*f*(3-2*f);return [x[0]+(y[0]-x[0])*smooth,x[1]+(y[1]-x[1])*smooth];
 }
 function menuAttract(t){
- if(state!=='menu')return;
+ if(state!=='menu'&&state!=='front')return;
  // Simulated shift is not the player's game object; it can never award or save points.
  const oldCtx=ctx,oldGame=game;
  const m=t%DEMO_PERIOD;
@@ -504,7 +573,17 @@ function drawDaylight(elapsed){
  if(d>.66){ctx.save();ctx.globalAlpha=Math.min(.7,(d-.66)*2);for(let i=0;i<5;i++){const x=94+i*192;ellipse(ctx,x,70,33,11,'#f4c975')}ctx.restore()}
 }
 function drawSky(t){sc.clearRect(0,0,480,270);const g=sc.createLinearGradient(0,0,0,270);g.addColorStop(0,'#529aab');g.addColorStop(.63,'#f3b385');g.addColorStop(1,'#144e64');sc.fillStyle=g;sc.fillRect(0,0,480,270);ellipse(sc,370,82,47,47,'#fceab5');cloud(41+Math.sin(t/5)*10,65,1.3);cloud(247-Math.sin(t/9)*9,25,.8);for(let i=0;i<8;i++){line(sc,0,193+i*10,480,193+i*10,i%2?'#7bc9b2':'#52979e',3)}for(let i=0;i<10;i++)line(sc,340+i*3,190+i*4,402-i*5,193+i*4,'#ebd7a1',3);palm(30,215,2.1);palm(470,260,2)}
-function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='menu')menuAttract(tick);if(state==='playing')update(dt);if(state!=='menu'&&game)render(tick);if(game?.mini)paintMini();if(!introDone)drawIntro(now);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
+function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(state==='menu'||state==='front')menuAttract(tick);if(state==='playing')update(dt);if(state!=='menu'&&state!=='front'&&game)render(tick);if(state==='finish')drawVictory(tick);if(game?.mini)paintMini();if(!introDone)drawIntro(now);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
+function drawVictory(t){
+ if(!game||state!=='finish')return;
+ const canvas=$('victoryCanvas');if(!canvas)return;const c=canvas.getContext('2d');if(!c)return;
+ c.clearRect(0,0,360,190);c.save();
+ for(let i=0;i<12;i++){const a=i*TAU/12+t*.35;ellipse(c,180+Math.cos(a)*118,92+Math.sin(a)*72,4,4,i%2?'#ffdd81':'#b3eed5')}
+ ellipse(c,180,150,81,17,'#123d4a55');
+ sprite(c,180,141,roles[game.role],2.16,t,'cheer');
+ for(let i=0;i<7;i++){let x=180+Math.cos(t*1.8+i)*82,y=68+Math.sin(t*1.8+i*1.3)*31;text(c,i%2?'♥':'✦',x,y,21,i%2?'#ff8c9e':'#fff0a0','center',false)}
+ c.restore();
+}
 function nearbyDialogue(){
  if(!game)return false;
  const spots=CREW_SPOTS;
@@ -525,7 +604,7 @@ function pressWork(){if(!game||game.paused||game.boardOpen||game.mini||state!=='
 /* Scene presentation: short fade curtain plus a scripted 3.8-second sunrise over the cove. */
 function screenFade(){const el=$('sceneFade');el.classList.remove('wipe');void el.offsetWidth;el.classList.add('wipe')}
 function replayIntro(){introDone=false;introStarted=0;$('sunriseIntro').classList.remove('hidden','introFade')}
-function finishIntro(){if(introDone)return;introDone=true;const el=$('sunriseIntro');el.classList.add('introFade');setTimeout(()=>el.classList.add('hidden'),540)}
+function finishIntro(){if(introDone)return;introDone=true;const el=$('sunriseIntro');el.classList.add('introFade');if(state==='intro'&&game){state='playing';game.paused=false;screenFade();toast('☀️ THE SHIFT BEGINS!');beep(660,.1)}setTimeout(()=>{if(introDone)el.classList.add('hidden')},540)}
 function drawIntro(now){if(!introStarted)introStarted=now;const elapsed=now-introStarted,p=clamp(elapsed/3800,0,1),c=$('sunriseCanvas').getContext('2d');if(!c)return;
  const w=640,h=360;c.clearRect(0,0,w,h);
  const bg=c.createLinearGradient(0,0,0,h);bg.addColorStop(0,p<.35?'#162f59':'#3c8faa');bg.addColorStop(.57,'#f4a776');bg.addColorStop(1,'#f4dcac');c.fillStyle=bg;c.fillRect(0,0,w,h);
@@ -596,7 +675,7 @@ miniCanvas.addEventListener('pointermove',e=>{if(!miniPointerActive)return;e.pre
 for(const k of ['pointerup','pointercancel','lostpointercapture'])miniCanvas.addEventListener(k,()=>{miniPointerActive=false;if(game?.mini)game.mini.last=null});
 $('quitMini').onclick=()=>exitMini(false);
 
-$('play').onclick=begin;$('again').onclick=begin;$('change').onclick=()=>{state='menu';game=null;$('finish').classList.add('hidden');$('titleScreen').classList.remove('hidden');$('gameScreen').classList.add('hidden');choose(chosen);screenFade();replayIntro()};$('menuBtn').onclick=()=>{if(!game)return;state='menu';game=null;$('gameScreen').classList.add('hidden');$('titleScreen').classList.remove('hidden');$('taskBoard').classList.add('hidden');choose(chosen);screenFade()};
+$('frontPlay').onclick=openCrew;$('crewBack').onclick=openFront;$('play').onclick=begin;$('again').onclick=begin;$('change').onclick=openCrew;$('menuBtn').onclick=openCrew;
 $('taskBtn').onclick=()=>toggleBoard();$('closeBoard').onclick=()=>toggleBoard(false);$('skipIntro').onclick=finishIntro;
 $('pauseBtn').onclick=()=>{if(!game)return;game.paused=!game.paused;$('pauseBtn').textContent=game.paused?'▶':'Ⅱ';say(game.paused?'Shift paused. Tap play to continue.':'Back to work!')};$('soundBtn').onclick=()=>{sound=!sound;$('soundBtn').textContent=sound?'♪':'♪̸';if(sound)beep(600,.08)};
 // No screen-tap movement or task autopathing; use physical controls only.
@@ -612,7 +691,7 @@ window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
 for(const e of ['contextmenu','selectstart','dragstart'])document.addEventListener(e,event=>{if(event.target.closest?.('#controls, #world, #frame'))event.preventDefault()});
 for(const e of ['touchstart','touchmove'])document.querySelector('#controls').addEventListener(e,event=>event.preventDefault(),{passive:false});
 window.addEventListener('blur',()=>{keys={};dpad=null;if(game)game.work=false});
-window.__coveTest={SHIFT_LENGTH,DAILY_JOBS,DAILY_GUESTS,shiftDifficulty,phaseName,crowdDelay,prankDelay,miniKind,get introDone(){return introDone},get mini(){return game?.mini||null},toggleBoard,finishIntro,startMini,applyMini,roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
+window.__coveTest={SHIFT_LENGTH,DAILY_JOBS,DAILY_GUESTS,shiftDifficulty,phaseName,crowdDelay,prankDelay,miniKind,get introDone(){return introDone},get mini(){return game?.mini||null},toggleBoard,openCrew,openFront,finishIntro,startMini,applyMini,roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'||state==='front'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,maybeScheduleService,completeTask,finish,pressWork};makeCards();requestAnimationFrame(loop);
 })();
 
 </script></body></html>
