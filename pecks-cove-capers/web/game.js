@@ -5,7 +5,7 @@ const $ = id => document.getElementById(id);
 const cvs = $('world'), mainCtx = cvs.getContext('2d'), sky=$('sky'), sc=sky.getContext('2d'), demoCanvas=$('menuWorld'), demoCtx=demoCanvas.getContext('2d');
 let ctx=mainCtx;
 ctx.imageSmoothingEnabled=false;sc.imageSmoothingEnabled=false;demoCtx.imageSmoothingEnabled=false;
-const W=960,H=540,MAP_W=1480,MAP_H=1040,TAU=Math.PI*2;
+const W=960,H=540,MAP_W=2240,MAP_H=1550,TAU=Math.PI*2;
 const C={sea:'#318aa0',sea2:'#6aafaf',sand:'#dfbd81',plank:'#ab7754',plank2:'#c39268',plankLine:'#8b5c4e',wall:'#f5dea9',wallShadow:'#a77c5d',floor:'#d4ac7c',seaDark:'#205e78',mint:'#b4e4bd',foam:'#def7d6',yellow:'#ffe4a0',coral:'#e98a70',ink:'#1b3e4b',white:'#fff2d3'};
 const roles=[
  {id:'dishes',name:'Dizzy Dishes',short:'Dizzy',job:'Dish Runner',emoji:'🍽️',skin:'#d5a277',hair:'#5e3b31',shirt:'#ffc16b',hat:'#ffe5a3',accent:'#ef6e68',desc:'Scoop up stray dishes, dodge guests, and race them to the bubbling dish pit.',tasks:[['Grab the plates','Collect dirty plates at table 2',490,304,'🍽',1.1],['Scrub-a-dub','Scrub the plate at the three-sink dish pit',151,351,'🫧',1.5],['Stack the sparkle','Stack dishes at the drying rack',302,230,'✨',1.2]]},
@@ -19,6 +19,12 @@ const roles=[
  {id:'decor',name:'Dottie Decor',short:'Dottie',job:'Decorator',emoji:'🌺',skin:'#d6ad8f',hair:'#8c5b3f',shirt:'#ef98b2',hat:'#fff0a1',accent:'#91e7ba',desc:'Brighten up the cove with flowers, bunting, and the best sunset photo spot.',tasks:[['Flower power','Water the patio flower boxes',759,439,'🌷',1.2],['Party flags','Fix the colorful pennants on the deck',712,136,'🎏',1.5],['Picture perfect','Polish the sunset photo corner',868,462,'📸',1.0]]},
  {id:'fix',name:'Wrenchy Wade',short:'Wade',job:'Fix-It Expert',emoji:'🔧',skin:'#986c57',hair:'#483c38',shirt:'#f5b27f',hat:'#ffe3a2',accent:'#b7d7e0',desc:'Repair rattling fans, rescue flickering lights, and keep the kitchen working.',tasks:[['Lights out','Fix the dining room hanging lamp',616,142,'💡',1.2],['Fan-tastic','Tighten the ceiling fan near the dock',704,264,'🔧',1.7],['All systems go','Check the kitchen power panel',57,287,'⚡',1.3]]}
 ];
+
+// v0.9: six distinct staff assignments per job family.
+const EXTRA_SHIFTS={"dishes": [["Scrape seafood", "Swipe the grouper crumbs from dirty dishes", 505, 1170, "🦐", 1.1], ["Rinse & sanitize", "Rinse plates at the triple sink", 1106, 845, "🫧", 1.2], ["Load dishwasher", "Load the rack and start the dishwasher", 945, 850, "🍽", 1.2]], "cook": [["Grill the grouper", "Grill today's fish at the hot line", 1164, 920, "🐟", 1.2], ["Flip the flat top", "Turn burgers and shrimp on the griddle", 1084, 920, "🍳", 1.2], ["Oven timing", "Bake bread until perfectly golden", 1358, 920, "🍞", 1.2]], "waiter": [["Refill drinks", "Bring cold drinks back to the table", 743, 955, "🥤", 1.0], ["Clear a plate", "Collect leftovers from the guests", 520, 1190, "🍽", 1.2], ["Dessert run", "Balance the key lime pie tray", 1275, 485, "🥧", 1.2]], "boss": [["Inspect prep", "Check the prep-room stations", 1660, 1120, "📋", 1], ["Check the freezer", "Inspect frozen seafood stock", 1900, 895, "🧊", 1.1], ["Closing report", "Finish the shift paperwork at the office", 782, 788, "📑", 1.2]], "host": [["Check waitlist", "Update the entrance wait list", 320, 1140, "📋", 1.1], ["Help a family", "Bring menus to the chowder room", 1030, 528, "📖", 1], ["Guest goodbye", "Wave goodbye near the entrance", 330, 1065, "👋", 1.1]], "drinks": [["Crush ice", "Fill ice at the tiki counter", 1850, 740, "🧊", 1], ["Fruit garnish", "Prepare colorful drink garnishes", 1610, 720, "🍋", 1], ["Clean glassware", "Polish the tiki glasses", 1990, 720, "🍹", 1.1]], "busser": [["Wipe down booth", "Clean the waterfront booth", 742, 1160, "🧽", 1.1], ["Refill napkins", "Replace supplies by the bar", 762, 790, "🧻", 1.0], ["Take trash out", "Carry trash to the employee yard", 1500, 1330, "🗑", 1.1]], "fish": [["Scale grouper", "Scale the grouper on the prep board", 1600, 1180, "🐟", 1.1], ["Walk-in stock", "Put seafood in the walk-in cooler", 1870, 1160, "🧊", 1.1], ["Freezer rotation", "Rotate seafood in the freezer", 1870, 900, "❄", 1.1]], "decor": [["Brighten the chowder room", "Hang bunting in the chowder room", 1250, 580, "🎏", 1], ["Set pier lights", "Light up the colorful pier rail", 290, 400, "💡", 1], ["Flower refresh", "Water plants by the front entrance", 357, 1290, "🌺", 1.1]], "fix": [["Fryer check", "Repair the kitchen fryer controls", 948, 920, "🔧", 1], ["Walk-in thermostat", "Calibrate the refrigerator thermostat", 1920, 1170, "🌡", 1], ["Pier lanterns", "Fix the glowing pier lanterns", 300, 550, "💡", 1.2]]};
+for(const r of roles)r.tasks.push(...EXTRA_SHIFTS[r.id]);
+const CREW_ABILITIES={"dishes": [4, 5, 2, 3, "Quick Hands"], "cook": [3, 5, 2, 3, "Chef’s Precision"], "waiter": [5, 3, 5, 4, "Big Tips"], "boss": [3, 4, 5, 4, "Rush Leader"], "host": [3, 3, 5, 3, "Patient Guests"], "drinks": [4, 4, 5, 4, "Smooth Pour"], "busser": [5, 4, 3, 3, "Fast Reset"], "fish": [3, 5, 2, 4, "Fresh Catch"], "decor": [4, 3, 4, 5, "Sparkle Boost"], "fix": [3, 5, 3, 4, "Steady Hands"]};
+for(const r of roles){const [speed,skill,charm,luck,perk]=CREW_ABILITIES[r.id];r.stats={speed,skill,charm,luck};r.perk=perk;}
 // Uniforms reflect restaurant job families; accessories and faces remain individual.
 for(const r of roles){
  if(['cook','fish'].includes(r.id)){r.shirt='#232b39';r.accent='#9fa9b5';}
@@ -27,26 +33,15 @@ for(const r of roles){
  else if(r.id==='drinks'){r.shirt='#29898e';r.accent='#f3c780';}
 }
 // Hand-authored walkable station anchors. Each role has a coherent three-stage work circuit.
-const ROLE_STATIONS=[
- [[758,404],[249,746],[422,733]], // dish collecting, wash next to three sinks, clean plate storage
- [[270,701],[179,328],[429,442]], // fish prep, real fryer, pass
- [[927,454],[1260,466],[1260,466]], // order collection and deck service
- [[347,704],[523,470],[938,260]], // supplies, team, register
- [[1217,250],[920,452],[920,452]], // greet, seating, menus
- [[1151,809],[1376,526],[1398,584]], // fruit, tiki mix, drink run
- [[931,793],[735,441],[756,785]], // clear, sweep, reset
- [[1367,849],[292,699],[260,322]], // dock fish, ice, fish prep
- [[1036,826],[1091,247],[1334,842]], // flower, pennants, photo
- [[795,410],[1081,481],[102,479]] // lamps, fan, electrical panel
-];
+const ROLE_STATIONS=[[[510, 965], [1010, 850], [1130, 835], [505, 1170], [1106, 845], [945, 850]], [[1600, 1100], [945, 925], [855, 900], [1164, 920], [1084, 920], [1358, 920]], [[835, 940], [1050, 500], [1050, 500], [743, 955], [520, 1190], [1275, 485]], [[1610, 1080], [1330, 1120], [760, 820], [1660, 1120], [1900, 895], [782, 788]], [[355, 1080], [510, 962], [740, 965], [320, 1140], [1030, 528], [330, 1065]], [[1660, 718], [1850, 720], [1875, 595], [1850, 740], [1610, 720], [1990, 720]], [[520, 958], [740, 960], [740, 1192], [742, 1160], [762, 790], [1530, 1402]], [[305, 455], [1885, 1170], [1640, 1130], [1600, 1180], [1870, 1160], [1870, 900]], [[1600, 630], [370, 420], [1970, 700], [1250, 580], [290, 400], [357, 1290]], [[1060, 610], [1680, 650], [1510, 1280], [948, 920], [1920, 1170], [300, 550]]];
 roles.forEach((r,i)=>r.tasks.forEach((task,j)=>{task[2]=ROLE_STATIONS[i][j][0];task[3]=ROLE_STATIONS[i][j][1]}));
 // Earnable fictional placeholders for future, consenting real-restaurant staff.
 // They share the base role's mechanics and NEVER claim to portray a real person.
 const PREMIUM_CREW=[
- {base:1,cost:240,name:'Kitchen Spotlight',short:'Spotlight',job:'Special Chef'},
- {base:2,cost:360,name:'Deck Spotlight',short:'Spotlight',job:'Special Server'},
- {base:0,cost:480,name:'Dish Pit Spotlight',short:'Spotlight',job:'Special Dishwasher'},
- {base:5,cost:620,name:'Tiki Spotlight',short:'Spotlight',job:'Special Bartender'}
+ {base:1,cost:50,name:'Kitchen Spotlight',short:'Spotlight',job:'Special Chef'},
+ {base:2,cost:100,name:'Deck Spotlight',short:'Spotlight',job:'Special Server'},
+ {base:0,cost:150,name:'Dish Pit Spotlight',short:'Spotlight',job:'Special Dishwasher'},
+ {base:5,cost:200,name:'Tiki Spotlight',short:'Spotlight',job:'Special Bartender'}
 ];
 const BASE_ROLE_COUNT=roles.length;
 const STARS_ID='peks-plunder-progress-v08';
@@ -58,17 +53,17 @@ PREMIUM_CREW.forEach((p,i)=>{
 });
 function isUnlocked(i){return i<BASE_ROLE_COUNT||profile.unlocked.includes(i)}
 function refreshWallet(){for(const id of ['frontWallet','crewWallet']){const e=$(id);if(e)e.textContent=`🪙 ${profile.coins} · DAY ${profile.days+1}`}const c=$('frontContinue');if(c){c.disabled=!hasSavedShift();c.textContent=hasSavedShift()?'▶ CONTINUE SHIFT':'CONTINUE (NO SAVE)'}}
-const SAVE_ID='peks-plunder-shift-v08';
-function hasSavedShift(){try{const s=JSON.parse(localStorage.getItem(SAVE_ID)||'null');return s&&s.version===8&&s.game&&Number.isInteger(s.game.role)&&s.game.role>=0&&s.game.role<roles.length&&isUnlocked(s.game.role)&&s.game.elapsed>=0&&s.game.elapsed<SHIFT_LENGTH}catch{return false}}
+const SAVE_ID='peks-plunder-shift-v09';
+function hasSavedShift(){try{const s=JSON.parse(localStorage.getItem(SAVE_ID)||'null');return s&&s.version===9&&s.game&&Number.isInteger(s.game.role)&&s.game.role>=0&&s.game.role<roles.length&&isUnlocked(s.game.role)&&s.game.elapsed>=0&&s.game.elapsed<SHIFT_LENGTH}catch{return false}}
 function clearSavedShift(){try{localStorage.removeItem(SAVE_ID)}catch{}}
 function saveShift(){if(!game||state!=='playing')return;try{
  const snap={...game,paused:false,boardOpen:false,work:false,mini:null,progress:0,particles:[],floats:[],speech:null,cheerUntil:0};
- localStorage.setItem(SAVE_ID,JSON.stringify({version:8,game:snap,when:Date.now()}));
+ localStorage.setItem(SAVE_ID,JSON.stringify({version:9,game:snap,when:Date.now()}));
  }catch{}}
 function resumeSavedShift(){if(!hasSavedShift()){toast('NO SAVED SHIFT YET');return false}try{
  const data=JSON.parse(localStorage.getItem(SAVE_ID));game=data.game;
  if(!Number.isFinite(game.x)||!Number.isFinite(game.y)||!Number.isFinite(game.elapsed))throw Error('Invalid save');
- game.x=clamp(game.x,80,1400);game.y=clamp(game.y,183,909);
+ game.x=clamp(game.x,280,2010);game.y=clamp(game.y,370,1360);
  game.particles=[];game.floats=[];game.paused=false;game.work=false;game.boardOpen=false;game.mini=null;game.progress=0;
  game.camX=game.x;game.camY=game.y;game.cheerUntil=0;game.customers=Array.isArray(game.customers)?game.customers:[];
  game.customers.forEach(c=>{if(c.table){c.table=DINER_TABLES.find(t=>t.x===c.table.x&&t.y===c.table.y)||null}});
@@ -78,39 +73,80 @@ function resumeSavedShift(){if(!hasSavedShift()){toast('NO SAVED SHIFT YET');ret
  $('taskBoard').classList.add('hidden');$('minigameOverlay').classList.add('hidden');
  $('pauseBtn').textContent='Ⅱ';updateHud();screenFade();toast('WELCOME BACK TO YOUR SHIFT!');return true;
  }catch{clearSavedShift();toast('COULD NOT RESTORE SHIFT');return false}}
-const PICKUP={x:938,y:454};
-const EXIT={x:1231,y:187};
-const CREW_SPOTS=[[225,736],[249,337],[856,446],[571,474],[1178,255],[1352,529],[762,772],[310,682],[1111,794],[555,324]];
-const sites=[{x:721,y:423},{x:184,y:501},{x:1224,y:487},{x:760,y:438},{x:1176,y:786},{x:555,y:305},{x:876,y:825}];
+const PICKUP={x:905,y:1015};
+const EXIT={x:346,y:1090};
+const CREW_SPOTS=[[1085,851],[1040,929],[722,916],[1244,1123],[358,1109],[1795,703],[648,1109],[1630,1135],[1569,642],[1490,1282]];
+const sites=[{x:743,y:943},{x:1020,y:893},{x:1300,y:558},{x:1720,y:613},{x:1663,y:1140},{x:515,y:1190},{x:1500,y:1300}];
 let chosen=0, state='front',game=null,stars=[],sound=true,audio=null,tick=0,last=0,keys={},dpad=null,toastDeadline=0;
-const SHIFT_LENGTH=720,DAILY_JOBS=8,DAILY_GUESTS=6;
+const SHIFT_LENGTH=720,DAILY_JOBS=9,DAILY_GUESTS=4;
 const shiftDifficulty=t=>t<240?0:t<480?1:2;
 const phaseName=t=>['SUNRISE','LUNCH RUSH','SUNSET RUSH'][shiftDifficulty(t)];
-const crowdDelay=t=>[49,29,16][shiftDifficulty(t)];
+const crowdDelay=t=>[52,39,28][shiftDifficulty(t)];
 const prankDelay=t=>[120,82,48][shiftDifficulty(t)];
 let introStarted=0,introDone=true,miniPointerActive=false;
-const DINER_TABLES=[{x:656,y:304},{x:847,y:306},{x:672,y:714},{x:850,y:716},{x:1146,y:315},{x:1335,y:315},{x:1152,y:714},{x:1346,y:716}];
-const TABLE_COLLISION={rx:75,ry:68};
-const WALL_ZONES=[
- // Hot line and dish machine are solid; open central galley allows passing from prep to dish pit.
- {x:80,y:205,w:388,h:76},{x:85,y:805,w:390,h:70},
- {x:941,y:336,w:33,h:96},{x:1350,y:407,w:58,h:84},
- {x:1063,y:846,w:152,h:35}
+const DINER_TABLES=[{x:495,y:961},{x:737,y:969},{x:495,y:1200},{x:740,y:1195},{x:1021,y:500},{x:1293,y:505},{x:1610,y:532},{x:1882,y:532}];
+const TABLE_COLLISION={rx:72,ry:63};
+const WALK_ROOMS=[
+ {id:'customer',x:281,y:844,w:568,h:505},{id:'bar',x:565,y:633,w:283,h:260},
+ {id:'kitchen',x:865,y:713,w:568,h:617},{id:'chowder',x:860,y:359,w:588,h:352},
+ {id:'tiki',x:1450,y:354,w:602,h:459},{id:'hall',x:1422,y:807,w:138,h:547},
+ {id:'prep',x:1536,y:992,w:289,h:338},{id:'fridge',x:1783,y:965,w:250,h:365},
+ {id:'freezer',x:1783,y:782,w:250,h:246},
+ {id:'staff-passage',x:740,y:1307,w:820,h:142},{id:'pier',x:210,y:292,w:190,h:550},{id:'entrance-bridge',x:280,y:825,w:105,h:38}
 ];
+// Solid equipment and walls; main doors have animated pressure sensors.
+const WALL_ZONES=[
+ {x:893,y:752,w:313,h:73}, // dish pit: dishwasher + three-sink bench
+ {x:901,y:884,w:460,h:70}, // cooking line: fryer, flat top, grill, oven
+ {x:740,y:726,w:96,h:48}, // bar counter
+ {x:1650,y:384,w:165,h:44}, // tiki back bar
+ {x:1570,y:1235,w:125,h:48}, // prep cabinet
+];
+const DOORS=[
+ {id:'chowder',x:1262,y:709,axis:'h',name:'CHOWDER ROOM'},
+ {id:'employee',x:1428,y:1100,axis:'v',name:'KITCHEN'},
+ {id:'customer',x:800,y:1340,axis:'h',name:'DINING ACCESS'},
+ {id:'bar',x:854,y:860,axis:'v',name:'BAR'},
+ {id:'public',x:281,y:1085,axis:'v',name:'ENTRANCE'},
+ {id:'staff',x:1491,y:1338,axis:'h',name:'STAFF ENTRY'},
+ {id:'tiki',x:1450,y:573,axis:'v',name:'TIKI'}
+];
+const NO_DOOR_OPENINGS=[{x:1548,y:1130},{x:1806,y:1148},{x:1900,y:1004}];
+function inRect(x,y,r,extra=0){return x>=r.x-extra&&x<=r.x+r.w+extra&&y>=r.y-extra&&y<=r.y+r.h+extra}
 function ellipseCollision(x,y,t,margin=0){const dx=(x-t.x)/(TABLE_COLLISION.rx+margin),dy=(y-t.y)/(TABLE_COLLISION.ry+margin);return dx*dx+dy*dy<1}
 function canStand(x,y){
- const r=13;
- const inKitchen=x>=78&&x<=473&&y>=182&&y<=910;
- const inDining=x>=506&&x<=974&&y>=182&&y<=910;
- const onDeck=x>=1007&&x<=1416&&y>=209&&y<=910;
- const corridorA=x>465&&x<517&&y>=368&&y<=577;
- const corridorB=x>966&&x<1022&&y>=368&&y<=577;
- const entrance=x>=1160&&x<=1305&&y>=168&&y<=219;
- if(!(inKitchen||inDining||onDeck||corridorA||corridorB||entrance))return false;
- for(const t of DINER_TABLES)if(ellipseCollision(x,y,t,0))return false;
- for(const b of WALL_ZONES)if(x+r>b.x&&x-r<b.x+b.w&&y+r>b.y&&y-r<b.y+b.h)return false;
+ if(!(WALK_ROOMS.some(r=>inRect(x,y,r))||inRect(x,y,{x:232,y:990,w:62,h:220})))return false;
+ for(const t of DINER_TABLES)if(ellipseCollision(x,y,t,5))return false;
+ for(const b of WALL_ZONES)if(inRect(x,y,b,12))return false;
+ // Wall boundaries are collidable except at designated pressure doors and open cold storage.
+ if(x>843&&x<875&&y>715&&y<1330 && Math.abs(y-860)>45 && Math.abs(y-1113)>48)return false; // bar/kitchen
+ if(y>687&&y<714&&x>863&&x<1447 && Math.abs(x-1262)>49)return false; // galley/chowder
+ if(x>1415&&x<1450&&y>829&&y<1326 && Math.abs(y-1100)>48)return false; // kitchen/employee hall
+ if(x>1435&&x<1459&&y>355&&y<802 && Math.abs(y-573)>49)return false; // chowder/tiki
+ for(const d of DOORS){
+  if(game?.doors&&game.doors[d.id]!==undefined&&game.doors[d.id]<.67){
+   const inside=d.axis==='h'?Math.abs(y-d.y)<13&&Math.abs(x-d.x)<42:Math.abs(x-d.x)<13&&Math.abs(y-d.y)<42;
+   if(inside)return false;
+  }
+ }
  return true;
 }
+function updateDoors(dt){if(!game)return;game.doors=game.doors||{};
+ for(const d of DOORS){const pressure=Math.hypot(game.x-d.x,game.y-d.y)<64;
+  const old=game.doors[d.id]||0;game.doors[d.id]=Math.min(1,Math.max(0,old+(pressure?8:-1.7)*dt));
+ }
+}
+// Find an accessible standing point near each drawn station, including table edges.
+// The furniture itself remains solid; interaction happens at its front edge.
+function alignRoleStations(){
+ const find=(x,y)=>{if(canStand(x,y))return [x,y];
+  for(let r=18;r<=135;r+=9)for(let a=0;a<32;a++){
+   const phi=a*Math.PI/16,tx=Math.round(x+Math.cos(phi)*r),ty=Math.round(y+Math.sin(phi)*r);
+   if(canStand(tx,ty))return [tx,ty];
+  }return [x,y];};
+ roles.slice(0,BASE_ROLE_COUNT).forEach((r,i)=>r.tasks.forEach((t,j)=>{const [x,y]=find(t[2],t[3]);t[2]=x;t[3]=y;ROLE_STATIONS[i][j]=[x,y]}));
+}
+alignRoleStations();
 function moveWithCollision(dx,dy){if(!game)return;const x=game.x,y=game.y;
  if(canStand(x+dx,y+dy)){game.x=x+dx;game.y=y+dy;return}
  if(canStand(x+dx,y))game.x=x+dx;
@@ -183,7 +219,9 @@ function choose(i){chosen=i;document.querySelectorAll('.crewCard').forEach((e,n)
  $('roleTitle').textContent=r.name+' · '+r.job;
  $('roleDesc').textContent=locked?`🔒 Spend ${r.cost} shift coins to unlock this fictional staff spotlight. Real employee likenesses will be added only with permission.`:r.desc;
  $('play').textContent=locked?`UNLOCK · ${r.cost} 🪙`:'START THE SHIFT →';
- $('best').textContent='★ TOP SCORE '+best();refreshWallet()}
+ $('best').textContent='★ TOP SCORE '+best();
+ const bars=$('abilityBars');if(bars)bars.innerHTML=Object.entries(r.stats).map(([k,v])=>`<div class="ability"><span>${k.toUpperCase()}</span><div class="abilityRail"><i style="width:${v*20}%"></i></div><b>${v}/5</b></div>`).join('')+`<div class="perk">✦ ${r.perk}</div>`;
+ refreshWallet()}
 function startOrUnlock(){if(isUnlocked(chosen)){begin();return}const r=roles[chosen];
  if(profile.coins<r.cost){toast(`NEED ${r.cost-profile.coins} MORE COINS`);return}
  profile.coins-=r.cost;profile.unlocked.push(chosen);saveProfile();makeCards();
@@ -230,35 +268,40 @@ function maybeScheduleService(){
  return false;
 }
 function spawnCustomer(){
- if(!game||game.customers.filter(c=>c.state!=='leaving').length>=8)return;
+ if(!game||game.customers.filter(c=>c.state!=='leaving').length>=7)return;
  const id=game.spawned++,table=DINER_TABLES.find(t=>!game.customers.some(c=>c.table===t&&c.state!=='leaving'))||null;
- const guest={id,name:DINER_NAMES[id%DINER_NAMES.length],x:EXIT.x,y:EXIT.y,tx:table?.x||1250,ty:table?.y||280,table,state:table?'entering':'queue',order:DISHES[id%DISHES.length],wait:0,eat:0,route:0,pathIndex:0};game.customers.push(guest);
- if(table){toast(`${guest.name.toUpperCase()} ARRIVED!`);say(`Hattie: Welcome, ${guest.name}! Grab a seat by the water.`)}
+ const guest={id,name:DINER_NAMES[id%DINER_NAMES.length],x:EXIT.x,y:EXIT.y,tx:table?.x||495,ty:table?.y||960,table,state:table?'entering':'queue',order:DISHES[id%DISHES.length],wait:0,eat:0,route:0,pathIndex:0};
+ game.customers.push(guest);if(table)toast(`${guest.name.toUpperCase()} ARRIVED!`);
 }
-function moveGuest(c,x,y,dt,speed=64){const dx=x-c.x,dy=y-c.y,dist=Math.hypot(dx,dy);if(dist<speed*dt){c.x=x;c.y=y;return true}c.x+=dx/dist*dt*speed;c.y+=dy/dist*dt*speed;return false}
+function moveGuest(c,x,y,dt,speed=71){const dx=x-c.x,dy=y-c.y,dist=Math.hypot(dx,dy);if(dist<speed*dt){c.x=x;c.y=y;return true}c.x+=dx/dist*dt*speed;c.y+=dy/dist*dt*speed;return false}
+function guestLeaves(c){
+ c.state='leaving';c.route=0;game.lostGuests=(game.lostGuests||0)+1;game.score=Math.max(0,game.score-2);
+ if(game.carryMeal?.id===c.id){game.carryMeal=null;game.serviceStage=null}
+ say(`${c.name}: I've waited long enough, sorry!`);toast('😢 GUEST LEFT · −2 COINS');
+}
 function updateCustomers(dt){
  if(game.elapsed>game.nextCustomer){spawnCustomer();game.nextCustomer=game.elapsed+crowdDelay(game.elapsed)}
  for(const c of game.customers){
   if(c.state==='queue'){
    const table=DINER_TABLES.find(t=>!game.customers.some(o=>o!==c&&o.table===t&&o.state!=='leaving'));
    if(table){c.table=table;c.tx=table.x;c.ty=table.y;c.state='entering'}
-   else moveGuest(c,1240-c.id%3*23,252,dt);
+   else {c.wait+=dt;if(c.wait>60+roles[game.role].stats.charm*2)guestLeaves(c)}
   }else if(c.state==='entering'){
-   const seatX=c.tx+((c.id%2)?82:-82),seatY=c.ty-3;
-   const indoor=c.tx<1000;
-   const route=indoor?[[1234,451],[995,451],[937,470],[seatX,seatY]]:[[1234,447],[seatX,seatY]];
-   const step=route[Math.min(c.pathIndex,route.length-1)];
-   if(moveGuest(c,step[0],step[1],dt,85)){c.pathIndex++;if(c.pathIndex>=route.length){c.state='seated';c.wait=0}}
+   const seatX=c.tx+(c.id%2?81:-81),seatY=c.ty+21;
+   if(moveGuest(c,seatX,seatY,dt,144)){c.state='seated';c.wait=0}
   }else if(c.state==='seated'){
-   c.wait+=dt;if(c.wait>=1.8){c.state='ordered';say(`${c.name}: Could I please have ${c.order[0]}?`)}
+   c.wait+=dt;if(c.wait>=1.8){c.state='ordered';c.wait=0;say(`${c.name}: Could I have ${c.order[0]}?`)}
+  }else if(c.state==='ordered'){
+   c.wait+=dt;
+   if(c.wait>=60+roles[game.role].stats.charm*2+(roles[game.role].id==='host'?12:0))guestLeaves(c);
   }else if(c.state==='eating'){
-   c.eat+=dt;if(c.eat>4){c.state='leaving';c.route=0;say(`${c.name}: That was delicious! See you again!`)}
+   c.eat+=dt;if(c.eat>5){c.state='leaving';c.route=0;say(`${c.name}: Delicious! See you soon!`)}
   }else if(c.state==='leaving'){
-   if(c.route===0){if(moveGuest(c,1235,453,dt,92))c.route=1}
-   else moveGuest(c,EXIT.x,EXIT.y,dt,92);
+   if(moveGuest(c,EXIT.x,EXIT.y,dt,169))c.route=1;
   }
  }
- game.customers=game.customers.filter(c=>!(c.state==='leaving'&&c.route===1&&c.y<=EXIT.y+3));
+ game.customers=game.customers.filter(c=>!(c.state==='leaving'&&c.route===1));
+ if(!game.serviceStage)maybeScheduleService();
 }
 function nextDialogue(t){if(!game||game.elapsed<game.nextSpeech)return;game.nextSpeech=game.elapsed+9;
  const i=(Math.floor(game.elapsed/8)+game.role+3)%BASE_ROLE_COUNT;
@@ -283,7 +326,7 @@ function refreshTaskBoard(){if(!game)return;
  `<li>${completed>=DAILY_JOBS?'✅':'⬜'} ${r.job}: ${completed}/${DAILY_JOBS} tasks</li>`,
  `<li>${game.served>=DAILY_GUESTS?'✅':'⬜'} Guests served: ${Math.min(game.served,DAILY_GUESTS)}/${DAILY_GUESTS}</li>`,
  `<li>👻 Ghost pranks fixed: ${game.ghostCount}</li>`,
- `<li>💰 Coins earned: ${game.score}</li>`];
+ `<li>🪙 Coins: ${game.score} · Guests lost: ${game.lostGuests||0}</li>`];
  if(game.mess)rows.splice(1,0,'<li>👻 BONUS INTERRUPT: Clean up the ghost mess!</li>');
  $('taskItems').innerHTML=rows.join('');
  $('boardHint').textContent=`${phaseName(game.elapsed)} · ${Math.max(0,Math.ceil((SHIFT_LENGTH-game.elapsed)/60))} min left · Finish a task to unlock the next`;
@@ -291,7 +334,7 @@ function refreshTaskBoard(){if(!game)return;
 function toggleBoard(force){if(!game||state!=='playing')return;game.boardOpen=typeof force==='boolean'?force:!game.boardOpen;
  $('taskBoard').classList.toggle('hidden',!game.boardOpen);if(game.boardOpen){game.work=false;keys={};dpad=null;refreshTaskBoard()}}
 
-function startingSpot(role){const choices=[[706,464],[345,478],[843,487],[445,490],[1050,297],[1263,816],[931,504],[1240,842],[1265,835],[940,294]];const [x,y]=choices[roles[role]?.baseIndex??role];return canStand(x,y)?{x,y}:{x:567,y:464}}
+function startingSpot(role){return {x:1501,y:1340}}
 function openFront(){
  state='front';game=null;keys={};dpad=null;introDone=true;introStarted=0;
  $('sunriseIntro').classList.add('hidden');$('sunriseIntro').classList.remove('introFade');
@@ -308,7 +351,7 @@ function openCrew(){
 function begin(){
  if(!isUnlocked(chosen))return;clearSavedShift();
  const r=roles[chosen],spawn=startingSpot(chosen);
- game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:115,elapsed:0,particles:[],paused:true,ghostCount:0,streak:0,carry:null,carryMeal:null,serviceStage:null,served:0,spawned:0,nextCustomer:8,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0,mini:null,boardOpen:false,peakPhase:0,cheerUntil:0,saveDue:0};
+ game={role:chosen,x:spawn.x,y:spawn.y,lastFacing:1,done:0,score:0,progress:0,work:false,mess:null,ghost:null,nextGhost:115,elapsed:0,particles:[],paused:true,ghostCount:0,streak:0,carry:null,carryMeal:null,serviceStage:null,served:0,spawned:0,nextCustomer:8,customers:[],speech:null,nextSpeech:7,camX:spawn.x,camY:spawn.y,completedStations:[],floats:[],jobVisuals:{},combo:0,mini:null,boardOpen:false,peakPhase:0,cheerUntil:0,saveDue:0,doors:{},introWalk:0,lostGuests:0};
  state='intro';$('creditsScreen').classList.add('hidden');$('frontMenu').classList.add('hidden');$('titleScreen').classList.add('hidden');
  $('gameScreen').classList.remove('hidden');$('finish').classList.add('hidden');$('taskBoard').classList.add('hidden');
  $('pauseBtn').textContent='Ⅱ';say(`${r.name}: ${CREW_DIALOGUE[r.id][0]} Follow the ! to your first job.`);
@@ -317,7 +360,7 @@ function begin(){
 function finish(won){
  if(state!=='playing')return;state='finish';game.paused=true;game.cheerUntil=tick+6;
  saveBest(game.score);clearSavedShift();
- const reward=won?100+Math.min(game.done,DAILY_JOBS)*12+Math.min(game.served,DAILY_GUESTS)*20:0;
+ const reward=won?Math.max(0,game.score+6):0;
  if(won){profile.days++;profile.coins+=reward;saveProfile()}
  $('finish').classList.remove('hidden');
  $('finishIcon').textContent=won?'🏆':'🌅';$('finishTitle').textContent=won?'HOORAY! SHIFT COMPLETE!':'SUNSET CELEBRATION!';
@@ -329,45 +372,56 @@ function completeTask(action=activeTask()){
  if(!game||!action)return false;
  if(action.kind==='ghost'&&!game.mess)return false;
  if(action.kind!=='ghost'&&target().kind!==action.kind)return false;
- confetti(action.x,action.y,48,action.kind==='ghost'?'#bdedff':'#ffdf82');burstConfetti();
+ confetti(action.x,action.y,roles[game.role].id==='decor'?82:48,action.kind==='ghost'?'#bdedff':'#ffdf82');burstConfetti();
  game.progress=0;game.work=false;game.cheerUntil=tick+1.85;const role=roles[game.role];
  if(action.kind==='ghost'){
-  game.mess=null;game.ghost=null;game.ghostCount++;game.score+=50;game.floats.push({x:action.x,y:action.y-95,label:'CLEAN! +50',life:1.8});
-  say('Wade: Whew! That pesky ghost made a fine mess. Thanks for fixing it!');toast('+50 · PRANK FIXED!');beep(750,.17);
+  game.mess=null;game.ghost=null;game.ghostCount++;game.score+=2;game.floats.push({x:action.x,y:action.y-95,label:'CLEAN! +2',life:1.8});
+  say('Wade: Whew! That pesky ghost made a fine mess. Thanks for fixing it!');toast('+2 · PRANK FIXED!');beep(750,.17);
  }else if(action.kind==='pickup'){
   const c=action.guest||customersWaiting()[0];if(!c)return false;
   game.carryMeal={id:c.id,name:c.name,icon:c.order[1]};game.serviceStage='serve';say(`${role.short}: ${c.order[0]} for ${c.name}, coming right up!`);toast('TAKE DINNER TO THE ! TABLE');beep(630,.13);
  }else if(action.kind==='serve'){
   const c=action.guest;if(!game.carryMeal||game.carryMeal.id!==c.id)return false;
-  c.state='eating';c.eat=0;game.carryMeal=null;game.serviceStage=null;game.served++;game.score+=150;game.floats.push({x:action.x,y:action.y-97,label:'THANK YOU! +150',life:1.7});
-  say(`${c.name}: Thank you! This ${c.order[0].toLowerCase()} looks wonderful!`);toast('+150 · HAPPY GUEST!');beep(880,.14);
+  c.state='eating';c.eat=0;game.carryMeal=null;game.serviceStage=null;game.served++;game.score+=Math.max(2,2+(role.stats.charm>=5?1:0)+(role.id==='waiter'?1:0));game.floats.push({x:action.x,y:action.y-97,label:'THANK YOU! +TIP',life:1.7});
+  say(`${c.name}: Thank you! This ${c.order[0].toLowerCase()} looks wonderful!`);toast('🪙 HAPPY GUEST!');beep(880,.14);
  }else if(action.kind==='job'){
-  const stage=game.done%3;game.carry=stage===2?null:role.tasks[stage][4];game.done++;game.score+=100;maybeScheduleService();
-  game.completedStations.push({x:action.x,y:action.y,icon:action.icon,role:role.id,stage,cycle:Math.floor((game.done-1)/3),doneAt:game.elapsed});
+  const stage=game.done%role.tasks.length;game.carry=stage===role.tasks.length-1?null:role.tasks[stage][4];game.done++;game.score+=2+(role.stats.luck>=5?1:0)+(role.id==='fish'&&miniKind(action)==='prep'?1:0);maybeScheduleService();
+  game.completedStations.push({x:action.x,y:action.y,icon:action.icon,role:role.id,stage,cycle:Math.floor((game.done-1)/role.tasks.length),doneAt:game.elapsed});
   game.jobVisuals[role.id]=Math.max(game.jobVisuals[role.id]||0,stage+1);
-  game.floats.push({x:action.x,y:action.y-95,label:'+100  '+action.icon,life:1.7});
+  game.floats.push({x:action.x,y:action.y-95,label:'+COINS  '+action.icon,life:1.7});
   say(`${role.short}: ${CREW_DIALOGUE[role.id][game.done%3]} ${game.done<DAILY_JOBS?'Find the next ! marker.':'The daily job goal is done—extra work earns more coins!'}`);
-  toast('+'+100+' · '+action.label.toUpperCase()+' ✓');beep(640+stage*100,.16);
+  toast('🪙 +TASK · '+action.label.toUpperCase()+' ✓');beep(640+stage*100,.16);
  }
  if(game.done===DAILY_JOBS||game.served===DAILY_GUESTS){confetti(game.x,game.y,55,'#ffdc84');toast('🎉 DAILY GOAL COMPLETE! KEEP GOING!')}
  updateHud();return true;
 }
 function update(dt){
- if(!game||game.paused||game.boardOpen||game.mini||state!=='playing')return;
+ if(!game)return;
+ if(state==='walkin'){
+  game.introWalk=(game.introWalk||0)+dt;
+  const t=game.introWalk;
+  if(t<1.25){game.x=1501;game.y=1340-210*t;}
+  else if(t<2.25){game.x=1501-(t-1.25)*110;game.y=1077;}
+  else if(t<3.15){game.x=1391-(t-2.25)*65;game.y=1077;}
+  else {game.x=1332;game.y=1077;state='playing';game.paused=false;toast('🦀 CLOCKED IN — LET’S WORK!');}
+  game.camX=game.x;game.camY=game.y;updateDoors(dt);return;
+ }
+ if(game.paused||game.boardOpen||game.mini||state!=='playing')return;
  game.elapsed=Math.min(SHIFT_LENGTH,game.elapsed+dt);
  if(game.elapsed>=(game.saveDue||0)){game.saveDue=game.elapsed+4;saveShift()}
  if(game.elapsed>=SHIFT_LENGTH){finish(game.done>=DAILY_JOBS&&game.served>=DAILY_GUESTS);return}
  const phase=shiftDifficulty(game.elapsed);if(phase>game.peakPhase){game.peakPhase=phase;toast(phase===1?'🍽 LUNCH RUSH! MORE DINERS!':'🌙 DINNER RUSH! ALL HANDS!');beep(780,.16)}
  updateCustomers(dt);
- if(game.elapsed>=game.nextGhost){ghostPrank();game.nextGhost=game.elapsed+prankDelay(game.elapsed)+rnd(-6,7)}
+ if(game.elapsed>=game.nextGhost){ghostPrank();game.nextGhost=game.elapsed+prankDelay(game.elapsed)+(roles[game.role].id==='boss'?36:0)+rnd(-6,7)}
  if(game.ghost){game.ghost.t+=dt;if(game.ghost.t>5)game.ghost=null}
- let dx=0,dy=0;const speed=195;
+ let dx=0,dy=0;const speed=145+roles[game.role].stats.speed*17;
  if(keys['arrowleft']||keys['a']||dpad==='left')dx-=1;
  if(keys['arrowright']||keys['d']||dpad==='right')dx+=1;
  if(keys['arrowup']||keys['w']||dpad==='up')dy-=1;
  if(keys['arrowdown']||keys['s']||dpad==='down')dy+=1;
  if(dx||dy){const m=Math.hypot(dx,dy);dx/=m;dy/=m;moveWithCollision(dx*speed*dt,dy*speed*dt)}
  if(dx)game.lastFacing=dx>0?1:-1;
+ updateDoors(dt);
  // A held button only works while the player is standing next to a marked task.
  const task=activeTask(),working=game.work||keys['e']||keys[' ']||keys['enter'];
  if(working&&task){
@@ -392,83 +446,153 @@ function water(t){pRect(0,0,MAP_W,MAP_H,'#2a788c');for(let i=0;i<130;i++){const 
 function floorPattern(x,y,w,h,col1,col2){pRect(x,y,w,h,col1);for(let yy=y;yy<y+h;yy+=27){line(ctx,x,yy,x+w,yy,col2,2);for(let xx=x+(Math.floor(yy/27)%2)*71;xx<x+w;xx+=142)line(ctx,xx,yy,xx,yy+27,col2,1)}}
 function chair(x,y){pRect(x-18,y-10,36,7,'#694a42');pRect(x-16,y-4,32,20,'#ba8462');pRect(x-15,y+12,6,10,'#775344');pRect(x+9,y+12,6,10,'#775344')}
 function table(x,y,food=true){ellipse(ctx,x+4,y+19,55,26,'#314a574f');chair(x-52,y-5);chair(x+52,y-5);chair(x,y-46);chair(x,y+43);ellipse(ctx,x,y,48,26,'#75513f');ellipse(ctx,x,y-4,44,23,'#bb8961');ellipse(ctx,x,y-7,38,16,'#efd29e');ellipse(ctx,x-20,y-9,9,6,'#fbf2df');ellipse(ctx,x+20,y-9,9,6,'#fbf2df');if(food){pRect(x-8,y-13,10,7,'#e08d64');pRect(x+6,y+3,10,4,'#f4be76')}pRect(x-3,y-22,6,11,'#609b7b');ellipse(ctx,x,y-22,6,5,'#86b989');for(const d of [-1,1]){pRect(x+d*29-2,y-12,2,11,'#d9e7db');pRect(x+d*30-5,y-10,2,5,'#9db0b0')}}
+function colorfulRoom(x,y,w,h,main,edge,label,tx,ty){
+ floorPattern(x,y,w,h,main,'#ffffff24');pRect(x,y,w,12,edge);pRect(x,y+h-10,w,10,edge);
+ pRect(x,y,10,h,edge);pRect(x+w-10,y,10,h,edge);
+ if(label)sign(tx,ty,Math.min(w-35,Math.max(152,label.length*13+32)),label);
+}
+function shinySteel(x,y,w,h){rounded(ctx,x+3,y+5,w,h,8,'#3e6875');rounded(ctx,x,y,w,h-3,8,'#9fcbd0');pRect(x+5,y+5,w-10,7,'#f3fbec');pRect(x+6,y+h-12,w-12,4,'#6593a3')}
+function labels(){
+ sign(940,640,230,'🫧 DISH PIT');sign(1035,326,225,'CHOWDER ROOM');
+ sign(975,1280,240,'★ THE KITCHEN');sign(610,600,200,'🍹 BAR');
+ sign(335,801,250,'FRONT DINING');sign(1661,328,200,'TIKI BAR');
+ sign(1552,973,213,'PREP ROOM');sign(1815,974,194,'WALK-IN COOLER');
+ sign(1808,823,200,'FREEZER');sign(1427,1331,160,'STAFF ENTRANCE');
+}
+function dishPit(t){
+ shinySteel(892,756,316,71);
+ // Facing north along the top kitchen wall: machine LEFT, 3 separate sinks RIGHT.
+ rounded(ctx,902,767,87,47,4,'#4b7583');pRect(915,774,63,28,'#d8f1e7');
+ ellipse(ctx,948,785,19,12,'#789bad');pRect(912,796,67,9,'#a6d1d5');
+ text(ctx,'DISHWASHER',947,747,12,'#29556a','center',false);
+ for(let i=0;i<3;i++){const x=1005+i*66;
+  rounded(ctx,x,770,60,40,5,'#567986');rounded(ctx,x+6,775,48,25,5,'#3a8097');
+  for(let k=0;k<3;k++)ellipse(ctx,x+13+k*14,788+Math.sin(t*3+i+k)*2,4,4,'#e9fff6');
+  pRect(x+30,763,5,16,'#d7f8f3');
+  text(ctx,['WASH','RINSE','SANITIZE'][i],x+29,744,10,'#245468','center',false)
+ }
+ for(let i=0;i<5;i++){ellipse(ctx,1111+i*9,841,12,5,'#fff9da')}
+}
 function kitchen(t){
- floorPattern(61,159,422,768,'#ebd3a6','#d5b281');pRect(61,159,422,16,'#755c52');pRect(61,913,422,15,'#896950');
- // Hot line: five recognizable, individually labeled machines. Equipment is collidable.
- pRect(80,205,388,76,'#83929a');pRect(81,205,386,10,'#f4e2bd');
- for(const st of [{x:90,w:72,name:'FRYER'},{x:166,w:71,name:'FRYER'},{x:239,w:73,name:'FLAT TOP'},{x:315,w:70,name:'GRILL'},{x:390,w:73,name:'OVEN'}]){
-   rounded(ctx,st.x,214,st.w,55,5,'#53636d');pRect(st.x+5,216,st.w-10,6,'#cdd7d5');
-   if(st.name==='FRYER'){
-     rounded(ctx,st.x+9,226,st.w-18,28,4,'#343b45');pRect(st.x+13,230,st.w-26,18,'#ba8d4b');
-     for(let k=0;k<4;k++){ellipse(ctx,st.x+16+k*10,232+Math.sin(t*5+k)*3,3,2,'#ffe3aa')}
-     pRect(st.x+25,219,4,12,'#a9c9ca');pRect(st.x+22,219,22,4,'#d4e2dd');
-   }else if(st.name==='FLAT TOP'){
-     pRect(st.x+8,225,st.w-16,29,'#393e46');pRect(st.x+11,232,st.w-22,16,'#7d8080');
-     for(let k=0;k<3;k++)ellipse(ctx,st.x+19+k*14,237,7,5,'#d6a271');
-   }else if(st.name==='GRILL'){
-     pRect(st.x+8,225,st.w-16,28,'#30343b');for(let k=0;k<7;k++)line(ctx,st.x+14+k*8,228,st.x+14+k*8,250,'#9fa9a8',3);
-     ellipse(ctx,st.x+28,238,12,6,'#ab634e');
-   }else{
-     pRect(st.x+8,226,st.w-16,29,'#252f38');pRect(st.x+12,230,st.w-24,19,'#e2a36d');pRect(st.x+19,235,st.w-38,9,'#bd7956');
-   }
-   text(ctx,st.name,st.x+st.w/2,199,st.name==='FLAT TOP'?11:12,'#254957','center',false);
+ colorfulRoom(864,712,568,620,'#f5dab2','#a67163','',0,0);
+ // L-shaped hot line: two fryers, flat top, grill, oven.
+ shinySteel(900,882,461,74);
+ const ranges=[['FRYER',908,77],['FRYER',988,76],['FLAT TOP',1066,91],['GRILL',1160,90],['OVEN',1254,98]];
+ for(const [name,x,w] of ranges){rounded(ctx,x+6,890,w-10,44,5,'#445965');
+  if(name==='FRYER'){rounded(ctx,x+13,900,w-27,22,3,'#be834e');pRect(x+21,895,w-44,5,'#ffe6ae');for(let j=0;j<5;j++)ellipse(ctx,x+18+j*9,905+Math.sin(t*6+j)*2,3,2,'#fff4b3');}
+  else if(name==='FLAT TOP'){pRect(x+10,898,w-20,27,'#3d424c');for(let j=0;j<3;j++)ellipse(ctx,x+28+j*17,908,11,5,'#f5b57b')}
+  else if(name==='GRILL'){for(let j=0;j<9;j++)line(ctx,x+12+j*8,897,x+12+j*8,924,'#c8d9db',3);ellipse(ctx,x+34,911,20,8,'#b9614e')}
+  else {pRect(x+13,898,w-25,27,'#313e51');pRect(x+20,903,w-40,14,'#ffb276')}
+  text(ctx,name,x+w/2,872,11,'#225a6c','center',false);
  }
- // Open prep room with refrigerated fish prep, grill prep, food bins, and clear floor lanes.
- rounded(ctx,92,626,135,43,6,'#a5c6c5');rounded(ctx,247,626,190,43,6,'#d3b18a');
- for(let i=0;i<4;i++)ellipse(ctx,108+i*27,645,10,6,'#9ed4d6');
- pRect(262,634,44,18,'#c8916b');ellipse(ctx,323,645,23,12,'#bdd6d0');text(ctx,'FRESH CATCH / PREP',287,612,12,'#315b69','center',false);
- // Deep dish pit: exactly three stainless sinks, side by side, and a full dishwasher.
- pRect(84,805,390,72,'#8aaab0');pRect(84,807,390,9,'#eaf0e5');
- for(let i=0;i<3;i++){
-   const x=94+i*66;pRect(x,819,60,42,'#c2dfe0');pRect(x+5,823,50,33,'#527e92');pRect(x+13,828,33,22,i===1?'#6aa8b0':'#86babc');
-   pRect(x+31,810,4,15,'#e1e8e7');pRect(x+24,812,18,4,'#e9f4ee');
-   for(let b=0;b<4;b++)ellipse(ctx,x+14+b*10,830+Math.sin(t*4+b+i)*6,3,3,'#e2fcf4');
+ dishPit(t);
+ // Shelves on the east side with piles of dry dishes.
+ shinySteel(1331,1191,83,74);for(let i=0;i<4;i++)ellipse(ctx,1354+i*13,1208,12,5,'#fff7e5');
+ // order pickup window between left bar and kitchen, not a walk through
+ rounded(ctx,851,788,23,142,5,'#fff2bc');pRect(858,793,10,133,'#44a9a9');
+ text(ctx,'ORDER',863,786,12,'#185468','center',false);
+ // Color details/texture
+ for(let i=0;i<8;i++)ellipse(ctx,912+i*61,1050+Math.sin(i)*5,10,5,'#fae8bc');
+}
+function chowder(t){
+ colorfulRoom(860,359,588,351,'#ffebb9','#c98776','',0,0);
+ table(1021,500);table(1293,505);
+ for(let j=0;j<4;j++){ellipse(ctx,926+j*115,395,16,8,'#ffcf7c');ellipse(ctx,926+j*115,395,8,4,'#fff7b0')}
+ // actual north entrance is to the RIGHT of dish pit at x1262
+ pRect(1251,691,24,25,'#bceade');
+}
+function bar(t){
+ colorfulRoom(564,635,283,259,'#c8eff2','#46aabb','',0,0);
+ shinySteel(606,719,228,66);for(let i=0;i<8;i++){
+  pRect(610+i*24,717,14,31,['#f9a7a3','#ffc86d','#a1e6c4','#93ceef'][i%4]);
+  ellipse(ctx,617+i*24,715,10,4,'#fff7dc');
  }
- rounded(ctx,297,819,168,45,5,'#d5e0df');rounded(ctx,307,825,142,27,3,'#3f6875');
- pRect(319,830,48,15,'#b9ced0');for(let k=0;k<3;k++)ellipse(ctx,399+k*12,838,4,4,k===0?'#8ee4b4':'#fbca82');
- text(ctx,'DISHWASHER',380,897,16,'#27576c','center',false);
- sign(122,763,260,'DISH PIT • 3 SINKS');
- // Drain racks and stacked clean dish piles flank the machine.
- for(let i=0;i<4;i++){ellipse(ctx,345+i*19,789,13,5,'#fbf4dd');ellipse(ctx,345+i*19,785,9,4,'#bddadc')}
- sign(135,113,240,'GALLEY • HOT LINE');
- sign(165,561,208,'SEAFOOD PREP');
- // Service pass has real plating shelf beside dining doorway.
- pRect(396,397,79,24,'#a87858');pRect(396,396,79,7,'#fce3b1');for(let i=0;i<3;i++)ellipse(ctx,414+i*21,406,9,5,'#fff9de');
+ text(ctx,'PICKUP WINDOW →',799,888,12,'#225469','right',false);
 }
-function dining(t){floorPattern(501,160,479,768,'#e4c295','#c79d7b');pRect(501,160,479,15,'#755c52');pRect(501,914,479,14,'#7d5d53');pRect(494,160,13,206,'#9a7159');pRect(494,579,13,348,'#9a7159');pRect(971,160,12,206,'#8f6b58');pRect(971,579,12,348,'#8f6b58');pRect(580,162,7,96,'#966448');pRect(580,255,144,8,'#b18b70');pRect(755,162,7,85,'#966448');pRect(762,247,155,9,'#b18b70');
- // Two room atmospheres, inspired by the restaurant's family / chowder rooms.
- pRect(517,189,110,27,'#d3e2d0');pRect(525,195,29,15,'#8cc8c2');pRect(562,195,28,15,'#8cc8c2');pRect(598,195,22,15,'#8cc8c2');
- pRect(809,190,134,31,'#d5c09e');pRect(815,196,119,20,'#3d6572');text(ctx,'CHOWDER ROOM',874,210,10,'#f3ddbb','center');
- table(656,304);table(847,306);table(672,714);table(850,716);
- for(const x of [548,750,927]){pRect(x-2,178,5,20,'#88604c');ellipse(ctx,x,207,18,8,'#ffce84');ellipse(ctx,x,208+Math.sin(t*3+x)*2,8,3,'#ffebb1')}
- // Pass / register facing a spacious center aisle.
- pRect(944,336,30,96,'#b88861');pRect(944,336,30,13,'#f2cc8b');text(ctx,'PASS',960,384,11,'#fce4a9','center');sign(600,122,240,'THE FAMILY DINING ROOM');
- // Floor rugs and nautical artwork.
- pRect(771,416,87,12,'#659e9c');pRect(789,415,49,13,'#bedcd3');pRect(802,411,23,16,'#e1ba72');pRect(513,863,98,14,'#6faaa7');pRect(517,866,90,8,'#afdfc6');
+function dining(t){
+ colorfulRoom(282,840,565,506,'#ffedc0','#d88984','',0,0);
+ for(const tb of DINER_TABLES.slice(0,4))table(tb.x,tb.y);
+ for(let i=0;i<4;i++){ellipse(ctx,335+i*139,860,12,6,'#ffeaa4')}
+ // bright family dining seaside photos
+ for(let i=0;i<4;i++){pRect(363+i*116,864,45,34,'#fff4e6');pRect(370+i*116,870,32,21,['#6adad0','#7ecef2','#92e1ae','#f7b4b5'][i])}
 }
-function patio(t){pRect(998,173,441,756,'#806556');floorPattern(1008,192,420,725,'#bc906f','#9c735c');pRect(995,168,452,18,'#e6c383');pRect(1002,916,439,14,'#e5c18b');for(const x of [1012,1083,1164,1246,1328,1416]){pRect(x,189,9,727,'#957258');pRect(x,177,10,12,'#f2e4bc')}for(let y=215;y<910;y+=120){pRect(1002,y,9,12,'#ecd8a8');pRect(1424,y,9,12,'#ecd8a8')}
- table(1146,315);table(1335,315);table(1152,714);table(1346,716);
- pRect(1350,407,61,84,'#886351');pRect(1347,407,70,13,'#fae0a2');for(let i=0;i<3;i++){pRect(1358+i*16,425,9,20,['#80ddb0','#f6c47c','#ec9e95'][i]);ellipse(ctx,1363+i*16,425,6,3,'#fcf1cc')}
- sign(1246,402,167,'TIKI BAR');pRect(1063,846,152,36,'#679a76');for(let i=0;i<11;i++){ellipse(ctx,1074+i*12,844,8,7,['#ffcb87','#f59cb1','#8ddbb3'][i%3]);pRect(1074+i*12,847,2,8,'#517c5f')}
- pRect(1350,841,65,39,'#b38d62');pRect(1350,841,65,8,'#efc484');text(ctx,'DOCK',1381,867,14,'#fff0cb','center');
- for(let x=1020;x<=1400;x+=46){line(ctx,x,171,x+14,184,'#bfa88d',1);ctx.fillStyle=['#f8c57b','#f29eac','#a3e8c9','#ccaedf'][(x/46|0)%4];ctx.beginPath();ctx.moveTo(x+5,169);ctx.lineTo(x+30,169);ctx.lineTo(x+15,188);ctx.fill();ellipse(ctx,x+14,176,4+Math.sin(t*4+x)*1,4,'#ffe4a9')}
- sign(1037,212,135,'THE DECK');palm(1450,919,1.3);
-}
-function supplies(t){ // actual restaurant: several rooms connect to a covered waterside patio; walkway is interpretation, not surveyed geometry.
- pRect(1165,73,139,132,'#7e6e5d');floorPattern(1173,85,120,116,'#bc966c','#997353');pRect(1145,73,175,20,'#efd3a0');sign(1153,98,155,"PECK'S COVE");pRect(1225,145,32,48,'#8bbeb0');for(const [x,y] of [[522,691],[918,696],[1028,664],[1191,726]]){pRect(x-9,y-7,18,19,'#da9377');ellipse(ctx,x,y-14,16,16,'#5a946b');ellipse(ctx,x-4,y-20,8,9,'#a5cd7d')}
- for(const [x,y] of [[501,143],[969,143],[998,151],[1435,163]]){pRect(x-4,y-14,8,17,'#765a4b');pRect(x-10,y-4,20,24,'#d7a866');pRect(x-6,y,12,16,'#ffe4a0');pRect(x-10,y+20,20,4,'#5e7975')}
-}
-function fishAndNature(t){for(let i=0;i<5;i++){const fx=(i*277+t*(i%2?8:-11)+MAP_W*5)%MAP_W,fy=38+i*22;ellipse(ctx,fx,fy,17,5,'#85c9c6');ctx.fillStyle='#85c9c6';ctx.beginPath();ctx.moveTo(fx-12,fy);ctx.lineTo(fx-24,fy-6);ctx.lineTo(fx-24,fy+6);ctx.fill()}for(let i=0;i<9;i++){const x=55+i*161,y=795+Math.sin(t+i)*5;line(ctx,x,y,x+21,y-3,'#b3e5e0',3)}palm(36,185,1.5);palm(1460,100,1.2)}
-function world(t){water(t);fishAndNature(t);pRect(50,145,937,790,'#775e54');pRect(55,153,926,775,'#997457');kitchen(t);dining(t);patio(t);supplies(t);
- // Explicit wide connecting doorways to avoid collisions around interior walls.
- floorPattern(480,368,27,210,'#d0af83','#b68c6d');floorPattern(970,368,36,210,'#cf9f78','#b98968');
- for(const door of [{x:490,y:466,a:'KITCHEN',b:'DINING'},{x:992,y:467,a:'DINING',b:'DECK'}]){
-   pRect(door.x-26,door.y-100,52,9,'#8d654e');pRect(door.x-26,door.y-100,7,192,'#8d654e');pRect(door.x+18,door.y-100,7,192,'#8d654e');
-   rounded(ctx,door.x-56,door.y-95,112,20,5,'#fff0bd');text(ctx,'⇄ DOORWAY',door.x,door.y-81,12,'#295369','center',false);
-   pRect(door.x-10,door.y+68,20,6,'#9bd9c7');text(ctx,'⇄',door.x,door.y+56,22,'#fff1bd','center');
+function tiki(t){
+ colorfulRoom(1472,374,562,433,'#f8d7bd','#df8b94','',0,0);
+ table(1610,532);table(1882,532);
+ shinySteel(1660,395,300,49);for(let i=0;i<10;i++){
+  pRect(1676+i*26,400,14,32,['#fa9c96','#f5d575','#73ddd5','#9fc9f0'][i%4]);
+  ellipse(ctx,1683+i*26,400,9,5,'#fff6dc');
  }
-
- for(let i=0;i<10;i++){ellipse(ctx,1085+i*23,969+Math.sin(t*2+i)*2,12,3,'#9edbd7')}
+ for(let x=1480;x<2015;x+=45){line(ctx,x,374,x+18,390,'#8f8b97',2);pRect(x,384,22,13,['#ffc872','#fc94a2','#89edcf'][Math.floor(x/45)%3])}
+}
+function coldStorage(t){
+ colorfulRoom(1544,1001,263,330,'#e7e9c4','#80b6a4','',0,0);
+ for(let i=0;i<4;i++){shinySteel(1590+i*40,1240,31,36)}
+ colorfulRoom(1806,1000,226,331,'#caeff0','#659eb2','',0,0);
+ for(let i=0;i<4;i++){rounded(ctx,1840+i*44,1210,31,53,5,'#9bc5d5');pRect(1845+i*44,1215,21,12,'#fff9dc')}
+ colorfulRoom(1806,801,226,200,'#d6eaff','#82adce','',0,0);
+ for(let i=0;i<5;i++)text(ctx,'❄',1830+i*38,882+(i%2)*49,25,'#e4faff','center',false);
+ // no door collision on any of these cold room entries: teal open gap markers
+ pRect(1792,1100,36,120,'#b5e9d6');pRect(1864,986,116,35,'#bdebf9');
+ text(ctx,'OPEN',1808,1128,13,'#2b856a','center',false);text(ctx,'❄ OPEN TO FREEZER',1922,1012,11,'#2b7385','center',false);
+}
+function employeeHall(t){
+ // A service passage connects the employees' back entrance to public dining.
+ floorPattern(750,1332,812,96,'#daf3dc','#88c8bd');
+ pRect(756,1337,798,9,'#75baa8');pRect(759,1412,790,8,'#75baa8');
+ sign(949,1372,260,'STAFF HALL → DINING');
+ pRect(788,1320,23,44,'#dcf8cc');pRect(1478,1320,27,40,'#dcf8cc');
+ colorfulRoom(1427,807,132,542,'#daf2dc','#72b9b1','',0,0);
+ // corridor to prep, walk-in and open freezer; customer door at north wall
+ pRect(1550,1065,27,124,'#b3e8c8');
+ pRect(1412,1054,45,90,'#b3e8c8');
+ pRect(1459,806,65,24,'#b3e8c8');
+ for(let y=866;y<1290;y+=73)ellipse(ctx,1490,y,18,7,'#bce8d6');
+}
+function pierAndOutside(t){
+ // Dry land almost everywhere, water only north of the raised tiki boardwalk.
+ pRect(0,0,MAP_W,MAP_H,'#a9da9f');
+ for(let i=0;i<180;i++){const x=(i*137)%MAP_W,y=296+(i*89)%(MAP_H-310);ellipse(ctx,x,y,9,4,i%3?'#bce6a0':'#96d6a3')}
+ pRect(0,0,MAP_W,298,'#55c2d9');
+ for(let i=0;i<94;i++){const x=(i*159+Math.sin(t+i)*16)%MAP_W,y=(i*37)%285;line(ctx,x,y,x+36,y,'#c5f2e1',2)}
+ // Elevated waterside boardwalk across north edge, turns down the west to public entrance.
+ floorPattern(210,284,1835,100,'#d8a878','#c48b64');
+ floorPattern(205,284,201,805,'#d8a878','#c48b64');
+ // Classic true dock out over water in upper-left corner.
+ floorPattern(85,105,170,330,'#e4b785','#bf906c');
+ for(let x=100;x<260;x+=44){pRect(x,117,10,300,'#845e52')}
+ for(let y=132;y<426;y+=64){pRect(79,y,185,8,'#fff4b5')}
+ // Parking lot sits beyond land near restaurant entrance.
+ pRect(42,1094,200,371,'#92b8b8');for(let y=1120;y<1446;y+=78){pRect(62,y,149,4,'#fff5d9');pRect(73,y+8,7,50,'#ffe8bb')}
+ for(let i=0;i<3;i++){rounded(ctx,107,1144+i*94,90,47,12,['#f6b5a2','#81cce7','#ffe1a0'][i]);pRect(128,1152+i*94,47,16,'#c8eaf6')}
+ text(ctx,'PARKING',131,1070,20,'#296075','center',false);
+ pRect(245,1075,83,42,'#fff3bf');text(ctx,'WELCOME',285,1105,14,'#235469','center',false);
+}
+function wallsAndDoors(t){
+ // Make room connections conspicuous; sensor-operated restaurant doors open on contact.
+ for(const d of DOORS){
+  const a=game?.doors?.[d.id]||0;
+  const x=d.x,y=d.y;
+  rounded(ctx,x-52,y-71,104,22,6,'#245c73');text(ctx,d.name,x,y-55,11,'#fff4b9','center',false);
+  if(d.axis==='v'){
+   rounded(ctx,x-7,y-42,14,84,5,'#fcefc6');
+   if(a>.01){pRect(x-5,y-40,5,39*(1-a),'#ffa965');pRect(x-5,y+1+39*a,5,39*(1-a),'#ffa965')}
+   else pRect(x-6,y-38,12,76,'#f49d74');
+  }else{
+   rounded(ctx,x-43,y-6,86,13,4,'#fff4c0');pRect(x-40,y-5,40*(1-a),10,'#ffae79');pRect(x+40*a,y-5,40*(1-a),10,'#ffae79');
+  }
+  if(a>.7)text(ctx,'⇆',x,y+32,22,'#a3f4d8','center',false);
+ }
+ // Open cold storage portals are framed without door objects.
+ for(const d of NO_DOOR_OPENINGS)text(ctx,'↔',d.x,d.y,22,'#60d1ba','center',false);
+}
+function world(t){
+ pierAndOutside(t);bar(t);dining(t);chowder(t);tiki(t);kitchen(t);employeeHall(t);coldStorage(t);
+ // Connect chowder wall to galley only to the RIGHT of the three sinks.
+ pRect(1218,703,91,21,'#fff2c5');
+ // No door at prep/refrigerator/freezer room thresholds by design.
+ wallsAndDoors(t);labels();
+ for(let i=0;i<17;i++){const x=225+i*99;ellipse(ctx,x,311+Math.sin(t*2+i)*3,4,4,'#fff7c0')}
 }
 function workMarker(x,y,label,t,color='#ffcc73'){
  const bob=Math.sin(t*5+x*.03)*3;
@@ -533,15 +657,15 @@ function drawObjectiveCompass(camX,camY,zoom){
  if(!game)return;const q=target(),px=(q.x-camX)*zoom+W/2,py=(q.y-camY)*zoom+H/2;
  const edge=78;if(px>edge&&px<W-edge&&py>edge&&py<H-edge)return;
  const x=clamp(px,edge,W-edge),y=clamp(py,edge,H-edge),ang=Math.atan2(py-H/2,px-W/2);
- rounded(ctx,x-52,y-16,104,34,10,'#184b59e8');text(ctx,'!  '+Math.round(Math.hypot(q.x-game.x,q.y-game.y))+'m',x,y+6,17,'#ffe7a1','center',false);
+ rounded(ctx,x-52,y-16,104,34,10,'#184b59e8');text(ctx,'!  '+Math.ceil(Math.hypot(q.x-game.x,q.y-game.y)/32)+' TILES',x,y+6,17,'#ffe7a1','center',false);
  ctx.save();ctx.translate(x+Math.cos(ang)*44,y+Math.sin(ang)*12);ctx.rotate(ang);ctx.fillStyle='#ffd088';ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(-4,-7);ctx.lineTo(-4,7);ctx.closePath();ctx.fill();ctx.restore()
 }
 function render(t){
  ctx.clearRect(0,0,W,H);
- const zoom=1.59,halfW=W/(2*zoom),halfH=H/(2*zoom);
+ const zoom=1.20,halfW=W/(2*zoom),halfH=H/(2*zoom);
  const camX=clamp(game?.camX||700,halfW,MAP_W-halfW),camY=clamp(game?.camY||425,halfH,MAP_H-halfH);
  ctx.save();ctx.translate(W/2,H/2);ctx.scale(zoom,zoom);ctx.translate(-camX,-camY);
- world(t);drawWorkResults(t);npcCharacters(t);drawCustomers(t);drawPickup(t);
+ world(t);drawWorkResults(t);npcCharacters(t);drawCustomers(t);if(state==='playing')drawPickup(t);
  if(game?.ghost)ghost(game.ghost.x,game.ghost.y,game.ghost.t);
  drawCharacter(t);drawCrewDialogue(t);drawParticles(t);drawFloatingResults(t);
  ctx.restore();
@@ -554,16 +678,16 @@ function render(t){
    Guests and workers repeatedly enter, move, cook, eat, clean and wave. */
 const DEMO_PERIOD=40;
 const DEMO_ROUTES=[
- [[150,500],[245,515],[206,351],[310,371],[155,500]],
- [[235,355],[310,352],[307,255],[220,351],[235,355]],
- [[930,410],[935,455],[1014,463],[1215,520],[1321,536],[1018,448],[930,410]],
- [[540,420],[700,414],[924,438],[938,260],[540,420]],
- [[1220,252],[1244,439],[1213,460],[1220,252]],
- [[1367,446],[1314,473],[1367,446]],
- [[745,532],[912,525],[924,443],[741,535]],
- [[1377,677],[1250,671],[1068,615],[1377,677]],
- [[1163,646],[1200,626],[1090,661],[1163,646]],
- [[1035,461],[1024,510],[1350,476],[1035,461]]
+ [[1103,846],[1050,874],[1204,839],[1103,846]],
+ [[1040,930],[1240,955],[1341,1160],[1040,930]],
+ [[850,918],[1045,511],[520,961],[850,918]],
+ [[1330,1100],[1608,1120],[1120,1040],[1330,1100]],
+ [[350,1084],[480,955],[1030,500],[350,1084]],
+ [[1750,725],[1800,595],[1680,688],[1750,725]],
+ [[735,961],[490,1190],[739,1190],[735,961]],
+ [[1615,1130],[1885,1130],[1720,1040],[1615,1130]],
+ [[1595,620],[1285,525],[1635,640],[1595,620]],
+ [[1500,1280],[1400,1100],[1910,1150],[1500,1280]]
 ];
 function demoPath(nodes,t,duration=19,offset=0){
  let phase=((t+offset)%duration+duration)%duration / duration * nodes.length;
@@ -579,7 +703,7 @@ function menuAttract(t){
  try{
   ctx.clearRect(0,0,W,H);
   ctx.save();ctx.translate(W/2,H/2);ctx.scale(.97,.97);
-  const camX=760+195*Math.sin(t*.075),camY=451+48*Math.sin(t*.11);
+  const camX=1090+500*Math.sin(t*.075),camY=816+260*Math.sin(t*.11);
   ctx.translate(-camX,-camY);
   world(t);
   for(let i=0;i<BASE_ROLE_COUNT;i++){
@@ -630,7 +754,7 @@ function drawDaylight(elapsed){
  if(d>.66){ctx.save();ctx.globalAlpha=Math.min(.7,(d-.66)*2);for(let i=0;i<5;i++){const x=94+i*192;ellipse(ctx,x,70,33,11,'#f4c975')}ctx.restore()}
 }
 function drawSky(t){sc.clearRect(0,0,480,270);const g=sc.createLinearGradient(0,0,0,270);g.addColorStop(0,'#529aab');g.addColorStop(.63,'#f3b385');g.addColorStop(1,'#144e64');sc.fillStyle=g;sc.fillRect(0,0,480,270);ellipse(sc,370,82,47,47,'#fceab5');cloud(41+Math.sin(t/5)*10,65,1.3);cloud(247-Math.sin(t/9)*9,25,.8);for(let i=0;i<8;i++){line(sc,0,193+i*10,480,193+i*10,i%2?'#7bc9b2':'#52979e',3)}for(let i=0;i<10;i++)line(sc,340+i*3,190+i*4,402-i*5,193+i*4,'#ebd7a1',3);palm(30,215,2.1);palm(470,260,2)}
-function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(['menu','front','credits'].includes(state))menuAttract(tick);if(state==='playing')update(dt);if(game?.mini)updateMini(dt);if(state!=='menu'&&state!=='front'&&game)render(tick);if(state==='finish')drawVictory(tick);if(game?.mini)paintMini();if(!introDone)drawIntro(now);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
+function loop(now){const dt=Math.min(.05,(now-last||16)/1000);last=now;tick+=dt;drawSky(tick);if(['menu','front','credits'].includes(state))menuAttract(tick);if(state==='playing'||state==='walkin')update(dt);if(game?.mini)updateMini(dt);if(state!=='menu'&&state!=='front'&&game)render(tick);if(state==='finish')drawVictory(tick);if(game?.mini)paintMini();if(!introDone)drawIntro(now);if(toastDeadline&&now>toastDeadline){$('toast').classList.remove('show');toastDeadline=0}requestAnimationFrame(loop)}
 function drawVictory(t){
  if(!game||state!=='finish')return;
  const canvas=$('victoryCanvas');if(!canvas)return;const c=canvas.getContext('2d');if(!c)return;
@@ -661,7 +785,7 @@ function pressWork(){if(!game||game.paused||game.boardOpen||game.mini||state!=='
 /* Scene presentation: short fade curtain plus a scripted 3.8-second sunrise over the cove. */
 function screenFade(){const el=$('sceneFade');el.classList.remove('wipe');void el.offsetWidth;el.classList.add('wipe')}
 function replayIntro(){introDone=false;introStarted=0;$('sunriseIntro').classList.remove('hidden','introFade')}
-function finishIntro(){if(introDone)return;introDone=true;const el=$('sunriseIntro');el.classList.add('introFade');if(state==='intro'&&game){state='playing';game.paused=false;screenFade();toast('☀️ THE SHIFT BEGINS!');beep(660,.1)}setTimeout(()=>{if(introDone)el.classList.add('hidden')},540)}
+function finishIntro(){if(introDone)return;introDone=true;const el=$('sunriseIntro');el.classList.add('introFade');if(state==='intro'&&game){state='walkin';game.introWalk=0;game.paused=true;screenFade();toast('☀️ CREW ARRIVING FOR THE SHIFT!');beep(660,.1)}setTimeout(()=>{if(introDone)el.classList.add('hidden')},540)}
 function drawIntro(now){if(!introStarted)introStarted=now;const elapsed=now-introStarted,p=clamp(elapsed/3800,0,1),c=$('sunriseCanvas').getContext('2d');if(!c)return;
  const w=640,h=360;c.clearRect(0,0,w,h);
  const bg=c.createLinearGradient(0,0,0,h);bg.addColorStop(0,p<.35?'#162f59':'#3c8faa');bg.addColorStop(.57,'#f4a776');bg.addColorStop(1,'#f4dcac');c.fillStyle=bg;c.fillRect(0,0,w,h);
@@ -683,10 +807,10 @@ function burstConfetti(){const layer=$('celebrateFX');if(!layer)return;const col
  * five differing visual layouts. The clock pauses, and failure never awards credit.
  * The same engine supports more recipes and jobs without changing the game loop. */
 const MINI_ROLE_KINDS={
- dishes:['sort','dish','stack'],cook:['prep','fryer','plate'],waiter:['tray','tray','tip'],
- boss:['count','tap','count'],host:['tap','seat','sort'],drinks:['sort','shake','tray'],
- busser:['sort','sweep','stack'],fish:['sort','chill','prep'],
- decor:['water','tap','polish'],fix:['trace','dial','trace']
+ dishes:['sort','dish','stack','sweep','dish','stack'],cook:['prep','fryer','plate','tap','shake','dial'],waiter:['tray','tray','tip','tray','sort','tray'],
+ boss:['count','tap','count','trace','chill','count'],host:['tap','seat','sort','count','seat','tap'],drinks:['sort','shake','tray','chill','prep','polish'],
+ busser:['sort','sweep','stack','polish','stack','sweep'],fish:['sort','chill','prep','prep','chill','sort'],
+ decor:['water','tap','polish','stack','trace','water'],fix:['trace','dial','trace','fryer','dial','trace']
 };
 const FOOD_RESIDUES=[
  {name:'FRIED GROUPER CRUMBS',food:'grouper',color:'#c37b42'},
@@ -706,6 +830,9 @@ const MINI_LABELS={dish:['🫧 WASH THE DISH','Swipe away every leftover piece.'
  water:['🌺 WATER THE FLOWERS','Tap the planters in the highlighted order.'],
  polish:['🧽 POLISH IT CLEAN','Swipe across every dusty spot.'],trace:['🔧 FOLLOW THE REPAIR STEPS','Tap each connection in numbered order.'],
  dial:['⚡ TUNE THE SYSTEM','Tap the marked controls in order.']};
+// Skills have two parts: four visible stats and a distinct job-family perk.
+const specialPerks={dishes:'Dish residue scrubs faster',cook:'Fryer reversals are easier',waiter:'Earn bonus customer tips',boss:'Ghosts interrupt less often',host:'Guests are more patient',drinks:'Mixers finish sooner',busser:'Wiping removes more crumbs',fish:'Prep work earns a bonus coin',decor:'More celebratory sparkles',fix:'Repairs have larger touch targets'};
+function miniReverseGoal(m){return Math.max(5,8+m.variant*2-(m.kind==='fryer'&&roles[game.role].id==='cook'?2:0)-(m.kind==='shake'&&roles[game.role].id==='drinks'?2:0))}
 const MINI_ICONS={sort:['🐟','🦀','🍋','🍤','🥬'],stack:['🍽','🥣','🥄','🍴','✨'],prep:['🐟','🍋','🔪','🧂','🌿'],plate:['🍤','🐟','🍋','🌿','🥣'],tip:['🪙','💰','💵','⭐','🪙'],count:['📦','🧊','🥫','🐟','📋'],
  tap:['⭐','🧽','📋','🪛','✨'],seat:['🪑','🍴','🥣','📖','🌸'],chill:['🧊','🐟','🧊','❄','🐟'],water:['🌷','🌺','🌿','🌼','🌻'],trace:['⚡','🔧','🔌','💡','🪛'],dial:['⚡','🔋','🔧','💡','✓']};
 const lastMiniVariant={};
@@ -715,7 +842,7 @@ function miniKind(action){if(!game||!action)return null;
  if(action.kind==='pickup')return 'plate';
  if(action.kind==='serve')return 'tray';
  if(action.kind!=='job')return null;
- return (MINI_ROLE_KINDS[roles[game.role].id]||MINI_ROLE_KINDS.boss)[game.done%3];
+ return (MINI_ROLE_KINDS[roles[game.role].id]||MINI_ROLE_KINDS.boss)[game.done%roles[game.role].tasks.length];
 }
 function constructMini(action,kind,attempt=1){
  const variant=nextVariant(kind),a=variant*.62,offsets=[[-43,-24],[3,-38],[47,-21],[-46,19],[7,36],[49,19]];
@@ -752,15 +879,15 @@ function applyMini(x,y,tap=false){const m=game?.mini;if(!m||m.showFall>0)return;
  }else if(['dish','sweep','polish'].includes(m.kind)){
   const travel=prev?Math.hypot(x-prev.x,y-prev.y):0;
   if(tap||travel>2){for(const dirt of m.grime){const distance=prev?pointSegDist(prev.x,prev.y,x,y,dirt.x,dirt.y):Math.hypot(x-dirt.x,y-dirt.y);
-   if(distance<29)dirt.dirty=Math.max(0,dirt.dirty-(tap?.22:.12+Math.min(travel,60)*.007));}}
+   if(distance<29)dirt.dirty=Math.max(0,dirt.dirty-(tap?.22:.12+Math.min(travel,60)*.007+roles[game.role].stats.skill*.017+(roles[game.role].id==='dishes'?0.05:0)+(roles[game.role].id==='busser'?0.04:0)));}}
   m.progress=1-m.grime.reduce((sum,d)=>sum+d.dirty,0)/m.grime.length;
  }else if(['fryer','shake'].includes(m.kind)){
   if(prev){m.swing+=x-prev.x;
    if(Math.abs(m.swing)>=(m.kind==='fryer'?23:27)){const dir=Math.sign(m.swing);if(m.lastDir&&dir!==m.lastDir){m.switches++;beep(240+m.switches*22,.04,'triangle')}m.lastDir=dir;m.swing=0;}
   }
-  m.progress=Math.min(1,m.switches/(8+m.variant*2));
+  m.progress=Math.min(1,m.switches/miniReverseGoal(m));
  }else{ // ordered gesture/tap mini-game, used by every other job
-  const o=m.spots[m.index];if(o&&Math.hypot(x-o.x,y-o.y)<38&&tap){m.index++;m.progress=m.index/m.spots.length;beep(470+55*m.index,.055,'sine');}
+  const o=m.spots[m.index];if(o&&Math.hypot(x-o.x,y-o.y)<(roles[game.role].id==='fix'?50:38)&&tap){m.index++;m.progress=m.index/m.spots.length;beep(470+55*m.index,.055,'sine');}
  }
  m.last={x,y};updateMiniStatus();if(m.progress>=.99)exitMini(true);
 }
@@ -768,7 +895,7 @@ function updateMiniStatus(){const m=game?.mini;if(!m)return;
  $('minigameProgress').style.width=`${Math.min(100,Math.round(m.progress*100))}%`;
  $('minigameStatus').textContent=m.feedback||(m.kind==='tray'?`${Math.round(m.progress*100)}% BALANCED · ATTEMPT ${m.attempt}`:
  ['dish','sweep','polish'].includes(m.kind)?`${Math.round(m.progress*100)}% CLEAN · DESIGN ${m.variant+1}/5`:
- ['fryer','shake'].includes(m.kind)?`${m.switches}/${8+m.variant*2} REVERSES · DESIGN ${m.variant+1}/5`:
+ ['fryer','shake'].includes(m.kind)?`${m.switches}/${miniReverseGoal(m)} REVERSES · DESIGN ${m.variant+1}/5`:
  `${m.index}/${m.spots.length} STEPS · DESIGN ${m.variant+1}/5`);
 }
 function updateMini(dt){const m=game?.mini;if(!m||m.kind!=='tray')return;
@@ -782,11 +909,11 @@ function updateMini(dt){const m=game?.mini;if(!m||m.kind!=='tray')return;
  m.targetX=idealX;
  if(!m.touched)return;
  const err=Math.abs(m.touchX-idealX);
- if(err<54){m.stable+=dt;m.failTime=Math.max(0,m.failTime-dt*.7)}
+ if(err<46+roles[game.role].stats.skill*2){m.stable+=dt;m.failTime=Math.max(0,m.failTime-dt*.7)}
  else if(err<84){m.stable+=dt*.22;m.failTime=Math.max(0,m.failTime-dt*.2)}
  else {m.failTime+=dt*(err>108?1.4:1)}
  m.progress=Math.min(1,m.stable/(4.3+m.variant*.35));
- if(m.failTime>.63){m.showFall=1.05;m.feedback='💥 FOOD FELL! TRY AGAIN — GUEST IS STILL WAITING';beep(140,.28,'sawtooth');}
+ if(m.failTime>(.48+roles[game.role].stats.skill*.036)){m.showFall=1.05;m.feedback='💥 FOOD FELL! TRY AGAIN — GUEST IS STILL WAITING';beep(140,.28,'sawtooth');}
  else if(m.progress>=1){exitMini(true);return}
  updateMiniStatus();
 }
@@ -894,5 +1021,5 @@ window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
 for(const e of ['contextmenu','selectstart','dragstart'])document.addEventListener(e,event=>{if(event.target.closest?.('#controls, #world, #frame'))event.preventDefault()});
 for(const e of ['touchstart','touchmove'])document.querySelector('#controls').addEventListener(e,event=>event.preventDefault(),{passive:false});
 window.addEventListener('blur',()=>{keys={};dpad=null;if(game)game.work=false;saveShift()});window.addEventListener('pagehide',saveShift);
-window.__coveTest={SHIFT_LENGTH,DAILY_JOBS,DAILY_GUESTS,shiftDifficulty,phaseName,crowdDelay,prankDelay,miniKind,get introDone(){return introDone},get mini(){return game?.mini||null},exitMini,constructMini,updateMini,nextVariant,FOOD_RESIDUES,MINI_ROLE_KINDS,toggleBoard,openCrew,openFront,finishIntro,startMini,applyMini,roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'||state==='front'},DINER_TABLES,PICKUP,canStand,moveWithCollision,get state(){return state},get game(){return game},profile,saveShift,resumeSavedShift,hasSavedShift,startOrUnlock,openCredits,closeCredits,PREMIUM_CREW,BASE_ROLE_COUNT,choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,maybeScheduleService,completeTask,finish,pressWork};makeCards();refreshWallet();requestAnimationFrame(loop);
+window.__coveTest={SHIFT_LENGTH,DAILY_JOBS,DAILY_GUESTS,shiftDifficulty,phaseName,crowdDelay,prankDelay,miniKind,get introDone(){return introDone},get mini(){return game?.mini||null},exitMini,constructMini,updateMini,nextVariant,FOOD_RESIDUES,MINI_ROLE_KINDS,toggleBoard,openCrew,openFront,finishIntro,startMini,applyMini,roles,DEMO_ROUTES,get demoEnabled(){return state==='menu'||state==='front'},DINER_TABLES,PICKUP,DOORS,WALK_ROOMS,NO_DOOR_OPENINGS,CREW_ABILITIES,miniReverseGoal,specialPerks,canStand,moveWithCollision,get state(){return state},get game(){return game},profile,saveShift,resumeSavedShift,hasSavedShift,startOrUnlock,openCredits,closeCredits,PREMIUM_CREW,BASE_ROLE_COUNT,choose,begin,goal,target,activeTask,update,ghostPrank,spawnCustomer,updateCustomers,maybeScheduleService,completeTask,finish,pressWork};makeCards();refreshWallet();requestAnimationFrame(loop);
 })();
