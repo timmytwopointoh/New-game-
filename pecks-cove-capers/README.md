@@ -45,3 +45,14 @@ The APK is a hardware-accelerated WebView shell around bundled HTML Canvas game 
 - All active workstation tasks use floating ! signs, not route trails or auto-work.
 - Customer state machine: entrance → table → order → served/eating → exit; pending orders do not time out.
 - 10 role-specific dialogue pools, crew speech bubbles, food pickups, table delivery and persistent ghost cleanup.
+
+## v0.4 layout, interactions and tactile feedback
+- Enlarged 1480 × 850 walkable world: themed indoor galley/family dining, covered patio, tiki bar, dock, wide doorways. The room plan is an artistic interpretation from published photographs; it is not a verified floor plan.
+- Eight spaced-out solid tables/chairs and actual wall/counter collision with axis-separated sliding.
+- Ten role-specific three-step work circuits plus persistent completed-station graphics, particles, coins and progress animations.
+- Holding the touch D-pad no longer triggers text selection / copy; native WebView long press is suppressed on gameplay.
+- Camera follows the player, with an edge-of-screen compass toward the next ! station.
+- Customer orders persist until manually served, ghost messes persist until cleaned.
+- Offline browser and WebView packaging; emulator smoke is review-only.
+
+Local checks: node --check web/game.js; node test_logic.cjs; python test_upgrade.py; python test_v04.py (Chromium/Playwright).

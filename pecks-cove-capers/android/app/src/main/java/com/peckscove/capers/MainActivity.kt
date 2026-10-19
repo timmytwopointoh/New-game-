@@ -20,6 +20,9 @@ class MainActivity : Activity() {
         gameView = WebView(this)
         gameView.setBackgroundColor(Color.rgb(14, 48, 59))
         gameView.webViewClient = WebViewClient()
+        gameView.isLongClickable = false
+        gameView.setOnLongClickListener { true }
+        gameView.isHapticFeedbackEnabled = false
         gameView.settings.javaScriptEnabled = true
         gameView.settings.domStorageEnabled = true
         gameView.settings.allowFileAccess = true
@@ -30,6 +33,15 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         gameView.evaluateJavascript("document.getElementById('menuBtn').click()", null)
+    }
+    override fun onPause() {
+        gameView.evaluateJavascript("if(window.__coveTest && window.__coveTest.game && !window.__coveTest.game.paused){document.getElementById('pauseBtn').click()}", null)
+        gameView.onPause()
+        super.onPause()
+    }
+    override fun onResume() {
+        super.onResume()
+        if (::gameView.isInitialized) gameView.onResume()
     }
     override fun onDestroy() {
         gameView.destroy()
