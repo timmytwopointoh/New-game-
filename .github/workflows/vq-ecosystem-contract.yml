@@ -1,20 +1,5 @@
 name: VQ ecosystem contract — lightweight
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'AGENTS.md'
-      - 'docs/VQ_CROSS_REPO_HANDOFF.md'
-      - 'ecosystem/**'
-      - 'tools/verify_vq_ecosystem.py'
-      - '.github/workflows/vq-ecosystem-contract.yml'
-  pull_request:
-    paths:
-      - 'AGENTS.md'
-      - 'docs/VQ_CROSS_REPO_HANDOFF.md'
-      - 'ecosystem/**'
-      - 'tools/verify_vq_ecosystem.py'
-      - '.github/workflows/vq-ecosystem-contract.yml'
   workflow_dispatch:
 permissions:
   contents: read
