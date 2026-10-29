@@ -1,12 +1,5 @@
 name: Peks Plunder v0.42 downloadable Android APK
 on:
-  push:
-    branches:
-      - release/peks-plunder-v042-compat-20261028
-    paths:
-      - 'peks-plunder/**'
-      - '.github/workflows/peks-v042-public-test.yml'
-      - '.github/scripts/peks-v042-emulator-check.sh'
   workflow_dispatch:
 permissions:
   contents: write
