@@ -3,6 +3,7 @@
 from pathlib import Path
 import json
 import sys
+import re
 
 def verify(root: Path) -> None:
     shared=json.loads((root/"ecosystem/vq_shared_rules_v1.json").read_text(encoding="utf-8"))
@@ -26,7 +27,10 @@ def verify(root: Path) -> None:
     assert "user approval" in instructions.lower()
     assert "VQShape/1" in (root/"docs/VQ_CROSS_REPO_HANDOFF.md").read_text(encoding="utf-8")
     workflow=(root/".github/workflows/artifact-lifecycle.yml").read_text(encoding="utf-8")
-    assert "schedule:" in workflow and "deleteArtifact" in workflow
+    # GitHub hosted Actions must not start automatically; local Codex runs the tests.
+    assert "on:\\n  workflow_dispatch:" in workflow
+    assert re.search(r"(?m)^  (?:push|pull_request|schedule|workflow_run|repository_dispatch):", workflow) is None
+    assert "deleteArtifact" in workflow
     assert "protectedName" in workflow and "newest" in workflow
     assert "if(e.status===404)" in workflow
     assert role["emulator_lab_exception"] or role["emulator_policy"]=="manual_or_review_gated"
