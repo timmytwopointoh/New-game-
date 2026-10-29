@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+adb shell wm size 960x540
+adb shell wm density 200
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1
+adb install -r apk/Peks-Plunder-v041.apk
+adb logcat -c
+adb shell am start -n com.peks.plunder/.MainActivity
+for n in $(seq 1 15); do
+  sleep 4
+  adb logcat -d -s PEKS_AUDIT:I > peks-v041-log.txt || true
+  if grep -q 'UI_READY=.*roles' peks-v041-log.txt; then break; fi
+done
+adb shell pidof com.peks.plunder
+adb shell screencap -p /sdcard/peks-v041.png
+adb pull /sdcard/peks-v041.png Peks-Plunder-v041-emulator.png
+echo '=== WebView diagnostic ==='
+cat peks-v041-log.txt || true
+test -s Peks-Plunder-v041-emulator.png
+if grep -Eq 'JS_ERROR=|LOAD_ERROR=' peks-v041-log.txt; then exit 1; fi
+grep -Eq 'UI_READY=.*roles.*19' peks-v041-log.txt
