@@ -28,7 +28,7 @@ def verify(root: Path) -> None:
     assert "VQShape/1" in (root/"docs/VQ_CROSS_REPO_HANDOFF.md").read_text(encoding="utf-8")
     workflow=(root/".github/workflows/artifact-lifecycle.yml").read_text(encoding="utf-8")
     # GitHub hosted Actions must not start automatically; local Codex runs the tests.
-    assert "on:\\n  workflow_dispatch:" in workflow
+    assert "on:\n  workflow_dispatch:" in workflow
     assert re.search(r"(?m)^  (?:push|pull_request|schedule|workflow_run|repository_dispatch):", workflow) is None
     assert "deleteArtifact" in workflow
     assert "protectedName" in workflow and "newest" in workflow
