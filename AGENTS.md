@@ -1,3 +1,5 @@
+**Owner superseding directive, October 29 2026:** Keep **Peks Plunder v0.43 source** on `keeper/peks-plunder-v043-source-20261029` and verified earlier fallbacks. The ECHOFORM `main` branch is legacy and should not receive new feature work. Preserve its content temporarily until all branches are backed up and the latest Peks build has passed local tests. The VQ/VEILFORGE engine is separate from game sources; the GitHub Codex bridge in `Trion-Assistant-Lab/veilforge-link` requires **no GitHub Actions**. Do not launch any automatic hosted builds. Prior ECHOFORM-specific instructions below are historical, not active priorities.
+
 # Worker Coordination — ECHOFORM / Android Game
 
 Read https://github.com/timmytwopointoh/New-game-/issues/4 for verified storage remediation, active workflows and instructions shared with other development chats. Shared VQ / VEILFORGE / VEILBOUND workers are documented at https://github.com/timmytwopointoh/Project-hail/issues/29.
