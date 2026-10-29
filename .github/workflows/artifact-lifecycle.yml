@@ -1,10 +1,5 @@
 name: VQ Artifact Lifecycle — preserve knowledge, expire disposable builds
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/artifact-lifecycle.yml']
-  schedule:
-    - cron: '27 8 * * *'
   workflow_dispatch:
 permissions:
   contents: read
