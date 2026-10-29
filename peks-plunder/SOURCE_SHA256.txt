@@ -1,1 +1,1 @@
-c3b12530dabc0be87c4d5e74f8104e62dba72269037d4ca1a18834c158f5536a  app/src/main/assets/index.html
+eec375c59b6e063f15829a247c78b98c82dab818845348ad004afef78eeedb08  app/src/main/assets/index.html

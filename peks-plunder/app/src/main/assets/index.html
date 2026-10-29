@@ -257,7 +257,14 @@ html,body,#shell,#gameScreen,#controls,#controls *,#world{user-select:none!impor
 <section id="sunriseIntro" class="hidden" role="presentation"><canvas id="sunriseCanvas" width="1280" height="720" aria-label="The sunrise over Pek's Old Port Cove"></canvas><div class="introPanel"><h1>PEK'S PLUNDER</h1><p>A new day. A fresh catch. A whole lot of trouble!</p><div class="introTrack"><span id="introMeter"></span></div><button id="skipIntro">SKIP INTRO ›</button></div></section>
 <section id="minigameOverlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="minigameTitle"><div class="miniPanel"><h2 id="minigameTitle">SCRUB THE PLATE</h2><p id="minigameHelp">Tap and swipe!</p><canvas id="miniCanvas" width="920" height="560" aria-label="Interactive dishwashing or fryer-cleaning surface"></canvas><div class="miniBar"><span id="minigameProgress"></span></div><div class="miniFoot"><span id="minigameStatus">0%</span><button id="quitMini">BACK TO RESTAURANT</button></div></div></section>
 <section id="taskBoard" class="hidden" role="dialog" aria-modal="true" aria-label="Shift task checklist"><div class="boardPanel"><h2>📋 TODAY'S JOB BOARD</h2><p id="boardHint">Enjoy your shift!</p><ul id="taskItems"></ul><p class="boardFoot">The day lasts 12 minutes, including walking. Guests leave after about a minute unserved and cost 2 coins. Doors open automatically on contact.</p><button id="closeBoard" class="bigButton">BACK TO WORK</button></div></section>
-</div><script>/* Pek's Plunder v0.39: unified canvas source, crew fixes, and living restaurant polish. */
+</div><script>/* Compatibility for older Android System WebView engines. */
+(function(){
+  if (!Object.entries) Object.entries = function(o){return Object.keys(o).map(function(k){return [k,o[k]];});};
+  if (!Object.fromEntries) Object.fromEntries = function(entries){var o={};for(var i=0;i<entries.length;i++){var p=entries[i];o[p[0]]=p[1];}return o;};
+  if (!Array.prototype.includes) Array.prototype.includes = function(v){return this.indexOf(v)!==-1;};
+  if (!String.prototype.padStart) String.prototype.padStart = function(size,pad){var s=String(this),f=String(pad===undefined?' ':pad);if(!f)return s;while(s.length<size){s=f+s;}return s.slice(-Math.max(size,String(this).length));};
+})();
+/* Pek's Plunder v0.39: unified canvas source, crew fixes, and living restaurant polish. */
 (() => {
     'use strict';
     var _a, _b, _c;
@@ -1222,7 +1229,7 @@ html,body,#shell,#gameScreen,#controls,#controls *,#world{user-select:none!impor
     } sprite(a, 52, 100, r, 1.73, t, 'idle'); }
     function makeCards() {
         const box = $('crew');
-        box.replaceChildren();
+        box.textContent = '';
         roles.forEach((r, i) => {
             const b = document.createElement('button');
             const locked = !isUnlocked(i);
