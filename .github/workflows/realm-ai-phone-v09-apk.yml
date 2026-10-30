@@ -5,6 +5,7 @@ on:
       - sandbox/realm-ai-android-only-20261030
     paths:
       - 'realm-ai-phone-build/source-v09.tar.xz.b64'
+      - '.github/workflows/realm-ai-phone-v09-apk.yml'
 permissions:
   contents: write
 concurrency:
@@ -77,6 +78,9 @@ jobs:
               rm -f "$file"
             fi
           done
+          echo 'Prune non-runtime prismarine-nbt sample data that Android asset merger treats as duplicate'
+          rm -rf node_modules/prismarine-nbt/sample
+          test ! -e node_modules/prismarine-nbt/sample/bigtest.nbt
           test ! -e node_modules/prismarine-nbt/sample/bigtest.nbt.gz
       - name: Acquire checksum-verified Android 16 KB Node native runtime
         working-directory: .vf-phone-build/veilforge_realm_v09_apk_ready
