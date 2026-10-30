@@ -58,10 +58,18 @@ jobs:
           npm test
           npm install --omit=dev --ignore-scripts --no-audit --no-fund
           test -f node_modules/bedrock-protocol/package.json
-          if find node_modules -type f -name '*.node' | grep -q .; then
-            echo 'Found a Linux-native addon; Android-compatible dependency required' >&2
+          echo 'Inspect bundled native addons before Android packaging'
+          find node_modules -type f -name '*.node' -print | sort
+          find node_modules -type f -name '*.node' -print | grep -Ev '^node_modules/(raknet-native|raknet-node)/' > /tmp/vf-unexpected-native || true
+          if test -s /tmp/vf-unexpected-native; then
+            echo 'STOP: unexpected native modules require an Android-compatible build:' >&2
+            cat /tmp/vf-unexpected-native >&2
             exit 1
           fi
+          find node_modules/raknet-native node_modules/raknet-node -type f -name '*.node' -delete 2>/dev/null || true
+          node --input-type=module -e "import('bedrock-protocol').then(m=>{if(typeof m.default?.createClient!=='function') throw Error('Bedrock client missing');console.log('Pure JS Bedrock import OK')})"
+          test -z "$(find node_modules -type f -name '*.node' -print -quit)"
+          echo 'No Linux native addons will be bundled in the Android APK'
       - name: Acquire checksum-verified Android 16 KB Node native runtime
         working-directory: .vf-phone-build/veilforge_realm_v09_apk_ready
         run: python3 tools/prepare_android_node.py
