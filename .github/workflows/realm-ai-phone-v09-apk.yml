@@ -70,6 +70,14 @@ jobs:
           node --input-type=module -e "import('bedrock-protocol').then(m=>{if(typeof m.default?.createClient!=='function') throw Error('Bedrock client missing');console.log('Pure JS Bedrock import OK')})"
           test -z "$(find node_modules -type f -name '*.node' -print -quit)"
           echo 'No Linux native addons will be bundled in the Android APK'
+          echo 'Remove redundant gzipped copies that Android merges onto existing asset names'
+          find node_modules -type f -name '*.gz' -print0 | while IFS= read -r -d '' file; do
+            if test -f "${file%.gz}"; then
+              echo "Excluding duplicate Android asset: $file"
+              rm -f "$file"
+            fi
+          done
+          test ! -e node_modules/prismarine-nbt/sample/bigtest.nbt.gz
       - name: Acquire checksum-verified Android 16 KB Node native runtime
         working-directory: .vf-phone-build/veilforge_realm_v09_apk_ready
         run: python3 tools/prepare_android_node.py
