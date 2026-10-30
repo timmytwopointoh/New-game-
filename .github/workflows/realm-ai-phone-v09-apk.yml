@@ -81,6 +81,15 @@ jobs:
       - name: Acquire checksum-verified Android 16 KB Node native runtime
         working-directory: .vf-phone-build/veilforge_realm_v09_apk_ready
         run: python3 tools/prepare_android_node.py
+      - name: Select C++20 for Node.js 24 native headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app'
+          sed -i 's/-std=c++17 -fexceptions/-std=c++20 -fexceptions/' "$ROOT/build.gradle"
+          sed -i 's/cxx_std_17/cxx_std_20/' "$ROOT/CMakeLists.txt"
+          grep -q -- '-std=c++20 -fexceptions' "$ROOT/build.gradle"
+          grep -q 'cxx_std_20' "$ROOT/CMakeLists.txt"
       - name: Compile signed Android debug APK
         shell: bash
         run: gradle -p .vf-phone-build/veilforge_realm_v09_apk_ready/android-app :app:assembleDebug --no-daemon --max-workers=2 --stacktrace
