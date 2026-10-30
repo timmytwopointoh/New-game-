@@ -94,6 +94,11 @@ jobs:
           sed -i 's/cxx_std_17/cxx_std_20/' "$ROOT/CMakeLists.txt"
           grep -q -- '-std=c++20 -fexceptions' "$ROOT/build.gradle"
           grep -q 'cxx_std_20' "$ROOT/CMakeLists.txt"
+          echo 'Avoid duplicate libnode/libc++ packaging: AGP CMake imported targets own the native outputs'
+          sed -i "/sourceSets.main.jniLibs.srcDir 'libnode\\/bin'/d" "$ROOT/build.gradle"
+          if grep -q "sourceSets.main.jniLibs.srcDir 'libnode/bin'" "$ROOT/build.gradle"; then
+            echo 'STOP: duplicate JNI source still configured' >&2; exit 1
+          fi
       - name: Compile signed Android debug APK
         shell: bash
         run: gradle -p .vf-phone-build/veilforge_realm_v09_apk_ready/android-app :app:assembleDebug --no-daemon --max-workers=2 --stacktrace
