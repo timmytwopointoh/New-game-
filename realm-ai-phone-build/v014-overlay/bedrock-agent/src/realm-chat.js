@@ -34,9 +34,9 @@ export class RealmChat{
   if(instruction.length>190||/[\x00-\x1f\x7f]/.test(instruction)){this.connection.say('Use a short command (up to 190 characters).');return}
   const canonical=understandCommand(instruction)
   if(!canonical){this.connection.say('I did not understand that action. Try follow me, walk to X Y Z, dig X Y Z, diagnostics, or help.');return}
-  const now=this.clock(),prev=this.last.get(source)||-Infinity
+  const actor=source.toLowerCase(),now=this.clock(),prev=this.last.has(actor)?this.last.get(actor):-Infinity
   if(!STOP.test(canonical)&&now-prev<this.cooldownMs)return
-  this.last.set(source,now)
+  this.last.set(actor,now)
   let result
   try{
    if(canonical==='hello')result={accepted:true,message:'Hello! I am here. I can follow, walk, aim, inspect and mine when Survival is verified.'}
