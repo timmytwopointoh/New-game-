@@ -21,6 +21,7 @@ export function resolveMaterial(raw){
  return exists(name)?name:null
 }
 export function searchCatalog(raw='',limit=12){const q=String(raw).toLowerCase().replace(/ /g,'_');return [...new Set([...data.blocksArray,...data.itemsArray].map(x=>x.name))].filter(n=>n.includes(q)).slice(0,limit)}
+export const materialNames=[...new Set([...data.blocksArray,...data.itemsArray].map(x=>x.name))]
 export function recipeInfo(name){
  if(simpleRecipes[name])return [{name,output:simpleRecipes[name].output,ingredients:simpleRecipes[name].ingredients,station:simpleRecipes[name].station,verified:true}]
  return Object.values(data.recipes).filter(r=>r.output?.some(o=>o.name===name)).slice(0,3).map(r=>({name:r.name,output:r.output.find(o=>o.name===name).count,ingredients:Object.fromEntries((r.ingredients||[]).map(i=>[i.name,i.count||1])),station:r.type,verified:false}))

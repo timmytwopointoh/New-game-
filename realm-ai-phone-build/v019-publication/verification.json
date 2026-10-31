@@ -1,0 +1,17 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100016,
+  "versionName": "0.19-language-chat",
+  "signerCertificateSha256": "B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995",
+  "apkSha256": "252c1e3e7c6078927b5477c04bf8645d4546606a0666edf0a5f476225de74072",
+  "sourceOverlaySha256": "058b8de3c00d0ea6fc8b75b5f0d545b759ce0d3d22e6d14cd2e578da38930468",
+  "nodeTests": 186,
+  "android": "Derived from the verified v0.18 Android/native base; only embedded Node sources and version metadata changed. APK signature, alignment, archive integrity and package version verified.",
+  "features": [
+    "Realm-private learned action/material vocabulary",
+    "confirmation prompts for likely misspellings and disambiguation for ambiguous materials",
+    "chat replies for greetings, questions, jokes and teasing without queuing actions",
+    "actions remain gated by command prefix and explicit Activate"
+  ],
+  "delivery": "Test APK signed locally with the owner-supplied permanent key; reconstruction recipe contains public APK bytes only. No live Realm movement test was performed."
+}

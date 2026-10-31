@@ -1,15 +1,17 @@
 import {CommandPlans} from './command-plans.js'
+import {CommandVocabulary} from './command-vocabulary.js'
+import path from 'node:path'
 import {SurvivalVerification} from './verification.js'
 import {WorldView} from './world.js'
 import {Navigation} from './navigation.js'
 import {resolveMaterial,searchCatalog,recipeInfo,supplyPlan,catalogCounts,materialInfo} from './catalog.js'
 const answer=(message,extra={})=>({accepted:true,queued:false,message,...extra})
 export class SurvivalController{
- constructor(connection,{plansDirectory=null,scope=null}={}){this.connection=connection;this.world=new WorldView();this.navigation=new Navigation(this.world,m=>this.report(m));this.lastPlan=null;this.commandPlans=new CommandPlans(this,{directory:plansDirectory,scope});this.verification=new SurvivalVerification(this.world,this.navigation,m=>this.report(m));this.verification.desiredMode=connection.config?.requestedGameMode==='creative'?'creative':'survival';this.navigation.checkVerification=()=>this.verification.check()}
+ constructor(connection,{plansDirectory=null,scope=null}={}){this.connection=connection;this.world=new WorldView();this.navigation=new Navigation(this.world,m=>this.report(m));this.lastPlan=null;this.commandPlans=new CommandPlans(this,{directory:plansDirectory,scope});this.commandVocabulary=new CommandVocabulary({directory:plansDirectory?path.join(path.dirname(plansDirectory),'command-vocabulary'):null,scope});this.verification=new SurvivalVerification(this.world,this.navigation,m=>this.report(m));this.verification.desiredMode=connection.config?.requestedGameMode==='creative'?'creative':'survival';this.navigation.checkVerification=()=>this.verification.check()}
  report(message){const c=this.connection;c.events.push({id:++c.nextEventId,source:'Survival',message});if(c.events.length>64)c.events.shift();c.emit('survival-update',{message})}
  attach(client){this.world.detach();this.world.reset();this.world.attach(client);this.navigation.attach(client);this.verification.attach(client)}
  close(){this.commandPlans.interrupt('Disconnected; no automatic resume.');this.verification.detach();this.navigation.detach();this.world.detach()}
- snapshot(){return {plans:this.commandPlans.snapshot(),verification:this.verification.snapshot(),view:this.world.snapshot(),navigation:this.navigation.snapshot(),catalog:catalogCounts,plan:this.lastPlan}}
+ snapshot(){return {plans:this.commandPlans.snapshot(),vocabulary:this.commandVocabulary.list(),verification:this.verification.snapshot(),view:this.world.snapshot(),navigation:this.navigation.snapshot(),catalog:catalogCounts,plan:this.lastPlan}}
  handle(raw){
   if(typeof raw!=='string'||raw.length>190)return null
   const s=raw.trim().toLowerCase().replace(/[.!?]+$/,'').replace(/^(?:please |can you |could you )/,'');let m

@@ -7,8 +7,8 @@ android {
         applicationId 'com.veilforge.realmagent'
         minSdk 28
         targetSdk 35
-        versionCode 100015
-        versionName '0.18-command-batch'
+        versionCode 100016
+        versionName '0.19-language-chat'
         ndk { abiFilters 'arm64-v8a' }
         externalNativeBuild { cmake { cppFlags '-std=c++20 -fexceptions'; arguments '-DANDROID_STL=c++_shared' } }
     }

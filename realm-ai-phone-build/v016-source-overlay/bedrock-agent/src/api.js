@@ -1,4 +1,6 @@
 import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
+import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/command-vocabulary.js'
+import {respondToConversation} from './conversation.js'
 import http from 'node:http'
 import crypto from 'node:crypto'
 import {parseCommand} from '../pack-template/scripts/commands.js'
@@ -29,6 +31,7 @@ export function createApi(config,connection,log=console.log){
    log('Planner: '+u.message.slice(0,180))
  })
  // This handler is intentionally shared by the Android HTTPS API and owner-only Realm chat.
+ let pendingInterpretation=null
  const message=raw=>{
    if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
      planner.cancel();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
@@ -36,21 +39,67 @@ export function createApi(config,connection,log=console.log){
    let output
    if(connection.survival?.commandPlans){
     const plans=connection.survival.commandPlans
+    const vocabulary=connection.survival.commandVocabulary
     try{
      const text=String(raw).trim();let m
-     if((m=text.match(/^select plan (\d+)$/i)))output={accepted:true,message:'Selected plan '+m[1]+'.',plans:plans.select(Number(m[1]))}
+     if(pendingInterpretation&&Date.now()-pendingInterpretation.createdAt>60000)pendingInterpretation=null
+     const yes=/^(?:yes|yes that's right|yes that is right|correct|that's right|that is right)$/i.test(text),no=/^(?:no|nope|not that|wrong|cancel)$/i.test(text)
+     const isChoice=pendingInterpretation?.choices&&( /^[1-4]$/.test(text)||pendingInterpretation.choices.some(x=>x.toLowerCase().replace(/_/g,' ')===text.toLowerCase().trim().replace(/_/g,' ')))
+     if(pendingInterpretation&&!yes&&!no&&!/^command\s/i.test(text)&&!isChoice&&!(pendingInterpretation.kind==='unknown-action'&&resolveActionTarget(text)))pendingInterpretation=null
+     if((m=text.match(/^command\s+teach\s+(action|material)\s+(.+?)\s*=\s*(.+)$/i))){pendingInterpretation=null;const unquote=x=>x.trim().replace(/^["“](.*)["”]$/,'$1');output=vocabulary.teach(m[1].toLowerCase(),unquote(m[2]),unquote(m[3]))}
+     else if(/^command\s+vocabulary$/i.test(text)){const v=vocabulary.list();output={accepted:true,queued:false,message:`Learned action words: ${Object.keys(v.actions).join(', ')||'none'}. Learned material words: ${Object.keys(v.materials).join(', ')||'none'}. Teach one with “command teach action <word> = dig” or “command teach material <word> = stone”.`,vocabulary:v}}
+     else if(pendingInterpretation?.kind==='unknown-action'){
+      const target=resolveActionTarget(text)
+      if(target){const pending=pendingInterpretation;pendingInterpretation=null;try{vocabulary.teach('action',pending.word,target);const intent=parseCommandRequest(vocabulary.expand(pending.input).text);output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}catch(e){output={accepted:false,queued:false,showCatalog:true,message:e.message+' The correction was learned; nothing was activated.',plans:plans.snapshot()}}}
+      else if(no){pendingInterpretation=null;output={accepted:true,queued:false,message:'Okay, cancelled. Nothing was learned or queued.',plans:plans.snapshot()}}
+      else output={accepted:false,queued:false,message:'Tell me which supported action you meant, such as dig, walk, find, follow, look, or status. Or say no to cancel. Nothing is saved or queued yet.',plans:plans.snapshot()}
+     }
+     else if(yes&&pendingInterpretation&&!pendingInterpretation.choices){
+      const pending=pendingInterpretation;pendingInterpretation=null
+      if(pending.scope!==vocabulary?.scope)output={accepted:false,queued:false,message:'That question is no longer current. Nothing was saved or queued.',plans:plans.snapshot()}
+      else try{if(pending.learn)vocabulary.teach(pending.kind,pending.word,pending.target);const expanded=vocabulary.expand(pending.input).text;const intent=parseCommandRequest(expanded);output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}catch(e){output={accepted:false,queued:false,showCatalog:true,message:e.message+' The word mapping was saved only after your confirmation; nothing was activated.',plans:plans.snapshot()}}
+     }
+     else if(pendingInterpretation?.choices&&!no&&isChoice){
+      const pending=pendingInterpretation,choice=/^[1-4]$/.test(text)?pending.choices[Number(text)-1]:pending.choices.find(x=>x.toLowerCase().replace(/_/g,' ')===text.toLowerCase().trim().replace(/_/g,' '))
+      if(choice){pendingInterpretation=null;if(pending.scope!==vocabulary?.scope)output={accepted:false,queued:false,message:'Realm changed. Nothing was learned or queued.',plans:plans.snapshot()};else try{vocabulary.teach('material',pending.word,choice);const intent=parseCommandRequest(vocabulary.expand(pending.input).text);output=plans.prepare(intent.descriptor)}catch(e){output={accepted:false,queued:false,message:e.message+' The material choice was remembered; nothing was activated.',plans:plans.snapshot()}}}
+      else output={accepted:false,queued:false,message:'Choose one of the listed materials, or say no to cancel. Nothing was saved or queued.',plans:plans.snapshot()}
+     }
+     else if(no&&pendingInterpretation){pendingInterpretation=null;output={accepted:true,queued:false,message:'Okay. I did not save or queue that interpretation. You can rephrase it or teach the word explicitly.',plans:plans.snapshot()}}
+     else if((m=text.match(/^select plan (\d+)$/i)))output={accepted:true,message:'Selected plan '+m[1]+'.',plans:plans.select(Number(m[1]))}
      else if(/^(activate selected plan|start plan|activate queue|run queue)$/i.test(text))output=plans.activateQueue()
      else if(text==='saved plans')output={accepted:true,message:'Saved plan cards.',plans:plans.snapshot()}
      else if(/^(?:command|commands)$/i.test(text))output={accepted:true,queued:false,showCatalog:true,message:'Supported commands: '+commandCatalog.map(d=>d.label).join('; '),catalog:commandCatalog.map(d=>({id:d.id,label:d.label,fields:d.fields,note:d.note})),plans:plans.snapshot()}
      else if(/^command\s+/i.test(text)){
-      try{const intent=parseCommandRequest(text.slice(text.search(/\s/)+1));output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}
-      catch(e){output={accepted:false,queued:false,showCatalog:true,message:e.message+' Choose an option to open its required fields.',plans:plans.snapshot()}}
+      pendingInterpretation=null
+      const request=text.slice(text.search(/\s/)+1),expanded=vocabulary.expand(request).text
+      try{const intent=parseCommandRequest(expanded);output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}
+      catch(e){
+       const first=request.trim().split(/\s+/)[0].replace(/[.,!?]+$/,'')
+       const suggestion=suggestAction(request,vocabulary)
+       const materialError=/known material|known block material/i.test(e.message)
+       const materialWord=request.trim().split(/\s+/).at(-1)?.replace(/[.,!?]+$/,'')
+       const materialSuggestion=materialError&&materialWord?suggestMaterial(materialWord):null
+       if(suggestion&&suggestion.word!==first.toLowerCase()){
+        const target=suggestion.id;pendingInterpretation={input:request,scope:vocabulary?.scope,kind:'action',word:first,target,learn:true,createdAt:Date.now()}
+        const label=commandCatalog.find(d=>d.id===target)?.label||target
+        output={accepted:false,queued:false,message:`Did you mean “${label}” for “${first}”? Reply yes to save that word mapping and prepare the request, or no to leave it unchanged. Nothing has been saved or queued.` ,plans:plans.snapshot()}
+       }else if(Array.isArray(materialSuggestion)){
+        pendingInterpretation={input:request,scope:vocabulary?.scope,kind:'material',word:materialWord,choices:materialSuggestion,createdAt:Date.now()}
+        output={accepted:false,queued:false,message:`“${materialWord}” is ambiguous. Which material did you mean? Reply with a number: ${materialSuggestion.map((x,i)=>`${i+1}) ${x}`).join(', ')}. Nothing has been saved or queued.`,plans:plans.snapshot()}
+       }else if(materialSuggestion&&materialSuggestion!==materialWord){
+        pendingInterpretation={input:request,scope:vocabulary?.scope,kind:'material',word:materialWord,target:materialSuggestion,learn:true,createdAt:Date.now()}
+        output={accepted:false,queued:false,message:`Did you mean the Minecraft material “${materialSuggestion}” by “${materialWord}”? Reply yes to remember the spelling and prepare the request, or no. Nothing has been saved or queued.`,plans:plans.snapshot()}
+       }else if(!vocabulary?.actions?.[first.toLowerCase()]&&!suggestion&&!commandCatalog.some(d=>d.id===first.toLowerCase()||d.template.split(/[ {]/)[0].toLowerCase()===first.toLowerCase())){
+        pendingInterpretation={kind:'unknown-action',word:first,input:request,scope:vocabulary?.scope,createdAt:Date.now()}
+        output={accepted:false,queued:false,showCatalog:true,message:`I don't recognize “${first}” as an action. What did you mean? Reply with a supported action such as dig, walk, find, follow or look. I’ll remember the correction for this Realm. Nothing has been saved or queued yet.`,plans:plans.snapshot()}
+       }else output={accepted:false,queued:false,showCatalog:true,message:e.message+' Choose an option to open its required fields. Nothing was saved or queued.',plans:plans.snapshot()}
+      }
      }else{
       const candidate=text.replace(/[.!?]+$/,'').trim();let descriptor=null
       try{descriptor=parseDescriptor(candidate)}catch{}
       const safeQuestion=descriptor&&['status','movement','look','inventory','help','plan_status','find','materials','about','recipe','route'].includes(descriptor.id)
       if(safeQuestion)output=connection.survival.handle(renderDescriptor(descriptor))
-      else output={accepted:true,queued:false,message:'I treated that as a question/chat message; no action was started. Prefix an action with “command” (or type “command” to open the full command list).',plans:plans.snapshot()}
+      else{const reply=respondToConversation(text);let conversational=null;try{conversational=parseDescriptor(reply)}catch{}if(conversational&&['status','movement','inventory','about','recipe'].includes(conversational.id))output=connection.survival.handle(renderDescriptor(conversational));else output={accepted:true,queued:false,message:reply,plans:plans.snapshot()}}
      }
     }catch(e){output={accepted:false,queued:false,message:e.message,plans:plans.snapshot()}}
    }else output=planner.handle(raw)||(planner.snapshot().state==='running'?{accepted:true,queued:false,message:'A plan is running; cancel it first.'}:chatDispatch(raw,connection))

@@ -10,6 +10,8 @@ import {SurvivalController} from '../src/survival/controller.js'
 import {CommandPlans,validateDescriptor,parseDescriptor,parseCommandRequest,renderDescriptor,commandCatalog} from '../src/survival/command-plans.js'
 import {abilityEvidence,SurvivalVerification} from '../src/survival/verification.js'
 import {createApi} from '../src/api.js'
+import {CommandVocabulary,suggestAction,suggestMaterial} from '../src/survival/command-vocabulary.js'
+import {classifyConversation,respondToConversation} from '../src/conversation.js'
 import {createRequire} from 'node:module'
 const require=createRequire(import.meta.url),{createSerializer}=require('bedrock-protocol/src/transforms/serializer')
 function fixture(mode=0){
@@ -115,7 +117,7 @@ test('read-only chat and authenticated plan endpoints; selected activation dedup
 })
 test('typed command opens catalog; prefixed actions prepare while unprefixed action-like text never executes',()=>{
  const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:[]},events:[],nextEventId:0,spawned:true,status(){return {}},send(){throw Error('Legacy bridge must not run')}});c.survival=new SurvivalController(c);const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
- const api=createApi({localAPI:{token:'local-test'}},c,()=>{});assert(api.controller.message('command').showCatalog);assert(api.controller.message('command walk').showCatalog);assert.equal(api.controller.message('inventory').message,'inventory');const plain=api.controller.message('dig 1 2 3');assert.match(plain.message,/question\/chat message/);assert.equal(calls.length,1);assert.equal(c.survival.commandPlans.cards.length,0)
+ const api=createApi({localAPI:{token:'local-test'}},c,()=>{});assert(api.controller.message('command').showCatalog);assert(api.controller.message('command walk').showCatalog);assert.equal(api.controller.message('inventory').message,'inventory');const plain=api.controller.message('dig 1 2 3');assert.match(plain.message,/treat that as chat/i);assert.equal(calls.length,1);assert.equal(c.survival.commandPlans.cards.length,0)
  const prepared=api.controller.message('command dig 1 2 3');assert(prepared.accepted);assert.equal(c.survival.commandPlans.cards.length,1);assert.equal(calls.length,1);assert.equal(api.controller.message('five block high slab blocks').accepted,true);assert.equal(c.survival.commandPlans.cards.length,1);api.controller.message('command stop');assert.equal(calls.at(-1),'stop')
 })
 
@@ -125,4 +127,45 @@ test('running plan locks other cards; interruption preserves reusable descriptor
 })
 test('unconfirmed permission-authorized Survival request times out without retry or mode invention',()=>{
  const {w,n,client,sent}=fixture();w.gameMode='creative';w.abilityState={known:true,effective:{},active:[],loading:false,commandPermission:'operator'};const guard=new SurvivalVerification(w,n);guard.attach(client);guard.check(1000);guard.check(6001);assert(!guard.pending);assert.match(guard.reason,/not confirmed/);assert(!w.survivalVerified);guard.check(7000);assert.equal(sent.filter(([name])=>name==='command_request').length,1);guard.detach();n.detach()
+})
+
+test('uncertain action spelling asks first; yes privately learns it and only prepares a plan',()=>{
+ const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:[]},events:[],nextEventId:0,spawned:true,status(){return {}},send(){throw Error('Legacy bridge must not run')}});c.survival=new SurvivalController(c);const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
+ const api=createApi({localAPI:{token:'local-test'}},c,()=>{});const ask=api.controller.message('command miine 0 63 0');assert.equal(ask.accepted,false);assert.match(ask.message,/Did you mean.*Dig one block/);assert.equal(c.survival.commandPlans.cards.length,0);assert.equal(calls.length,0)
+ const yes=api.controller.message('yes');assert(yes.accepted);assert.match(yes.message,/Saved and selected plan/);assert.equal(c.survival.commandPlans.cards.length,1);assert.equal(c.survival.commandPlans.cards[0].descriptor.id,'dig');assert.equal(c.survival.commandVocabulary.actions.miine,'dig');assert.equal(calls.length,0)
+ assert.equal(api.controller.message('command miine 1 2 3').accepted,true);assert.equal(c.survival.commandPlans.cards.length,2);assert.equal(calls.length,0)
+})
+
+test('an unknown action asks what was meant; chat and cancellation clear the pending interpretation',()=>{
+ const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:[]},events:[],nextEventId:0,spawned:true,status(){return {}},send(){throw Error('Legacy bridge must not run')}});c.survival=new SurvivalController(c);let calls=0;c.survival.handle=()=>{calls++;return {accepted:true,message:'read only'}}
+ const api=createApi({localAPI:{token:'local-test'}},c,()=>{});const ask=api.controller.message('command glorp 0 63 0');assert.match(ask.message,/What did you mean/);assert.equal(c.survival.commandPlans.cards.length,0)
+ const reply=api.controller.message('dig');assert(reply.accepted);assert.match(reply.message,/Saved and selected/);assert.equal(c.survival.commandVocabulary.actions.glorp,'dig');assert.equal(c.survival.commandPlans.cards.length,1);assert.equal(calls,0)
+ const second=api.controller.message('command brarp 0 63 0');assert.match(second.message,/What did you mean/);assert.match(api.controller.message('no').message,/cancelled/i);assert.equal(c.survival.commandPlans.cards.length,1)
+ const third=api.controller.message('command zorp 1 2 3');assert.match(third.message,/What did you mean/);assert.match(api.controller.message('hello').message,/Hey/);assert.equal(c.survival.commandPlans.cards.length,1)
+})
+
+test('ambiguous material spelling asks for a choice and only remembers the chosen meaning',()=>{
+ const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:[]},events:[],nextEventId:0,spawned:true,status(){return {}},send(){throw Error('Legacy bridge must not run')}});c.survival=new SurvivalController(c);let calls=0;c.survival.handle=()=>{calls++;return {accepted:true,message:'read only'}}
+ const api=createApi({localAPI:{token:'local-test'}},c,()=>{});const ask=api.controller.message('command find iren');assert.match(ask.message,/is ambiguous/);assert.equal(c.survival.commandPlans.cards.length,0)
+ const choose=api.controller.message('2');assert(choose.accepted);assert.equal(c.survival.commandPlans.cards.length,1);assert.equal(c.survival.commandPlans.cards[0].descriptor.values.material,'iron_ingot');assert.equal(calls,0)
+})
+
+test('explicit vocabulary correction remains a preparation-only command',()=>{
+ const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:[]},events:[],nextEventId:0,spawned:true,status(){return {}},send(){throw Error('Legacy bridge must not run')}});c.survival=new SurvivalController(c);const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,message:raw}}
+ const api=createApi({localAPI:{token:'local-test'}},c,()=>{});const learned=api.controller.message('command teach action dredge = dig');assert(learned.accepted);assert.equal(c.survival.commandVocabulary.actions.dredge,'dig');const plan=api.controller.message('command dredge 1 2 3');assert(plan.accepted);assert.equal(c.survival.commandPlans.cards.length,1);assert.equal(calls.length,0)
+})
+
+test('Realm vocabulary is validated and persisted privately; learned words cannot target unsupported behavior',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vf-vocabulary-'));try{
+  const vocabulary=new CommandVocabulary({directory:dir,scope:'realm-one'});assert(vocabulary.teach('action','dredge','dig').accepted);assert.deepEqual(vocabulary.expand('dredge 1 2 3'),{text:'dig 1 2 3',changed:true});assert.throws(()=>vocabulary.teach('action','teleport','teleport'),/supported action/)
+  const restored=new CommandVocabulary({directory:dir,scope:'realm-one'});assert.equal(restored.expand('dredge 1 2 3').text,'dig 1 2 3');const other=new CommandVocabulary({directory:dir,scope:'realm-two'});assert.equal(other.expand('dredge 1 2 3').text,'dredge 1 2 3');assert(suggestMaterial('iren').includes('iron_ingot'));assert.equal(suggestAction('miine 0 1 0',restored).id,'dig')
+  const file=restored.file,stat=fs.statSync(file);assert.equal(stat.mode&0o077,0)
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+})
+
+test('ordinary questions, greetings, and teasing receive chat replies without entering the action queue',()=>{
+ assert.equal(classifyConversation('hello').kind,'greeting');assert.equal(classifyConversation('tell me a joke').kind,'joke');assert.equal(classifyConversation('you suck').kind,'teasing');assert.equal(classifyConversation('why is the sky blue?').kind,'question');assert.match(respondToConversation('you suck'),/here to help/i);assert.match(respondToConversation('what is your name'),/Realm assistant/i)
+ const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:[]},events:[],nextEventId:0,spawned:true,status(){return {}},send(){throw Error('Legacy bridge must not run')}});c.survival=new SurvivalController(c);let calls=0;c.survival.handle=raw=>{calls++;return {accepted:true,message:raw}}
+ const api=createApi({localAPI:{token:'local-test'}},c,()=>{});for(const text of ['hello','you suck','why is the sky blue?','tell me a joke'])api.controller.message(text);assert.equal(c.survival.commandPlans.cards.length,0);assert.equal(calls,0)
+ const question=api.controller.message('what is a cobblestone?');assert.equal(question.message,'about cobblestone');assert.equal(calls,1);assert.equal(c.survival.commandPlans.cards.length,0)
 })
