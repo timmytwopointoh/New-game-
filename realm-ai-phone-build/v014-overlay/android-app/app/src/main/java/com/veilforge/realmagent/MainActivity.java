@@ -23,7 +23,7 @@ public final class MainActivity extends Activity {
     final Handler ui = new Handler(Looper.getMainLooper());
     final ExecutorService io = Executors.newSingleThreadExecutor();
     final ExecutorService urgent = Executors.newSingleThreadExecutor();
-    volatile long commandEpoch=System.currentTimeMillis(); int selectedPlan=0;
+    volatile long commandEpoch=System.currentTimeMillis();
     EditText botField,ownerField,realmField,input;
     LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel;Button copyAuthCode;String displayedAuthCode="";
     String token=""; long cursor=0; boolean active=false;
@@ -39,7 +39,9 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state){super.onCreate(state);getWindow().setStatusBarColor(BASE);getWindow().setNavigationBarColor(BASE);
         token=getPreferences(MODE_PRIVATE).getString("token","");
         LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackgroundColor(BASE);setContentView(root);
-        root.addView(txt("VEILFORGE · REALM AI",18,WHITE));
+        LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header);
+        Button stopBot=button("Stop Bot",this::confirmStopBot);stopBot.setBackground(shape(0xff693640));header.addView(stopBot,new LinearLayout.LayoutParams(d(116),d(48)));
+        TextView title=txt("VEILFORGE · REALM AI",18,WHITE);title.setPadding(d(10),0,0,0);header.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         connection=txt("Not running",12,MUTED);connection.setMaxLines(4);root.addView(connection,space(4));
         authCodeLabel=txt("",16,WHITE);authCodeLabel.setTextIsSelectable(true);root.addView(authCodeLabel,space(4));authCodeLabel.setVisibility(View.GONE);
         copyAuthCode=button("Copy sign-in code",()->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Microsoft code",displayedAuthCode));});root.addView(copyAuthCode,space(4));copyAuthCode.setVisibility(View.GONE);
@@ -47,14 +49,20 @@ public final class MainActivity extends Activity {
         botField.setText(getPreferences(MODE_PRIVATE).getString("botTag",""));ownerField.setText(getPreferences(MODE_PRIVATE).getString("ownerTag",""));realmField.setText(getPreferences(MODE_PRIVATE).getString("realmName",""));
         LinearLayout account=new LinearLayout(this);root.addView(account,space(5));
         account.addView(button("Start",this::startBot),new LinearLayout.LayoutParams(0,d(48),1));account.addView(button("Sign in",this::showAuth),new LinearLayout.LayoutParams(0,d(48),1));account.addView(button("Settings",this::showSettings),new LinearLayout.LayoutParams(0,d(48),1));
-        LinearLayout plans=new LinearLayout(this);root.addView(plans,space(5));plans.addView(button("Commands",this::showJobs),new LinearLayout.LayoutParams(0,d(48),1));plans.addView(button("Plans (5)",this::showPlans),new LinearLayout.LayoutParams(0,d(48),1));
-        LinearLayout stop=new LinearLayout(this);root.addView(stop,space(5));stop.addView(button("STOP NOW",this::stopNow),new LinearLayout.LayoutParams(0,d(48),1));stop.addView(button("Stop bot service",this::stopServiceNow),new LinearLayout.LayoutParams(0,d(48),1));
+        LinearLayout plans=new LinearLayout(this);root.addView(plans,space(5));plans.addView(button("Commands",this::showJobs),new LinearLayout.LayoutParams(0,d(48),1));plans.addView(button("Queue (5)",this::showPlans),new LinearLayout.LayoutParams(0,d(48),1));
+        LinearLayout stop=new LinearLayout(this);root.addView(stop,space(5));stop.addView(button("STOP NOW",this::stopNow),new LinearLayout.LayoutParams(0,d(48),1));
         scroll=new ScrollView(this);LinearLayout.LayoutParams sc=new LinearLayout.LayoutParams(-1,0,1);sc.topMargin=d(6);root.addView(scroll,sc);log=vertical();scroll.addView(log);
-        LinearLayout entry=new LinearLayout(this);root.addView(entry,space(6));input=edit("Prepare a command…");input.setSingleLine(false);input.setMaxLines(2);entry.addView(input,new LinearLayout.LayoutParams(0,-2,1));entry.addView(button("Save",()->send(input.getText().toString())),new LinearLayout.LayoutParams(-2,d(52)));
-        root.addView(txt("Commands save plans. Select → Activate. Stop is immediate.",11,MUTED),space(4));
-        bubble("VEILFORGE","Joining uses your saved Microsoft session. Commands and manual chat prepare plans; nothing runs until you select and activate one. Supply/building actions are previews. STOP NOW cancels work while gravity continues.",false);
+        LinearLayout entry=new LinearLayout(this);root.addView(entry,space(6));input=edit("Type an instruction or save a command…");input.setSingleLine(false);input.setMaxLines(2);entry.addView(input,new LinearLayout.LayoutParams(0,-2,1));entry.addView(button("Save",()->send(input.getText().toString())),new LinearLayout.LayoutParams(-2,d(52)));
+        root.addView(txt("Queue runs top to bottom. Wait 2 seconds between finished commands. STOP NOW stays immediate.",11,MUTED),space(4));
+        bubble("VEILFORGE","Save commands to the ordered list, then Run Queue. You can also talk to the AI from Minecraft chat with !ai follow me or !ai diagnostics. Only the configured owner is authorized. Supply/building are previews until supported. STOP NOW cancels active work immediately.",false);
     }
     void showSettings(){LinearLayout body=vertical();for(EditText e:new EditText[]{botField,ownerField,realmField}){if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);body.addView(e,space(5));}new AlertDialog.Builder(this).setTitle("Separate bot account / Realm").setView(body).setMessage("Use two different gamertags. Realm name may be blank if only one is joined.").setPositiveButton("Save",(a,b)->getPreferences(MODE_PRIVATE).edit().putString("botTag",botField.getText().toString().trim()).putString("ownerTag",ownerField.getText().toString().trim()).putString("realmName",realmField.getText().toString().trim()).apply()).setNegativeButton("Close",null).show();}
+    void confirmStopBot(){
+        new AlertDialog.Builder(this).setTitle("Stop the Minecraft AI bot?")
+            .setMessage("Are you sure? This stops the bot service and cancels the command queue. Your saved commands and login remain available for next time.")
+            .setPositiveButton("Yes, stop bot",(dlg,which)->stopServiceNow())
+            .setNegativeButton("Keep running",null).show();
+    }
     void stopServiceNow(){commandEpoch++;startService(new Intent(this,BotService.class).setAction("STOP"));connection.setText("Bot service stopped; saved login and plans kept.");bubble("VEILFORGE","Bot service stopped. Start reconnects with saved login; plans never resume automatically.",false);}
     void bubble(String who,String body,boolean mine){if(body==null||body.isEmpty())return;LinearLayout row=new LinearLayout(this);row.setGravity(mine?Gravity.RIGHT:Gravity.LEFT);log.addView(row,space(9));
         LinearLayout panel=vertical();panel.setPadding(d(12),d(9),d(12),d(10));panel.setBackground(shape(mine?0xff594278:PANEL));row.addView(panel);
@@ -75,7 +83,7 @@ public final class MainActivity extends Activity {
             bubble("VEILFORGE","Starting a separate Realm player on the phone. You may need to complete the Microsoft device-code login. No PC is needed.",false);
         } catch(Exception e){bubble("VEILFORGE","Could not start: "+e.getClass().getSimpleName(),false);}
     }
-    void showJobs(){io.submit(()->{try{JSONObject result=request("GET","/catalog",null);ui.post(()->{catalog=result.optJSONArray("catalog");options=result.optJSONObject("options");if(catalog==null||options==null)return;String[] names=new String[catalog.length()];for(int i=0;i<names.length;i++)names[i]=catalog.optJSONObject(i).optString("label");new AlertDialog.Builder(this).setTitle("Prepare a command (nothing executes)").setItems(names,(dlg,n)->showCommandForm(catalog.optJSONObject(n))).setNegativeButton("Close",null).show();});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Start the bot and identify the Realm before preparing plans.",false));}});}
+    void showJobs(){io.submit(()->{try{JSONObject result=request("GET","/catalog",null);ui.post(()->{catalog=result.optJSONArray("catalog");options=result.optJSONObject("options");if(catalog==null||options==null)return;String[] names=new String[catalog.length()];for(int i=0;i<names.length;i++)names[i]=catalog.optJSONObject(i).optString("label");new AlertDialog.Builder(this).setTitle("Add to queue (diagnostics last)").setItems(names,(dlg,n)->showCommandForm(catalog.optJSONObject(n))).setNegativeButton("Close",null).show();});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Start the bot and identify the Realm before preparing plans.",false));}});}
     void showCommandForm(JSONObject def){
         JSONArray fields=def.optJSONArray("fields");if(fields==null)return;if(fields.length()==0){prepareDescriptor(def.optString("id"),new JSONObject());return;}
         LinearLayout body=vertical();body.setPadding(d(14),d(4),d(14),d(8));String note=def.optString("note");if(!note.isEmpty())body.addView(txt(note,14,MUTED),space(5));
@@ -95,15 +103,51 @@ public final class MainActivity extends Activity {
         }
         if(def.optString("id").equals("dig")){JSONArray visible=options.optJSONArray("visible");body.addView(txt("Held slot: "+options.optString("heldSlot","unknown")+". Actual tool, block hardness, visibility and protections are checked on activation.",13,MUTED),space(5));if(visible!=null&&visible.length()>0)body.addView(button("Choose visible block",()->{String[] names=new String[visible.length()];for(int i=0;i<names.length;i++){JSONObject block=visible.optJSONObject(i);names[i]=block.optString("name")+" @ "+block.optInt("x")+","+block.optInt("y")+","+block.optInt("z")+" · "+block.optString("tool")+" · "+(block.optBoolean("eligible")?block.optInt("durationMs")+"ms":block.optString("reason"));}new AlertDialog.Builder(this).setTitle("Observed blocks").setItems(names,(a,n)->{JSONObject block=visible.optJSONObject(n);for(String key:new String[]{"x","y","z"})edits.get(key).setText(""+block.optInt(key));}).show();}),space(5));}
         TextView error=txt("",13,0xffffaaaa);body.addView(error,space(5));ScrollView formScroll=new ScrollView(this);formScroll.addView(body);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(def.optString("label")).setView(formScroll).setPositiveButton("Save plan",null).setNegativeButton("Cancel",null).create();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(def.optString("label")).setView(formScroll).setPositiveButton("Add to queue",null).setNegativeButton("Cancel",null).create();
         dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{JSONObject values=new JSONObject();for(int i=0;i<fields.length();i++){JSONObject f=fields.optJSONObject(i);String key=f.optString("id"),type=f.optString("type");if(spinners.containsKey(key)){ArrayList<String> list=choices.get(key);if(list.isEmpty())throw new IllegalArgumentException("Wait for server-observed choices.");String val=list.get(spinners.get(key).getSelectedItemPosition());if(type.equals("slot"))values.put(key,Integer.parseInt(val));else values.put(key,val);}else{String val=edits.get(key).getText().toString().trim();if(val.isEmpty())throw new IllegalArgumentException("Enter "+f.optString("label"));if(type.equals("integer")){int n=Integer.parseInt(val);if(n<f.optInt("min")||n>f.optInt("max"))throw new IllegalArgumentException(f.optString("label")+" is outside the allowed range.");values.put(key,n);}else values.put(key,val);}}prepareDescriptor(def.optString("id"),values);dialog.dismiss();}catch(Exception e){error.setText(e.getMessage());}}));dialog.show();
     }
     void prepareDescriptor(String id,JSONObject values){try{planAction("prepare",new JSONObject().put("descriptor",new JSONObject().put("id",id).put("values",values)));}catch(Exception e){bubble("VEILFORGE",e.getMessage(),false);}}
     void planAction(String action,JSONObject payload){final long epoch=commandEpoch;io.submit(()->{if(epoch!=commandEpoch)return;try{payload.put("epoch",epoch);JSONObject r=request("POST","/plans/"+action,payload);ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message",r.optBoolean("accepted")?"Plan updated.":"Plan rejected."),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Plan request failed: "+e.getMessage(),false));}});}
-    void syncPlans(JSONObject plans){if(plans==null)return;cards=plans.optJSONArray("cards");if(cards==null)cards=new JSONArray();selectedPlan=plans.optInt("selected",0);}
-    void showPlans(){io.submit(()->{try{JSONObject r=request("GET","/plans",null);ui.post(()->{syncPlans(r.optJSONObject("plans"));String[] names=new String[cards.length()];for(int i=0;i<names.length;i++){JSONObject c=cards.optJSONObject(i),desc=c.optJSONObject("descriptor");names[i]="#"+c.optInt("id")+(c.optInt("id")==selectedPlan?" (selected)":"")+" · "+c.optString("label")+" · "+c.optString("state");}
-        new AlertDialog.Builder(this).setTitle("Saved plans ("+cards.length()+"/5)").setItems(names,(dlg,n)->{JSONObject c=cards.optJSONObject(n);new AlertDialog.Builder(this).setTitle("Plan #"+c.optInt("id")).setMessage(c.optString("command")+"\n"+c.optString("note")+"\n"+c.optString("result")+"\nCompleted cards remain reusable; select again before reactivation.").setPositiveButton("Select",(a,b)->{try{planAction("select",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNeutralButton("Delete",(a,b)->{try{planAction("delete",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNegativeButton("Close",null).show();})
-        .setPositiveButton("Activate Plan",(a,b)->{if(selectedPlan==0){bubble("VEILFORGE","Select a saved card first.",false);return;}final int chosen=selectedPlan;new AlertDialog.Builder(this).setTitle("Activate selected plan #"+chosen+"?").setMessage("Only this plan starts. Supply and building plans are previews.").setPositiveButton("Activate",(x,w)->{try{planAction("activate",new JSONObject().put("id",chosen));}catch(Exception ignored){}}).setNegativeButton("Cancel",null).show();}).setNegativeButton("Close",null).show();});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Plans unavailable: "+e.getMessage(),false));}});}
+    void syncPlans(JSONObject plans){if(plans==null)return;cards=plans.optJSONArray("cards");if(cards==null)cards=new JSONArray();}
+    void showPlans(){io.submit(()->{try{
+        JSONObject r=request("GET","/plans",null);ui.post(()->{
+            JSONObject planState=r.optJSONObject("plans");syncPlans(planState);
+            final int count=cards.length();final boolean running=planState!=null&&planState.optBoolean("runActive");
+            String[] names=new String[count];
+            for(int i=0;i<count;i++){
+                JSONObject c=cards.optJSONObject(i);
+                names[i]=(i+1)+". "+c.optString("label")+" · "+c.optString("state");
+            }
+            new AlertDialog.Builder(this)
+              .setTitle("Command queue · "+count+"/5"+(running?" · RUNNING":""))
+              .setMessage(count==0?"Add commands from Commands. They execute in list order, with a two-second gap after each one finishes.":"Commands run from first to last. Tap a command to move it up/down or delete it.")
+              .setItems(names,(dlg,index)->{
+                  JSONObject card=cards.optJSONObject(index);
+                  if(card==null)return;
+                  int id=card.optInt("id");
+                  String[] choices={"Move up","Move down","Delete","Close"};
+                  new AlertDialog.Builder(this).setTitle("Step "+(index+1)+": "+card.optString("label"))
+                      .setMessage(card.optString("command")+"\\n"+card.optString("note")+"\\n"+card.optString("result"))
+                      .setItems(choices,(actionDialog,choice)->{
+                          try{
+                              if(choice==0)planAction("move",new JSONObject().put("id",id).put("direction",-1));
+                              else if(choice==1)planAction("move",new JSONObject().put("id",id).put("direction",1));
+                              else if(choice==2)new AlertDialog.Builder(this).setTitle("Delete this command?")
+                                  .setPositiveButton("Delete",(x,w)->{try{planAction("delete",new JSONObject().put("id",id));}catch(Exception ignored){}})
+                                  .setNegativeButton("Cancel",null).show();
+                          }catch(Exception e){bubble("VEILFORGE",e.getMessage(),false);}
+                      }).show();
+              })
+              .setPositiveButton(running?"Running…":"Run Queue",(dlg,which)->{
+                  if(running)return;
+                  new AlertDialog.Builder(this).setTitle("Run all "+count+" commands?")
+                    .setMessage("Every saved command runs from first to last. A long walking/mining action must finish before the next command's two-second delay. STOP NOW cancels everything.")
+                    .setPositiveButton("Run all",(x,w)->{try{planAction("run-all",new JSONObject());}catch(Exception e){bubble("VEILFORGE",e.getMessage(),false);}})
+                    .setNegativeButton("Cancel",null).show();
+              })
+              .setNegativeButton("Close",null).show();
+        });
+    }catch(Exception e){ui.post(()->bubble("VEILFORGE","Queue unavailable: "+e.getMessage(),false));}});}
     void stopNow(){commandEpoch++;bubble("YOU","STOP",true);urgent.submit(()->{try{JSONObject r=request("POST","/stop?epoch="+commandEpoch,new JSONObject());ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message"),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Stop not confirmed: "+e.getMessage(),false));}});}
     JSONObject lastStatus=null;
     void showAuth(){JSONObject info=lastStatus!=null?lastStatus.optJSONObject("authChallenge"):null;
