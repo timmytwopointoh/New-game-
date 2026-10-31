@@ -154,9 +154,53 @@ public final class MainActivity extends Activity {
                     .setPositiveButton("Run all",(x,w)->{try{planAction("run-all",new JSONObject());}catch(Exception e){bubble("VEILFORGE",e.getMessage(),false);}})
                     .setNegativeButton("Cancel",null).show();
               })
-              .setNegativeButton("Close",null).show();
+              .setNeutralButton("Manage Queues",(dlg,which)->showQueueManager(planState)).setNegativeButton("Close",null).show();
         });
     }catch(Exception e){ui.post(()->bubble("VEILFORGE","Queue unavailable: "+e.getMessage(),false));}});}
+    void showQueueManager(JSONObject state){
+        boolean running=state!=null&&state.optBoolean("runActive");
+        new AlertDialog.Builder(this).setTitle("Manage saved queues")
+          .setItems(new String[]{"Clear this Realm's queue","Delete old Realm queues","Cancel"},(dlg,choice)->{
+              if(choice==0){
+                  if(running){bubble("VEILFORGE","STOP NOW to end the active queue before clearing it.",false);return;}
+                  int count=cards!=null?cards.length():0;
+                  new AlertDialog.Builder(this).setTitle("Delete all "+count+" queued commands?")
+                    .setMessage("This permanently clears the current Realm's saved command list. The bot's login, settings, other Realms and inventory are not affected.")
+                    .setPositiveButton("Clear current queue",(x,which)->{try{planAction("clear",new JSONObject());}catch(Exception e){bubble("VEILFORGE",e.getMessage(),false);}})
+                    .setNegativeButton("Keep commands",null).show();
+              }else if(choice==1)showOldRealmQueues();
+          }).show();
+    }
+    void showOldRealmQueues(){
+        io.submit(()->{try{
+            JSONObject response=request("GET","/plans/saved-queues",null);
+            JSONArray queues=response.optJSONArray("queues");
+            if(queues==null)queues=new JSONArray();
+            final JSONArray found=queues;
+            ui.post(()->{
+                if(found.length()==0){new AlertDialog.Builder(this).setTitle("Old Realm queues").setMessage("No old Realm queues found. The current queue can be cleared from Manage Queues.").setPositiveButton("OK",null).show();return;}
+                String[] labels=new String[found.length()];
+                for(int i=0;i<found.length();i++){
+                    JSONObject entry=found.optJSONObject(i);
+                    long updated=entry!=null?entry.optLong("modifiedAt"):0L;
+                    String date=updated>0?new java.text.SimpleDateFormat("MMM d, yyyy h:mm a",java.util.Locale.US).format(new java.util.Date(updated)):"unknown date";
+                    int count=entry!=null?entry.optInt("count",-1):-1;
+                    labels[i]="Old Realm "+(i+1)+" · "+date+" · "+(count<0?"unknown":count)+" commands";
+                }
+                new AlertDialog.Builder(this).setTitle("Delete old Realm queue")
+                   .setMessage("Older queue files did not retain readable Realm names. Choose by last modified date. Your current queue is never shown here.")
+                   .setItems(labels,(dlg,index)->{
+                       JSONObject entry=found.optJSONObject(index);
+                       if(entry==null)return;
+                       String id=entry.optString("id","");
+                       new AlertDialog.Builder(this).setTitle("Permanently delete this old queue?")
+                          .setMessage(labels[index]+". Its archived recovery files will also be deleted. This cannot be undone, but your current queue, sign-in and Minecraft account will not change.")
+                          .setPositiveButton("Delete old queue",(x,w)->{try{planAction("delete-saved-queue",new JSONObject().put("id",id));}catch(Exception e){bubble("VEILFORGE",e.getMessage(),false);}})
+                          .setNegativeButton("Keep it",null).show();
+                   }).setNegativeButton("Cancel",null).show();
+            });
+        }catch(Exception e){ui.post(()->bubble("VEILFORGE","Could not list saved queues: "+e.getMessage(),false));}});
+    }
     void stopNow(){commandEpoch++;bubble("YOU","STOP",true);urgent.submit(()->{try{JSONObject r=request("POST","/stop?epoch="+commandEpoch,new JSONObject());ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message"),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Stop not confirmed: "+e.getMessage(),false));}});}
     JSONObject lastStatus=null;
     void showAuth(){JSONObject info=lastStatus!=null?lastStatus.optJSONObject("authChallenge"):null;
