@@ -1,0 +1,1 @@
+Publish-only request: reconstruct the locally signed v0.15.1 candidate from public v0.15 APK bytes and recipe; verify 2026 permanent certificate, versionCode 100007, ZIP integrity, native runtime files and alignment; attach as prerelease. Do not build Android or access signing secrets.

@@ -1,0 +1,9 @@
+Test APK for VEILFORGE Realm AI v0.15.1. Install over the app signed with the VEILFORGE 2026 permanent certificate; **do not uninstall**. Package ID com.veilforge.realmagent, versionCode 100007, and certificate SHA-256 8E902E783E7B4BD45FFE2F99B45C53B0E15D4B8E36092532CC6E969A956815C verified. The earlier v0.15 release used the retired v0.14 certificate and versionCode 100005; use this v0.15.1 download.
+
+This candidate targets sustained server-confirmed mining and actual hotbar-backed block placement. Mining remains held until server block removal, uses the received mining protocol, and estimates time from the observed held item and effects. Building sends one placement at a time and waits for both the server block update and inventory count change. Stop cancels current mining/build movement intent; gravity continues.
+
+Validation: 169 Node tests passed, including simulated legacy/server-authoritative mining, tool/hand timing, Stop cancellation, and 96-block shelter placement with feedback. Four Android phone-size layout/form tests passed. 16 KB alignment and the uploaded permanent-key signature passed locally; GitHub publication rechecks the certificate, app version, alignment and embedded runtime.
+
+**Live Realm mining/building and physical-device installation remain unverified.** The compact home-screen/settings redesign, Creative-mode controls and strip-mining automation are not included. The free-form “move forward N blocks” instruction is still unsupported. Autonomous movement/mining/building remains paused unless this bot's own server-reported Survival mode and effective abilities are verified; the app does not request Creative mode or privileged abilities.
+
+Publication reconstructs the exact locally signed APK from public APK data and contains no private signing material.
