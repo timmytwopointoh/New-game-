@@ -1,0 +1,35 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100018,
+  "versionName": "0.21-language-chat",
+  "apk_sha256": "1ec4acc8f4dc43d3bf8ee587c4396da7faab142d408226096d62d5349c27ef14",
+  "apk_bytes": 110061672,
+  "source_archive": "v021-source.zip",
+  "source_sha256": "88e3aab412199c1436aac7346ad6ba957e5e164a3dd095076a061b4219caec6e",
+  "source_archive_bytes": 571440,
+  "signature_certificate_sha256": "B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995",
+  "signing_key_reused": true,
+  "microsoft_link": "https://www.microsoft.com/link",
+  "microsoft_link_behavior": "Android auto-link enabled on the pending-code text; LinkMovementMethod launches the official URL when tapped. Copy button remains visible.",
+  "checks": {
+    "apk_zip_integrity": true,
+    "zipalign_16": true,
+    "package_identity": true,
+    "version_code_increased": true,
+    "pinned_signature": true,
+    "english_glossary_5000_entries": true,
+    "dex_contains_auto_link_and_link_movement": true
+  },
+  "tests": {
+    "node_tests_inherited_from_v0_20": {
+      "passed": 189,
+      "failed": 0
+    },
+    "android_test_added": "signInButtonShowsClickableMicrosoftLinkAndCopyableCodeOnHome",
+    "android_test_run": false,
+    "live_microsoft_signin_test": false,
+    "live_realm_test": false
+  },
+  "recipe_sha256": "860f714b875708dc9fbb57cc18e35906d749af1a20b0683875060ba796e5a935",
+  "recipe_bytes": 1874240
+}

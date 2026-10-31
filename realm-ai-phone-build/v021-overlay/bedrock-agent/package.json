@@ -1,0 +1,25 @@
+{
+  "name": "veilforge-bedrock-agent",
+  "version": "0.9.0",
+  "private": true,
+  "type": "module",
+  "description": "Separate authenticated Bedrock Realm bot with phone HTTPS chat, owner-only in-game chat and bounded job planner",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18.20.4"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "setup": "node tools/setup-config.js",
+    "make:pack": "node tools/make-pack.js",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check src/index.js && node --check src/api.js && node --check src/chat.js && node --check src/connection.js && node --check pack-template/scripts/main.js && node --check pack-template/scripts/commands.js && node --check pack-template/scripts/logic.js && node --check src/planner.js && node --check src/realm-chat.js",
+    "doctor": "node tools/doctor.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "bedrock-protocol": "^3.61.0",
+    "prismarine-block": "1.23.0",
+    "prismarine-registry": "1.12.0"
+  }
+}

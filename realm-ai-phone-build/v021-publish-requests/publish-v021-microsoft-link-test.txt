@@ -1,0 +1,6 @@
+Publish the already-built and locally signed v0.21 test APK. Reconstruct it
+from the public v0.20 APK and byte recipe, verify its exact hash, package,
+version, alignment, clickable Microsoft device-link bytecode, and the pinned
+existing signing certificate, then attach the APK, v0.21 source ZIP, recipe,
+checksum and public reports to veilforge-realm-ai-v021-microsoft-link-test.
+This request contains no private signing material or passwords.

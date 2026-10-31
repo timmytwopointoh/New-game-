@@ -1,0 +1,3 @@
+1ec4acc8f4dc43d3bf8ee587c4396da7faab142d408226096d62d5349c27ef14  VEILFORGE-Realm-AI-v0.21-Microsoft-Link-TEST.apk
+88e3aab412199c1436aac7346ad6ba957e5e164a3dd095076a061b4219caec6e  v021-source.zip
+860f714b875708dc9fbb57cc18e35906d749af1a20b0683875060ba796e5a935  v021-public-apk-recipe.json.xz.b64
