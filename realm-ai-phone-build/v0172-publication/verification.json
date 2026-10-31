@@ -1,0 +1,10 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100013,
+  "versionName": "0.17.2-visible-commands",
+  "signerCertificateSha256": "8e902e783e7b4bd45ffe2f99b45c53b0e15d4b8e36092532cc6e969a956815c5",
+  "apkSha256": "81e504a0fc1452bc20577a31d4acbcd08aae9953a4890c4f9558057ec5e15258",
+  "sourceOverlaySha256": "66881834903c1cd3580f837d8a043de5c7a67956fa270740ffe055c1b3585b92",
+  "nodeTests": 174,
+  "androidUnitTests": "passed"
+}
