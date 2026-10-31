@@ -45,13 +45,27 @@ test('world default does not verify own Survival; mode change cancels active job
 test('Stop immediately emits neutral input and aborts mining with no later movement',()=>{
  const {w,n,sent}=fixture();assert(n.walk({x:2,y:64,z:0}).accepted);n.step();const before=sent.length;n.stop();assert.equal(sent.length,before+1);assert.deepEqual(sent.at(-1)[1].move_vector,{x:0,z:0});const x=w.position.x;n.step(Date.now()+50);assert.equal(w.position.x,x);assert.equal(n.job,null);n.detach()
 })
-test('five Realm-scoped cards persist; selected-only activation, duplicate protection and no restart resume',()=>{
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vf-plans-'));try{
-  const {w,n}=fixture(),connection={config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection,{plansDirectory:dir,scope:'realm-A'});s.world=w;s.navigation=n;let calls=0;s.handle=raw=>{calls++;return {accepted:true,queued:false,message:raw}}
-  const p=s.commandPlans;for(let i=0;i<5;i++)p.prepare({id:'status',values:{}});assert.equal(calls,0);assert.throws(()=>p.prepare({id:'status',values:{}}),/Five/);assert.throws(()=>p.activate(1),/selected/)
-  p.select(4);const r=p.activate(4);assert(r.accepted);assert.equal(calls,1);assert.throws(()=>p.activate(4),/already activated/);p.select(4);p.activate(4);assert.equal(calls,2)
-  const restored=new CommandPlans(s,{directory:dir,scope:'realm-A'});assert.equal(restored.cards.length,5);assert.equal(restored.selected,null);assert.equal(restored.running,null);assert(restored.cards.every(c=>c.state==='waiting'))
-  const other=new CommandPlans(s,{directory:dir,scope:'realm-B'});assert.equal(other.cards.length,0);restored.delete(1);assert.equal(restored.cards.length,4);assert(!JSON.stringify(JSON.parse(fs.readFileSync(restored.file))).includes('token'));n.detach()
+test('Realm-scoped command list preserves all cards, runs all without selection and never resumes after restart',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vf-plans-'))
+ try{
+  const {w,n}=fixture(),connection={config:{ownerPlayerNames:['Owner']},spawned:true,events:[],nextEventId:0,emit(){}}
+  const s=new SurvivalController(connection,{plansDirectory:dir,scope:'realm-A'});s.world=w;s.navigation=n
+  let calls=0;s.handle=raw=>{calls++;return {accepted:true,queued:false,message:raw}}
+  const p=s.commandPlans
+  for(let i=0;i<5;i++)p.prepare({id:'diagnostics',values:{}})
+  assert.equal(calls,0);assert.throws(()=>p.prepare({id:'diagnostics',values:{}}),/Five/)
+  assert.throws(()=>p.select(1),/Selection was removed/)
+  assert.throws(()=>p.activate(1),/Individual activation/)
+  assert(p.startAll().accepted);assert.equal(calls,1)
+  assert.throws(()=>p.startAll(),/already running/)
+  p.interrupt();assert(!p.runActive)
+  const restored=new CommandPlans(s,{directory:dir,scope:'realm-A'})
+  assert.equal(restored.cards.length,5);assert.equal(restored.runActive,false)
+  assert(restored.cards.every(c=>c.state==='waiting'))
+  const other=new CommandPlans(s,{directory:dir,scope:'realm-B'});assert.equal(other.cards.length,0)
+  restored.delete(1);assert.equal(restored.cards.length,4)
+  assert(!JSON.stringify(JSON.parse(fs.readFileSync(restored.file))).includes('token'))
+  n.detach()
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 })
 test('API Stop cancels both controllers and rejects delayed requests from before Stop',async()=>{
@@ -87,16 +101,38 @@ test('permission-gated Ensure Survival sends only @s request, waits for confirma
 test('unknown terrain triggers bounded terrain requests and disconnect, retaining authentication',()=>{
  const {w,n,client}=fixture();w.updates.clear();w.sections.clear();let closed=0;client.disconnect=()=>closed++;const at=Date.now();n.step(at);n.step(at+5001);assert.equal(closed,1);assert.equal(n.spawned,false);assert.match(n.reason,/five seconds/)
 })
-test('manual chat and authenticated plan endpoints prepare only; selected plan alone activates',async()=>{
- const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,spawned:true,status(){return {survival:this.survival.snapshot()}},send(){throw Error('No legacy bridge')}});c.survival=new SurvivalController(c);const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
- const server=createApi({localAPI:{token:'test-token'}},c,()=>{});await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port
+test('manual phone instructions build list and authenticated run-all begins in saved order',async()=>{
+ const c=new EventEmitter()
+ Object.assign(c,{config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,spawned:true,status(){return {survival:this.survival.snapshot()}},send(){throw Error('No legacy bridge')}})
+ c.survival=new SurvivalController(c)
+ const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
+ const server=createApi({localAPI:{token:'test-token'}},c,()=>{})
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port
  const post=async(endpoint,body)=>{const r=await fetch(url+endpoint,{method:'POST',headers:{Authorization:'Bearer test-token'},body:JSON.stringify(body)});return r.json()}
- try{await post('/message',{message:'inventory'});await post('/plans/prepare',{descriptor:{id:'look',values:{}}});assert.deepEqual(calls,[]);assert(!(await post('/plans/activate',{id:2})).accepted);await post('/plans/select',{id:1});assert((await post('/plans/activate',{id:1})).accepted);assert.deepEqual(calls,['inventory']);assert(!(await post('/plans/activate',{id:1})).accepted);const auth=await fetch(url+'/plans');assert.equal(auth.status,401)}finally{await new Promise(r=>server.close(r))}
+ try{
+  await post('/message',{message:'inventory'})
+  await post('/plans/prepare',{descriptor:{id:'look',values:{}}})
+  assert.deepEqual(calls,[])
+  assert((await post('/plans/run-all',{})).accepted)
+  assert.deepEqual(calls,['inventory'])
+  assert(!(await post('/plans/run-all',{})).accepted)
+  assert(!(await post('/plans/prepare',{descriptor:{id:'look',values:{}}})).accepted)
+  const auth=await fetch(url+'/plans');assert.equal(auth.status,401)
+  c.survival.commandPlans.interrupt()
+ }finally{await new Promise(r=>server.close(r))}
 })
-
-test('running plan locks other cards; interruption preserves reusable descriptors',()=>{
- const {w,n}=fixture(),connection={config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection);s.world=w;s.navigation=n;s.handle=raw=>{n.job={kind:'follow',name:'Owner'};return {accepted:true,queued:true,message:raw}}
- const p=s.commandPlans;p.prepare({id:'follow',values:{player:'Owner'}});p.prepare({id:'inventory',values:{}});p.select(1);p.activate(1);assert.throws(()=>p.select(2),/Stop/);assert.throws(()=>p.activate(2),/running/);p.interrupt();n.stop();assert.equal(p.cards.length,2);assert.equal(p.cards[0].state,'interrupted');p.select(1);assert(p.activate(1).accepted);n.detach()
+test('running queue locks list; interrupted work preserves saved descriptors for explicit restart',()=>{
+ const {w,n}=fixture(),connection={config:{ownerPlayerNames:['Owner']},spawned:true,events:[],nextEventId:0,emit(){}}
+ const s=new SurvivalController(connection);s.world=w;s.navigation=n
+ s.handle=raw=>{n.job={kind:'follow',name:'Owner'};return {accepted:true,queued:true,message:raw}}
+ const p=s.commandPlans
+ p.prepare({id:'follow',values:{player:'Owner'}})
+ p.prepare({id:'inventory',values:{}})
+ p.startAll()
+ assert.throws(()=>p.move(2,-1),/Stop/)
+ assert.throws(()=>p.startAll(),/already running/)
+ p.interrupt();n.stop();assert.equal(p.cards.length,2);assert.equal(p.cards[0].state,'interrupted')
+ assert(p.startAll().accepted);p.interrupt();n.detach()
 })
 test('unconfirmed permission-authorized Survival request times out without retry or mode invention',()=>{
  const {w,n,client,sent}=fixture();w.gameMode='creative';w.abilityState={known:true,effective:{},active:[],loading:false,commandPermission:'operator'};const guard=new SurvivalVerification(w,n);guard.attach(client);guard.check(1000);guard.check(6001);assert(!guard.pending);assert.match(guard.reason,/not confirmed/);assert(!w.survivalVerified);guard.check(7000);assert.equal(sent.filter(([name])=>name==='command_request').length,1);guard.detach();n.detach()
