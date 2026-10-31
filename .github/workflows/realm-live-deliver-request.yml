@@ -26,11 +26,15 @@ jobs:
       - name: Verify independent APK identity, dedicated certificate and 16 KB alignment
         run: |
           set -eu
-          sdkmanager 'build-tools;35.0.0'
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs Realm-AI-Live.apk > certificate-report.txt
+          curl -fLsS --max-time 180 'https://dl.google.com/android/repository/build-tools_r35_linux.zip' -o build-tools.zip
+          mkdir -p "$RUNNER_TEMP/realm-android-tools"
+          unzip -q build-tools.zip -d "$RUNNER_TEMP/realm-android-tools"
+          TOOLS="$(dirname "$(find "$RUNNER_TEMP/realm-android-tools" -type f -name apksigner -print -quit)")"
+          test -x "$TOOLS/apksigner"
+          "$TOOLS/apksigner" verify --verbose --print-certs Realm-AI-Live.apk > certificate-report.txt
           grep -qi 'Signer #1 certificate SHA-256 digest: f268e5085b79197eca9ca9ea1f94bc625d045f191e5e4704a22178d47696da06' certificate-report.txt
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 Realm-AI-Live.apk > alignment-report.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging Realm-AI-Live.apk > package-report.txt
+          "$TOOLS/zipalign" -c -P 16 -v 4 Realm-AI-Live.apk > alignment-report.txt
+          "$TOOLS/aapt" dump badging Realm-AI-Live.apk > package-report.txt
           grep -q "package: name='com.veilforge.realmagent.live' versionCode='200001'" package-report.txt
       - name: Publish APK and signed phone-update channel
         env:
