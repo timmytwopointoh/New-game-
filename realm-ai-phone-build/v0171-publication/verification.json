@@ -1,0 +1,10 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100012,
+  "versionName": "0.17.1-live-home-status",
+  "signerCertificateSha256": "8e902e783e7b4bd45ffe2f99b45c53b0e15d4b8e36092532cc6e969a956815c5",
+  "apkSha256": "3cf33b6f035d1867da3a11f1a3e9bc1fff8edd9903a7293560df1b552df210ed",
+  "sourceOverlaySha256": "03d276368b94d3d6f353c9970c052861222d4aac9b69c908a806e115f74beebe",
+  "nodeTests": 174,
+  "androidUnitTests": "passed"
+}

@@ -48,7 +48,7 @@ public class MainActivity extends Activity {
         View headerSpacer=new View(this);header.addView(headerSpacer,new LinearLayout.LayoutParams(0,d(44),1));
         Button settings=button("⚙",this::showSettings);settings.setContentDescription("Settings");settings.setPadding(0,0,0,0);header.addView(settings,new LinearLayout.LayoutParams(d(42),d(44)));
         commandsButton=button("",this::showJobs);commandsButton.setBackground(circle(0xffb33b50));commandsButton.setContentDescription("Commands: prepare a saved command");commandsButton.setPadding(0,0,0,0);header.addView(commandsButton,new LinearLayout.LayoutParams(d(42),d(42)));
-        connection=txt("Not running",12,MUTED);connection.setMaxLines(4);connection.setVisibility(View.GONE);
+        connection=txt("Not running",12,MUTED);connection.setMaxLines(4);connection.setVisibility(View.VISIBLE);root.addView(connection,space(2));
         authCodeLabel=txt("",16,WHITE);authCodeLabel.setTextIsSelectable(true);authCodeLabel.setVisibility(View.GONE);
         copyAuthCode=button("Copy sign-in code",()->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Microsoft code",displayedAuthCode));});copyAuthCode.setVisibility(View.GONE);
         scroll=new ScrollView(this);scroll.setFillViewport(false);LinearLayout.LayoutParams sc=new LinearLayout.LayoutParams(-1,0,1);sc.topMargin=d(4);root.addView(scroll,sc);log=vertical();scroll.addView(log);

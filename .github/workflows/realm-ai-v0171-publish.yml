@@ -1,0 +1,77 @@
+name: Publish verified VEILFORGE Realm AI v0.17.1 test APK
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v013-adaptive-recovery-20261031
+    paths:
+      - 'realm-ai-phone-build/v0171-publish-requests/**'
+permissions:
+  contents: write
+concurrency:
+  group: realm-v0171-requested-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reconstruct the exact locally signed APK using public APK bytes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 2 'https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v017-queue-creative-actions-test/VEILFORGE-Realm-AI-v0.17-Queue-Creative-Actions-TEST.apk' -o public-base.apk
+          python3 realm-ai-phone-build/materialize_v0171_apk.py public-base.apk realm-ai-phone-build/v0171-public-apk-recipe.json.xz.b64 VEILFORGE-Realm-AI-v0.17.1-Live-Status-TEST.apk
+          sha256sum -c realm-ai-phone-build/v0171-publication/VEILFORGE-Realm-AI-v0.17.1-SHA256.txt
+          sha256sum -c realm-ai-phone-build/v0171-publication/source-overlay-sha256.txt
+      - name: Install pinned Android verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+      - name: Verify permanent signature, version, alignment, and runtime assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='VEILFORGE-Realm-AI-v0.17.1-Live-Status-TEST.apk'
+          TOOLS="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify --verbose --print-certs "$APK" > certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: 8e902e783e7b4bd45ffe2f99b45c53b0e15d4b8e36092532cc6e969a956815c5' certificate-report.txt
+          "$TOOLS/zipalign" -c -P 16 -v 4 "$APK" > alignment-report.txt
+          tail -n 1 alignment-report.txt
+          "$TOOLS/aapt" dump badging "$APK" > package-report.txt
+          head -n 1 package-report.txt
+          grep -q "package: name='com.veilforge.realmagent' versionCode='100012'" package-report.txt
+          grep -q "versionName='0.17.1-live-home-status'" package-report.txt
+          python3 - <<'PY'
+          import zipfile
+          apk='VEILFORGE-Realm-AI-v0.17.1-Live-Status-TEST.apk'
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert all(not n.endswith(('.p12','.pfx','.jks','.node')) and 'private/' not in n and 'signing-password' not in n for n in names)
+              for name in ['lib/arm64-v8a/libnode.so','lib/arm64-v8a/libveilforge_bridge.so','assets/nodejs-project/src/survival/world.js','assets/nodejs-project/src/survival/verification.js','assets/nodejs-project/src/survival/mining.js','assets/nodejs-project/src/survival/building.js','assets/nodejs-project/src/survival/command-plans.js','assets/nodejs-project/src/survival/command-catalog.json']:
+                  assert name in names, name
+          PY
+      - name: Publish the test APK, source overlay, and public verification data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG='veilforge-realm-ai-v0171-live-home-status-test'
+          APK='VEILFORGE-Realm-AI-v0.17.1-Live-Status-TEST.apk'
+          REPO="$GITHUB_REPOSITORY"
+          NOTES='realm-ai-phone-build/v0171-publication-release-notes.md'
+          ASSETS=("$APK" realm-ai-phone-build/v0171-source-overlay.tar.xz realm-ai-phone-build/v0171-public-apk-recipe.json.xz.b64 realm-ai-phone-build/v0171-publication/VEILFORGE-Realm-AI-v0.17.1-SHA256.txt realm-ai-phone-build/v0171-publication/source-overlay-sha256.txt realm-ai-phone-build/v0171-publication/verification.json certificate-report.txt alignment-report.txt package-report.txt)
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --repo "$REPO" --clobber
+            gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease --title 'VEILFORGE Realm AI v0.17.1 — Live Home Status' --notes-file "$NOTES"
+          else
+            gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --target "$GITHUB_SHA" --prerelease --title 'VEILFORGE Realm AI v0.17.1 — Live Home Status' --notes-file "$NOTES"
+          fi
