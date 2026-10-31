@@ -1,59 +1,56 @@
-// Chat commands sent in the REALM to the separate authenticated player bot.
-// Not a mod: users type "!ai status" or "@veilforge plan ..." in ordinary chat.
-// Strict owner allowlist; no automatic action from other players or echoed bot messages.
-const PREFIX = /^(?:!ai|@veilforge)(?:\s+|$)/i
-const LOCAL_PING = /^(?:ping|are you there|connection|connection status|are you connected|hello)$/i
-
-export class RealmChat {
-  constructor(connection, controller, config, log=()=>{}, {cooldownMs=900, clock=()=>Date.now()}={}){
-    this.connection=connection
-    this.controller=controller
-    this.log=log
-    this.clock=clock
-    this.cooldownMs=cooldownMs
-    this.owners=new Set(config.ownerPlayerNames||[])
-    this.last=new Map()
-    this.active=true
-    this.onMessage=this.onMessage.bind(this)
-    connection.on('player-chat',this.onMessage)
-    this.onUpdate=u=>{
-      if(this.active && this.observingPlan && connection.spawned)connection.say('Plan update: '+u.message.slice(0,160))
-    }
-    controller.planner.on('planner-update',this.onUpdate)
+import {understandCommand} from './survival/language.js'
+// Owner-only commands sent as !ai, @veilforge or @<bot gamertag>.
+// No AI can guarantee arbitrary language understanding: unsupported intents are rejected.
+// Incoming player-chat source names are supplied by the Bedrock server, never by this handler.
+const PREFIX=/^(?:!ai|@veilforge)(?:\s+|$)/i
+const STOP=/^(?:stop|stop everything|cancel|cancel plan|cancel job|stop walking|stop mining|abort|wait here)$/i
+const escape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
+export class RealmChat{
+ constructor(connection,controller,config,log=()=>{},{cooldownMs=900,clock=()=>Date.now()}={}){
+  this.connection=connection;this.controller=controller;this.log=log;this.clock=clock
+  this.cooldownMs=cooldownMs;this.owners=new Set((config.ownerPlayerNames||[]).map(s=>String(s).toLowerCase()))
+  this.last=new Map();this.active=true;this.observingPlan=false
+  this.onMessage=this.onMessage.bind(this)
+  connection.on('player-chat',this.onMessage)
+  this.onUpdate=u=>{if(this.active&&this.observingPlan&&connection.spawned)connection.say('Plan: '+u.message.slice(0,150))}
+  controller.planner?.on?.('planner-update',this.onUpdate)
+ }
+ extract(raw){
+  if(PREFIX.test(raw))return raw.replace(PREFIX,'').trim()
+  const bot=String(this.connection.username||this.connection.config?.minecraft?.botPlayerName||'').trim()
+  if(bot){
+   const tagged=raw.match(new RegExp('^@?'+escape(bot)+'(?:[:,]?\\s+|$)','i'))
+   if(tagged)return raw.slice(tagged[0].length).trim()
   }
-  onMessage(packet){
-    if(!this.active || !packet || typeof packet.message!=='string')return
-    const raw=packet.message.trim()
-    if(!PREFIX.test(raw))return
-    const source=String(packet.source||'')
-    if(!this.owners.has(source)){
-      this.log('Ignoring in-world AI command from non-owner.')
-      return
-    }
-    if(source===this.connection.username || source===this.connection.config?.minecraft?.botPlayerName)return
-    const now=this.clock(), prev=this.last.get(source)||0
-    const emergency=/^(stop|stop everything|cancel plan|stop following|stop walking|stop mining)$/i.test(raw.replace(PREFIX,'').trim())
-    if(!emergency&&now-prev<this.cooldownMs)return
-    this.last.set(source,now)
-    const command=raw.replace(PREFIX,'').trim()
-    this.log('Owner-only Realm text command received (not yet executed).')
-    if(!command || command.length>190 || /[\x00-\x1f\x7f]/.test(command)){
-      this.connection.say('Use !ai followed by one short instruction (max 190 characters).')
-      return
-    }
-    if(LOCAL_PING.test(command)){
-      const s=this.connection.status()
-      this.connection.say(s.spawned?'I am in the Realm as '+(s.username||'your AI player')+'.':'I have not spawned yet.')
-      return
-    }
-    // The planner object is the SAME one used by the phone API.  Never spawn a second plan queue.
-    const result=this.controller.message(command)
-    if(Array.isArray(this.connection.events) && typeof this.connection.nextEventId==='number'){
-      this.connection.events.push({id:++this.connection.nextEventId,source:'RealmChat',message:`${source} requested: ${command.slice(0,145)}`})
-      if(this.connection.events.length>64)this.connection.events.shift()
-    }
-    this.observingPlan=Boolean(result.planner && result.planner.state==='running')
-    this.connection.say(result.message)
+  return null
+ }
+ onMessage(packet){
+  if(!this.active||typeof packet?.message!=='string')return
+  const source=String(packet.source||''),raw=packet.message.trim()
+  const instruction=this.extract(raw)
+  if(instruction===null)return
+  if(!this.owners.has(source.toLowerCase())){this.log('Ignored non-owner Realm AI command.');return}
+  if(source.toLowerCase()===String(this.connection.username||'').toLowerCase())return
+  if(instruction.length>190||/[\x00-\x1f\x7f]/.test(instruction)){this.connection.say('Use a short command (up to 190 characters).');return}
+  const canonical=understandCommand(instruction)
+  if(!canonical){this.connection.say('I did not understand that action. Try follow me, walk to X Y Z, dig X Y Z, diagnostics, or help.');return}
+  const now=this.clock(),prev=this.last.get(source)||-Infinity
+  if(!STOP.test(canonical)&&now-prev<this.cooldownMs)return
+  this.last.set(source,now)
+  let result
+  try{
+   if(canonical==='hello')result={accepted:true,message:'Hello! I am here. I can follow, walk, aim, inspect and mine when Survival is verified.'}
+   else if(canonical==='run queue'||canonical==='saved plans')result=this.controller.message(canonical)
+   else if(canonical==='stop')result=this.controller.message('stop')
+   else result=this.connection.survival.handle(canonical)
+   if(!result)result={accepted:false,message:'I cannot perform that command yet.'}
+  }catch(e){result={accepted:false,message:'Command blocked: '+String(e.message||e).slice(0,130)}}
+  if(Array.isArray(this.connection.events)&&Number.isSafeInteger(this.connection.nextEventId)){
+   this.connection.events.push({id:++this.connection.nextEventId,source:'RealmChat',message:'Owner command: '+canonical.slice(0,120)})
+   if(this.connection.events.length>64)this.connection.events.shift()
   }
-  stop(){this.active=false;this.connection.off('player-chat',this.onMessage);this.controller.planner.off('planner-update',this.onUpdate)}
+  this.observingPlan=!!(result.plans?.runActive||result.planner?.state==='running')
+  this.connection.say(String(result.message||'No response').slice(0,180))
+ }
+ stop(){this.active=false;this.connection.off('player-chat',this.onMessage);this.controller.planner?.off?.('planner-update',this.onUpdate)}
 }
