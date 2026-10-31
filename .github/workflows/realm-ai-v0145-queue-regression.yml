@@ -1,5 +1,5 @@
 name: VEILFORGE Realm AI v0.14.5 queue and chat regression
-# Final verification: owner Realm chat executes safely rather than only preparing legacy previews.
+# Final verification: correct phone queue labels, top-left Stop Bot confirmation and Android layout.
 on:
   push:
     branches:
