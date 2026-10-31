@@ -1,0 +1,97 @@
+name: VEILFORGE Realm AI v0.14.4 original-key signed APK
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v0144-real-player-identity-20261031
+    paths:
+      - '.github/workflows/realm-ai-v0144-sign-existing-key-apk.yml'
+permissions:
+  contents: write
+concurrency:
+  group: veilforge-realmai-0144-original-key-release
+  cancel-in-progress: false
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Require previously configured original signing key and pinned certificate
+        shell: bash
+        env:
+          VF_KEYSTORE_B64: ${{ secrets.VF_ANDROID_KEYSTORE_B64 }}
+          VF_PASSWORD_B64: ${{ secrets.VF_ANDROID_PASSWORD_B64 }}
+          VF_EXPECTED_CERT: ${{ vars.VF_ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          if test -z "$VF_KEYSTORE_B64" || test -z "$VF_PASSWORD_B64"; then
+            echo 'FAIL: the original permanent signing key has not been configured in GitHub Actions Secrets.' >&2
+            echo 'Configure VF_ANDROID_KEYSTORE_B64 and VF_ANDROID_PASSWORD_B64 from your EXISTING private backup; never create a replacement key.' >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          expected='B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995'
+          actual=os.environ.get('VF_EXPECTED_CERT','').replace(':','').strip().upper()
+          if actual!=expected:raise SystemExit('FAIL: VF_ANDROID_CERT_SHA256 must match the ORIGINAL installed signing certificate')
+          print('Original certificate pinned; secret values will never be logged.')
+          PY
+      - name: Install pinned Android APK verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+      - name: Download and validate EXACT previously compiled original-package v0.14.4 APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v0144-player-update-kit/VEILFORGE-Realm-AI-v0144-Update-Kit.zip'
+          curl --fail --location --retry 3 --proto '=https' --max-time 180 "$URL" -o verified-kit.zip
+          printf '%s  %s\n' '7d626c3b9f0d785167c1f9708a869da50e0d3acdbfb7c19deea190eee481fe5f' verified-kit.zip | sha256sum -c -
+          mkdir -p verified-kit
+          unzip -oq verified-kit.zip -d verified-kit
+          APK='verified-kit/Realm-AI-v0.14.4-unsigned.apk'
+          test -s "$APK"
+          (cd verified-kit && sha256sum -c Realm-AI-v0.14.4-unsigned.SHA256.txt)
+          unzip -t "$APK" | tail -1
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/build-tools/35.0.0/aapt" dump badging "$APK" > unsigned-package-report.txt
+          grep -q "package: name='com.veilforge.realmagent' versionCode='100006'" unsigned-package-report.txt
+          for path in 'assets/nodejs-project/src/survival/real-player.js' 'assets/nodejs-project/src/survival/control-input.js' 'assets/nodejs-project/src/survival/inventory-evidence.js' 'lib/arm64-v8a/libnode.so' 'lib/arm64-v8a/libveilforge_bridge.so'; do
+            unzip -Z1 "$APK" | grep -Fxq "$path"
+          done
+          "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK" > unsigned-alignment-report.txt
+      - name: Sign using ORIGINAL permanent key, NEVER generate a replacement
+        shell: bash
+        env:
+          VF_KEYSTORE_B64: ${{ secrets.VF_ANDROID_KEYSTORE_B64 }}
+          VF_PASSWORD_B64: ${{ secrets.VF_ANDROID_PASSWORD_B64 }}
+          VF_EXPECTED_CERT: ${{ vars.VF_ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          python3 realm-ai-phone-build/sign_permanent_apk.py verified-kit/apksigner.jar verified-kit/Realm-AI-v0.14.4-unsigned.apk VEILFORGE-Realm-AI-v0.14.4-Permanent-Update.apk __github_secrets__
+      - name: Verify installation identity, original signer, APK integrity and 16KB alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='VEILFORGE-Realm-AI-v0.14.4-Permanent-Update.apk'
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" > certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995' certificate-report.txt
+          "$SDK/build-tools/35.0.0/aapt" dump badging "$APK" > installed-package-report.txt
+          grep -q "package: name='com.veilforge.realmagent' versionCode='100006'" installed-package-report.txt
+          "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK" > installed-alignment-report.txt
+          unzip -t "$APK" | tail -1
+          sha256sum "$APK" > VEILFORGE-Realm-AI-v0.14.4-SHA256.txt
+      - name: Publish the actual directly installable SAME-KEY Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create 'veilforge-realm-ai-v0144-permanent-apk' VEILFORGE-Realm-AI-v0.14.4-Permanent-Update.apk VEILFORGE-Realm-AI-v0.14.4-SHA256.txt certificate-report.txt installed-package-report.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'VEILFORGE Realm AI v0.14.4 — Same-Key In-Place APK Update' --notes 'Install this actual signed .apk OVER the existing permanent-key VEILFORGE Realm AI app, without uninstalling. Exact same package com.veilforge.realmagent, higher versionCode 100006, original permanent certificate B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995. Includes v0.14.4 Bedrock player identity, own game-mode evidence, inventory receipts, aiming and control diagnostics. Automated tests and APK signature/integrity checks were required to publish. Live Realm gameplay is still unverified. Only works as update to app signed with this permanent certificate.' --prerelease
