@@ -1,0 +1,50 @@
+name: Publish requested same-key survival preview download
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v012-survival-20261031
+    paths:
+      - '.github/workflows/realm-ai-v012-publish.yml'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: VEILFORGE-Realm-AI-v0.12-Survival-Verified-APK
+          run-id: 41185676536
+          github-token: ${{ github.token }}
+          path: original-build
+      - name: Verify exact permanent-key APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE="$(find original-build -name app-debug.apk -type f -print -quit)"
+          SIGNER="$(find original-build -name apksigner.jar -type f -print -quit)"
+          python3 realm-ai-phone-build/materialize_v012_apk.py "$SOURCE" realm-ai-phone-build/v012-permanent-apk-recipe.json.xz.b64 VEILFORGE-Realm-AI-v0.12-Survival-Permanent.apk
+          java -jar "$SIGNER" verify --verbose --print-certs VEILFORGE-Realm-AI-v0.12-Survival-Permanent.apk > certificate-report.txt
+          cat certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995' certificate-report.txt
+          sha256sum VEILFORGE-Realm-AI-v0.12-Survival-Permanent.apk > VEILFORGE-Realm-AI-v0.12-SHA256.txt
+      - name: Publish user-requested survival preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create veilforge-realm-ai-v012-survival-preview VEILFORGE-Realm-AI-v0.12-Survival-Permanent.apk VEILFORGE-Realm-AI-v0.12-SHA256.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VEILFORGE Realm AI v0.12 — Survival View, Walking and Rejoin Preview" --notes "Install over permanent-key v0.9.11 to preserve login; same application ID/certificate and higher versionCode 100002 verified. No add-ons required. Adds manual saved-session rejoin, terrain/inventory perception, bounded A* level-ground walking, material/recipe catalog and supply/build-plan previews. 120 Node tests and actual movement/subchunk serializer checks passed. Real-device walking and reconnection remain unverified. Crafting/mining/building/combat execution is NOT implemented; plans are previews only. See realm-ai-phone-build/SURVIVAL_PREVIEW.md on the source branch for commands and limitations. SHA256 bac71d12a6dee711478b0d3d8bbc3425caa0b206ad255f8ef9b8b4469861fb1f." --prerelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VEILFORGE-Realm-AI-v0.12-Survival-Permanent-Download
+          path: |
+            VEILFORGE-Realm-AI-v0.12-Survival-Permanent.apk
+            VEILFORGE-Realm-AI-v0.12-SHA256.txt
+          retention-days: 7
