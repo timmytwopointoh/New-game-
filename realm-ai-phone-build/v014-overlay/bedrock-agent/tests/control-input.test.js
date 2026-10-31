@@ -64,7 +64,7 @@ test('direct aim sends serialized first-person-aligned input with no motion or f
   assert(!sent.some(([name])=>name==='command_request'||name==='camera'))
   assert.equal(n.controlStatus().packetsSent,1)
   assert.equal(n.controlStatus().serverPoseSamples,0)
-  assert.match(controller.handle('control status').message,/actual movement unverified/)
+  assert.match(controller.handle('control status').message,/normally sends no reply/)
  }finally{n.detach();w.detach()}
 })
 test('server position evidence is distinct from predicted input output',()=>{
