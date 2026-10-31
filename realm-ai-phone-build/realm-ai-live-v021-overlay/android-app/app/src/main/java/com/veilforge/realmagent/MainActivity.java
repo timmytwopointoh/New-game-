@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
     final int BASE=0xff110d1e,PANEL=0xff2b223d,PURPLE=0xffbb9cfb,WHITE=0xfffaf5ff,MUTED=0xffc8bed9;
     final Handler ui = new Handler(Looper.getMainLooper());
     final ExecutorService io = Executors.newSingleThreadExecutor();
+    final ExecutorService supportIo = Executors.newSingleThreadExecutor();
     final ExecutorService urgent = Executors.newSingleThreadExecutor();
     volatile long commandEpoch=System.currentTimeMillis(); int selectedPlan=0;
     EditText botField,ownerField,realmField,input;
@@ -39,7 +40,7 @@ public class MainActivity extends Activity {
     EditText edit(String hint){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);e.setHintTextColor(MUTED);e.setTextColor(WHITE);e.setTextSize(15);e.setPadding(d(12),d(12),d(12),d(12));e.setBackground(shape(PANEL));return e;}
     Button button(String s,Runnable action){Button b=new Button(this);b.setAllCaps(false);b.setText(s);b.setTextColor(WHITE);b.setBackground(shape(PANEL));b.setOnClickListener(v->action.run());return b;}
     JSONArray catalog=new JSONArray(),cards=new JSONArray();JSONObject options=new JSONObject();
-    @Override public void onCreate(Bundle state){super.onCreate(state);getWindow().setStatusBarColor(BASE);getWindow().setNavigationBarColor(BASE);
+    @Override public void onCreate(Bundle state){super.onCreate(state);SupportLog.install(this);SupportLog.record(this,"app_open");getWindow().setStatusBarColor(BASE);getWindow().setNavigationBarColor(BASE);
         token=getPreferences(MODE_PRIVATE).getString("token","");serviceStarted=getPreferences(MODE_PRIVATE).getBoolean("serviceStarted",false);serviceStateSince=serviceStarted?System.currentTimeMillis():0;
         botField=edit("AI Xbox gamertag");ownerField=edit("Your Xbox gamertag");realmField=edit("Realm name");
         botField.setText(getPreferences(MODE_PRIVATE).getString("botTag",""));ownerField.setText(getPreferences(MODE_PRIVATE).getString("ownerTag",""));realmField.setText(getPreferences(MODE_PRIVATE).getString("realmName",""));
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
         LinearLayout management=new LinearLayout(this);body.addView(management,space(5));management.addView(button("Saved plans",this::showPlans),new LinearLayout.LayoutParams(0,d(46),1));management.addView(button("Stop bot service",this::stopServiceNow),new LinearLayout.LayoutParams(0,d(46),1));
         body.addView(button("Learning",this::showLearning),space(5));
         body.addView(button("Connection diagnostics",this::showDiagnostics),space(5));
+        body.addView(button("Bug reports",this::showBugReports),space(5));
         body.addView(txt("Choose one file to share with another app. Android opens its file picker first, then its Share sheet. Only the file you choose is shared; Realm AI Live does not scan your phone or keep file access.",12,MUTED),space(10));
         Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(4));
         ScrollView scroller=new ScrollView(this);scroller.addView(body);AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Settings · account, connection, and mode").setView(scroller).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();dialog.setOnDismissListener(x->{for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();
@@ -101,7 +103,7 @@ public class MainActivity extends Activity {
         try{JSONObject safe=ConnectionDiagnostics.sanitize(report);safe.put("recordedAt",System.currentTimeMillis());safe=ConnectionDiagnostics.merge(safe,savedDiagnostics());getPreferences(MODE_PRIVATE).edit().putString("lastConnectionDiagnostics",safe.toString()).apply();}catch(Exception ignored){}
     }
     void markControllerAvailable(){
-        apiConnected=true;lastApiSuccessAt=System.currentTimeMillis();
+        if(!apiConnected)SupportLog.record(this,"api_ready");apiConnected=true;lastApiSuccessAt=System.currentTimeMillis();
         if(!serviceStarted){serviceStarted=true;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",true).apply();}
         renderPowerButton();
     }
@@ -117,9 +119,13 @@ public class MainActivity extends Activity {
         final long revision=serviceRevision;
         io.submit(()->{try{JSONObject report=request("GET","/diagnostics",null);ui.post(()->{if(revision!=serviceRevision)return;markControllerAvailable();rememberDiagnostics(report);text[0]=diagnosticText(savedDiagnostics(),"live",true);if(dialog.isShowing())dialog.setMessage(text[0]);});}catch(Exception e){ui.post(()->{text[0]=diagnosticText(savedDiagnostics(),savedDiagnostics()==null?"app-only":"saved",false);if(dialog.isShowing())dialog.setMessage(text[0]);});}});
     }
+    static final int REQUEST_EXPORT_REPORT=41022;
+    void showBugReports(){new AlertDialog.Builder(this).setTitle("Bug reports and updates").setMessage(SupportBundle.issues(this)).setPositiveButton("Export ZIP",(d,w)->exportBugReport()).setNegativeButton("Close",null).show();}
+    void exportBugReport(){Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/zip");save.putExtra(Intent.EXTRA_TITLE,"Realm-AI-Live-bug-report-"+System.currentTimeMillis()+".zip");try{startActivityForResult(save,REQUEST_EXPORT_REPORT);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open a save location for the report.",false);}}
+    void writeBugReport(Uri destination){supportIo.submit(()->{try(OutputStream out=getContentResolver().openOutputStream(destination)){if(out==null)throw new IOException();SupportBundle.export(this,out);SupportLog.record(this,"report_exported");ui.post(()->bubble("Progress","Bug report ZIP saved. Attach it to the development chat so its recorded issues can be investigated.",false));}catch(Exception e){SupportLog.record(this,"report_failed");ui.post(()->bubble("Progress","Could not save the bug report. Choose a writable location and try again.",false));}});}
     static final int REQUEST_PICK_SHARED_FILE=41021;
     void pickFileToShare(){Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);picker.setType("*/*");try{startActivityForResult(picker,REQUEST_PICK_SHARED_FILE);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open its file picker.",false);}}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode!=REQUEST_PICK_SHARED_FILE)return;if(resultCode!=RESULT_OK||data==null||data.getData()==null){bubble("Progress","File sharing canceled; no file was shared.",false);return;}Uri selected=data.getData();String mime;try{mime=getContentResolver().getType(selected);}catch(RuntimeException ignored){mime=null;}if(mime==null||mime.isEmpty())mime="*/*";Intent send=new Intent(Intent.ACTION_SEND);send.setType(mime);send.putExtra(Intent.EXTRA_STREAM,selected);send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);send.setClipData(ClipData.newUri(getContentResolver(),"Selected file",selected));try{startActivity(Intent.createChooser(send,"Share selected file"));}catch(ActivityNotFoundException e){bubble("Progress","No app is available to receive the selected file.",false);}}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==REQUEST_EXPORT_REPORT){if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null)writeBugReport(data.getData());else bubble("Progress","Bug report export canceled.",false);return;}if(requestCode!=REQUEST_PICK_SHARED_FILE)return;if(resultCode!=RESULT_OK||data==null||data.getData()==null){bubble("Progress","File sharing canceled; no file was shared.",false);return;}Uri selected=data.getData();String mime;try{mime=getContentResolver().getType(selected);}catch(RuntimeException ignored){mime=null;}if(mime==null||mime.isEmpty())mime="*/*";Intent send=new Intent(Intent.ACTION_SEND);send.setType(mime);send.putExtra(Intent.EXTRA_STREAM,selected);send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);send.setClipData(ClipData.newUri(getContentResolver(),"Selected file",selected));try{startActivity(Intent.createChooser(send,"Share selected file"));}catch(ActivityNotFoundException e){bubble("Progress","No app is available to receive the selected file.",false);}}
     void renderPowerButton(){if(powerButton==null)return;if(apiConnected){powerButton.setBackground(circle(0xffb33b50));powerButton.setContentDescription("Stop bot service");}else if(serviceStarted){powerButton.setBackground(circle(0xff88672c));powerButton.setContentDescription("Cancel bot service startup");}else{powerButton.setBackground(circle(0xff7e3040));powerButton.setContentDescription("Start bot service");}}
     void toggleBotService(){if(serviceStarted){stopServiceNow();return;}if(botField.getText().toString().trim().length()<2||ownerField.getText().toString().trim().length()<2){showSettings();bubble("Progress","Enter the bot and owner gamertags in Settings, then turn the bot on.",false);return;}startBot();}
     void stopServiceNow(){commandEpoch++;try{ComponentName accepted=startService(new Intent(this,BotService.class).setAction("STOP"));if(accepted==null)throw new IllegalStateException("Android did not accept the stop request.");serviceRevision++;serviceStarted=false;apiConnected=false;serviceStateSince=0;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();renderPowerButton();connection.setText("Bot service stopped; saved login and plans kept.");bubble("Progress","Stop request sent to Android. Saved login and plans are kept; plans do not resume automatically.",false);}catch(Exception e){bubble("Progress","Android could not stop the bot service: "+e.getClass().getSimpleName(),false);}}
@@ -139,7 +145,7 @@ public class MainActivity extends Activity {
             File root=new File(getFilesDir(),"nodejs-project");if(!root.exists()&&!root.mkdirs())throw new IOException("Could not prepare secure app directory");
             File file=new File(root,"config.json");try(FileOutputStream out=new FileOutputStream(file)){out.write(config.toString(2).getBytes(StandardCharsets.UTF_8));}
             token=secret;
-            Intent svc=new Intent(this,BotService.class);ComponentName accepted=Build.VERSION.SDK_INT>=26?startForegroundService(svc):startService(svc);if(accepted==null)throw new IllegalStateException("Android did not accept the start request.");
+            SupportLog.record(this,"service_start");Intent svc=new Intent(this,BotService.class);ComponentName accepted=Build.VERSION.SDK_INT>=26?startForegroundService(svc):startService(svc);if(accepted==null)throw new IllegalStateException("Android did not accept the start request.");
             getPreferences(MODE_PRIVATE).edit().putString("botTag",bot).putString("ownerTag",owner).putString("realmName",name).putString("token",token).putBoolean("serviceStarted",true).apply();serviceStarted=true;apiConnected=false;serviceStateSince=System.currentTimeMillis();serviceRevision++;renderPowerButton();
             connection.setText("Starting embedded AI player on this phone…");
             bubble("VEILFORGE","Starting a separate Realm player on the phone. You may need to complete the Microsoft device-code login. No PC is needed.",false);
@@ -174,7 +180,7 @@ public class MainActivity extends Activity {
     void showPlans(){io.submit(()->{try{JSONObject r=request("GET","/plans",null);ui.post(()->{syncPlans(r.optJSONObject("plans"));final JSONArray shownCards=cards;String[] names=new String[shownCards.length()];for(int i=0;i<names.length;i++){JSONObject c=shownCards.optJSONObject(i),desc=c.optJSONObject("descriptor");names[i]="#"+c.optInt("id")+(c.optInt("id")==selectedPlan?" (selected)":"")+" · "+c.optString("label")+" · "+c.optString("state");}
         new AlertDialog.Builder(this).setTitle("Saved plans ("+cards.length()+"/5)").setItems(names,(dlg,n)->{JSONObject c=shownCards.optJSONObject(n);new AlertDialog.Builder(this).setTitle("Plan #"+c.optInt("id")).setMessage(c.optString("command")+"\n"+c.optString("note")+"\n"+c.optString("result")+"\nReuse returns this card to the waiting queue. The green button runs waiting cards in order, selected first. Plans never resume automatically.").setPositiveButton("Reuse",(a,b)->{try{planAction("select",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNeutralButton("Delete",(a,b)->{try{planAction("delete",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNegativeButton("Close",null).show();})
         .setPositiveButton("Activate waiting",(a,b)->activateQueuedPlans()).setNegativeButton("Close",null).show();});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Plans unavailable: "+e.getMessage(),false));}});}
-    void stopNow(){commandEpoch++;bubble("YOU","STOP",true);urgent.submit(()->{try{JSONObject r=request("POST","/stop?epoch="+commandEpoch,new JSONObject());ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message"),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Stop not confirmed: "+e.getMessage(),false));}});}
+    void stopNow(){SupportLog.record(this,"stop_sent");commandEpoch++;bubble("YOU","STOP",true);urgent.submit(()->{try{JSONObject r=request("POST","/stop?epoch="+commandEpoch,new JSONObject());ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message"),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Stop not confirmed: "+e.getMessage(),false));}});}
     JSONObject lastStatus=null;
     void showAuth(){if(token.isEmpty()){bubble("Progress","Start the bot and wait for the local controller before requesting its Microsoft sign-in code.",false);return;}io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showAuth(status);});}catch(Exception e){ui.post(()->bubble("Progress","Could not check Microsoft sign-in status: "+e.getMessage(),false));}});}
     void showAuth(JSONObject status){JSONObject info=status!=null?status.optJSONObject("authChallenge"):null;
@@ -204,6 +210,7 @@ public class MainActivity extends Activity {
         JSONObject pack=r.optJSONObject("packStatus");
         String packStage=pack==null?"":pack.optString("stage","");
         if(!err.isEmpty()){String stage=r.optString("lastPhase","unknown stage");connection.setText((stage.startsWith("xbox-")||stage.startsWith("microsoft-")?"Switch sign-in error (":"Realm error (")+stage+"): "+err);}
+        else if(r.optBoolean("spawned")&&survival!=null&&survival.optJSONObject("respawn")!=null&&!Arrays.asList("alive","respawned").contains(survival.optJSONObject("respawn").optString("state"))){connection.setText(survival.optJSONObject("respawn").optString("reason","Waiting for respawn"));}
         else if(r.optBoolean("spawned")){JSONObject verify=survival==null?null:survival.optJSONObject("verification");connection.setText("In Realm as "+r.optString("username")+" · "+(verify==null?"mode unverified":verify.optString("mode","unknown")+" · "+verify.optString("reason","")));}
         else if("pack-request".equals(packStage))
             connection.setText("Requested Realm packs • waiting "+r.optInt("packWaitSeconds",0)+"s for server data");
@@ -243,13 +250,13 @@ public class MainActivity extends Activity {
     protected JSONObject request(String verb,String path,JSONObject payload)throws Exception{
         final long revision=serviceRevision;
         HttpURLConnection c=(HttpURLConnection)new URL("http://127.0.0.1:"+PORT+path).openConnection();try{
-            c.setConnectTimeout(4000);c.setReadTimeout(5000);c.setRequestMethod(verb);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");
+            if("POST".equals(verb))SupportLog.record(this,path.startsWith("/mode")?"mode_requested":"command_sent");c.setConnectTimeout(4000);c.setReadTimeout(5000);c.setRequestMethod(verb);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");
             if(payload!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream o=c.getOutputStream()){o.write(payload.toString().getBytes(StandardCharsets.UTF_8));}}
             if(c.getResponseCode()!=200)throw new IOException("Local API returned "+c.getResponseCode());
-            try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[2048];int n;while((n=in.read(buf))!=-1){if(out.size()+n>32768)throw new IOException("Response too large");out.write(buf,0,n);}JSONObject result=new JSONObject(out.toString("UTF-8"));ui.post(()->{if(revision==serviceRevision)markControllerAvailable();});return result;}
-        }finally{c.disconnect();}}
+            try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[2048];int n;while((n=in.read(buf))!=-1){if(out.size()+n>32768)throw new IOException("Response too large");out.write(buf,0,n);}JSONObject result=new JSONObject(out.toString("UTF-8"));if(result.has("accepted")&&!result.optBoolean("accepted"))SupportLog.record(this,"command_blocked");ui.post(()->{if(revision==serviceRevision)markControllerAvailable();});return result;}
+        }catch(Exception error){SupportLog.record(this,"api_failed");throw error;}finally{c.disconnect();}}
     final Runnable refresh=new Runnable(){public void run(){if(!active)return;if(!token.isEmpty())update();ui.postDelayed(this,4500);}};
     @Override protected void onResume(){super.onResume();if(getIntent().getBooleanExtra("showUpdates",false)){getIntent().removeExtra("showUpdates");AppUpdater.show(this);}active=true;ui.removeCallbacks(refresh);ui.post(refresh);}
     @Override protected void onPause(){active=false;ui.removeCallbacks(refresh);super.onPause();}
-    @Override protected void onDestroy(){io.shutdownNow();urgent.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){io.shutdownNow();urgent.shutdownNow();supportIo.shutdownNow();super.onDestroy();}
 }

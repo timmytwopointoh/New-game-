@@ -24,6 +24,8 @@ with zipfile.ZipFile(apk) as z,zipfile.ZipFile(baseline) as old:
   assert not name.startswith('assets/nodejs-project/private/')
   assert name!='assets/nodejs-project/config.json'
  dex=z.read('classes2.dex')
- for token in [b'https://www.microsoft.com/link',b'Copy sign-in code',b'Share one file',b'Language and learning',b'Copy diagnostics',b'Check companion updates',b'Lcom/veilforge/realmagent/AppUpdater;',b'Lcom/veilforge/realmagent/ConnectionDiagnostics;',b'markControllerAvailable',b'Nintendo Switch']:
+ for token in [b'https://www.microsoft.com/link',b'Copy sign-in code',b'Share one file',b'Language and learning',b'Copy diagnostics',b'Check companion updates',b'Lcom/veilforge/realmagent/AppUpdater;',b'Lcom/veilforge/realmagent/ConnectionDiagnostics;',b'markControllerAvailable',b'Nintendo Switch',b'Bug reports',b'Export ZIP',b'Lcom/veilforge/realmagent/SupportBundle;',b'Lcom/veilforge/realmagent/SupportLog;']:
   assert token in dex,token
+ for name in ['runtime-trace.js','survival/climbing.js','survival/respawn.js']:
+  assert 'assets/nodejs-project/src/'+name in expected,name
 print(json.dumps({'package':'com.veilforge.realmagent.live','sourceFilesChecked':len(expected),'bundledWords':5000,'nativeAndDependencies':'byte-identical to Live v0.21','controls':'Microsoft link/copy, sharing, learning, diagnostics and Live updater present','apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest()},indent=2))

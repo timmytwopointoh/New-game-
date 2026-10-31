@@ -119,6 +119,7 @@ export function createApi(config,connection,log=console.log){
  const token=config.localAPI.token
  const server=http.createServer(async(req,res)=>{
    const send=(status,obj)=>{
+     if(req.method==='POST')connection.trace?.record(obj?.accepted===false?'api_rejected':'api_request')
      res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'})
      res.end(JSON.stringify(obj))
    }
@@ -127,6 +128,7 @@ export function createApi(config,connection,log=console.log){
    if(!authorized(header.replace(/^Bearer\s+/i,''),token))return send(401,{error:'invalid token'})
    const pathname=new URL(req.url||'/','http://127.0.0.1').pathname
    if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,message('stop'))}
+   if(req.method==='GET'&&pathname==='/support')return send(200,{support:connection.trace?.summary()||null})
    if(req.method==='GET'&&pathname==='/diagnostics')return send(200,connection.diagnostics?.()||{phase:'unavailable',savedAuthentication:'kept'})
    if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot()})
    if(req.method==='GET'&&pathname==='/catalog')return send(200,{catalog:commandCatalog,options:connection.survival?{...formOptions(connection.survival.world,new URL(req.url,'http://127.0.0.1').searchParams.get('q')||''),owners:config.ownerPlayerNames||[]}:null})

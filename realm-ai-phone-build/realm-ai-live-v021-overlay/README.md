@@ -1,6 +1,6 @@
-# Realm AI Live v0.25 — flight recovery and grounded walking
+# Realm AI Live v0.26 — jumping, respawn and bug reports
 
-Current complete source for package `com.veilforge.realmagent.live`, versionCode 200006 (`0.25-grounded-walks`). The directory name retains v021 for the permanent baseline; this is the canonical source for future Live work. Source from the separate `com.veilforge.realmagent` app has been merged here. Keep Live’s updater, identity and permanent key.
+Current complete source for package `com.veilforge.realmagent.live`, versionCode 200007 (`0.26-climb-recovery`). The directory name retains v021 for the permanent baseline; this is the canonical source for future Live work. Source from the separate `com.veilforge.realmagent` app has been merged here. Keep Live’s updater, identity and permanent key.
 
 ## Included
 
@@ -17,7 +17,7 @@ This is a glossary/rule-based assistant, not an embedded neural language model. 
 
 Use JDK 17+, Gradle 8.9 and Android SDK 35/build-tools 35.0.0. Run `python3 tools/fetch_native_runtime.py`, `npm ci --omit=dev --ignore-scripts --no-audit --no-fund` in bedrock-agent, then `gradle -p android-app :app:assembleDebug :app:testDebugUnitTest`. Node tests: `node --test tests/*.test.js` in bedrock-agent. All dependencies and native files are excluded from this source archive.
 
-221 Node tests and 35 Android tests passed. APK/source parity, native/runtime preservation, package/version, signing certificate and alignment verified. Real phone connection remains unverified; the cache fix is not proof that every 403 is resolved.
+235 Node tests and 40 Android tests passed. APK/source parity, native/runtime preservation, package/version, signing certificate and alignment verified. Real phone connection remains unverified; the cache fix is not proof that every 403 is resolved.
 
 ## Permanent update key
 
@@ -28,3 +28,5 @@ The v0.23 diagnostics can be opened without a running service and retain a sanit
 The owner requested restoring Nintendo Switch login in v0.24. Current identity is Nintendo / DeviceOS 12 / MinecraftNintendoSwitch title / live flow. Xbox service labels are not an Xbox-console identity. Switch uses private/auth/switch, retains the previous cache, and may ask for one device-code login. The Android-only Sisu recovery is disabled for this identity. Do not automatically change this profile back to Android.
 
 Live v0.25 completes the Bedrock loading screen after terrain arrives, retries explicit flight-off requests until server confirmation, keeps mode changes pending until effective abilities agree, and distinguishes ground contact from flight permissions/server locks. See UPDATE-NOTES-v0.25.md. The owner reports that v0.24 joins and mode commands work; actual v0.25 landing/walking still needs a phone test.
+
+Live v0.26 adds ordinary jump/drop routes, bounded server-confirmed dirt staircases, normal automatic respawn without task resume, and Settings → Bug reports → Export ZIP. Logs are private, bounded and sanitized, with no automatic upload or remote phone connection. See UPDATE-NOTES-v0.26.md for behavior, limits and testing. The owner verified v0.25 no longer floats; v0.26 traversal/respawn still need phone testing.

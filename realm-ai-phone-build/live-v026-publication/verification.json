@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200007,
+  "issuedAt": 1793486370784,
+  "expiresAt": 1794091170784,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-026-climb-recovery/Realm-AI-Live.apk",
+  "size": 110095837,
+  "sha256": "c03c155e98ba5f3ac3f6fcf9ca5f43314d7ac0ae9100d507c602f291278355fd",
+  "notes": "Jumping, confirmed dirt staircases, automatic normal respawn, private bug-report export and update event logging. Same Switch login and permanent Live key. 235 Node and 40 Android tests passed; phone traversal and respawn need live testing.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested",
+  "tests": {
+    "node": {
+      "passed": 235,
+      "failed": 0
+    },
+    "android": {
+      "passed": 40,
+      "failed": 0
+    }
+  },
+  "authenticationProfile": {
+    "platform": "Nintendo",
+    "authTitle": "00000000441cc96b",
+    "deviceOS": 12,
+    "flow": "live",
+    "cache": "private/auth/switch",
+    "androidRecoveryEnabled": false
+  },
+  "movementInput": "touch; walking, jumping and drops; no teleport",
+  "climbing": {
+    "maxLocalLedgeRise": 4,
+    "material": "actual known hotbar dirt",
+    "placementConfirmation": "server block update and Survival inventory consumption"
+  },
+  "respawn": {
+    "trigger": "server-confirmed death",
+    "handshake": "normal respawn action and state 2 acknowledgement",
+    "confirmation": "positive server health",
+    "resumeInterruptedWork": false
+  },
+  "diagnosticExport": {
+    "location": "Settings > Bug reports > Export ZIP",
+    "worksOffline": true,
+    "remoteAccess": false,
+    "automaticUpload": false,
+    "includesInGameCoordinates": true,
+    "maxRuntimeEvents": 240,
+    "maxAppEvents": 200
+  },
+  "bundledEnglishWords": 5000,
+  "neuralLanguageModel": false
+}

@@ -28,7 +28,7 @@ public final class AppUpdater {
         return p.signingInfo.getApkContentsSigners()[0].toByteArray();
     }
     static ReleaseManifest check(Context c) throws Exception {
-        byte[] bytes=read(FEED,65536,null,null);
+        SupportLog.record(c,"update_check");byte[] bytes=read(FEED,65536,null,null);
         return ReleaseManifest.verify(new String(bytes,java.nio.charset.StandardCharsets.UTF_8),certificate(c),c.getPackageName(),
             c.getPackageManager().getPackageInfo(c.getPackageName(),0).getLongVersionCode(),System.currentTimeMillis());
     }
@@ -38,7 +38,7 @@ public final class AppUpdater {
         monitor.scheduleWithFixedDelay(()->{
             if(disabled(c).exists())return;
             try {
-                ReleaseManifest r=check(c);
+                ReleaseManifest r=check(c);SupportLog.record(c,"update_available");
                 android.content.SharedPreferences p=c.getSharedPreferences("release-notifications",Context.MODE_PRIVATE);
                 if(p.getLong("notified",0)>=r.version)return;
                 NotificationManager nm=c.getSystemService(NotificationManager.class);
@@ -51,7 +51,7 @@ public final class AppUpdater {
                         .setContentIntent(pi).setAutoCancel(true).build());
                     p.edit().putLong("notified",r.version).apply();
                 }
-            }catch(Exception ignored){/* Offline, unpublished and expired feeds leave the bot untouched. */}
+            }catch(ReleaseManifest.NoUpdateException current){SupportLog.record(c,"update_current");}catch(Exception ignored){SupportLog.record(c,"update_unavailable");}
         },30,900,TimeUnit.SECONDS);
     }
     static synchronized void stopMonitor(){if(monitor!=null){monitor.shutdownNow();monitor=null;}}
@@ -64,30 +64,30 @@ public final class AppUpdater {
             a.requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},91);
         new AlertDialog.Builder(a).setTitle("Companion updates").setView(box)
             .setMessage("Checks and downloads leave the bot running. Installing an APK restarts the app and disconnects the bot. Your saved login and commands stay on this installation.")
-            .setPositiveButton("Check now",(d,w)->checkNow(a)).setNegativeButton("Close",null).show();
+            .setNeutralButton("Bug reports",(d,w)->{if(a instanceof MainActivity)((MainActivity)a).showBugReports();}).setPositiveButton("Check now",(d,w)->checkNow(a)).setNegativeButton("Close",null).show();
     }
     static void checkNow(Activity a){
         if(!busy.compareAndSet(false,true)){message(a,"Updates","An update operation is already running.");return;}
         Toast.makeText(a,"Checking for a signed update…",Toast.LENGTH_SHORT).show();
-        worker.submit(()->{try{ReleaseManifest r=check(a);a.runOnUiThread(()->{
+        worker.submit(()->{try{ReleaseManifest r=check(a);SupportLog.record(a,"update_available");a.runOnUiThread(()->{
             if(a.isFinishing()||a.isDestroyed())return;
             new AlertDialog.Builder(a).setTitle("Update "+r.version).setMessage(r.notes+"\n\nDownload now while the bot continues running?")
                 .setPositiveButton("Download",(d,w)->download(a,r)).setNegativeButton("Later",null).show();
-        });}catch(ReleaseManifest.NoUpdateException e){a.runOnUiThread(()->message(a,"Updates","You have the current release."));}
-        catch(FileNotFoundException e){a.runOnUiThread(()->message(a,"Updates","No release has been published to this update channel yet."));}
-        catch(Exception e){a.runOnUiThread(()->message(a,"Update unavailable","Could not obtain a trusted update. Check your connection and device date. The current app is unchanged."));}
+        });}catch(ReleaseManifest.NoUpdateException e){SupportLog.record(a,"update_current");a.runOnUiThread(()->message(a,"Updates","You have the current release."));}
+        catch(FileNotFoundException e){SupportLog.record(a,"update_unavailable");a.runOnUiThread(()->message(a,"Updates","No release has been published to this update channel yet."));}
+        catch(Exception e){SupportLog.record(a,"update_unavailable");a.runOnUiThread(()->message(a,"Update unavailable","Could not obtain a trusted update. Check your connection and device date. The current app is unchanged."));}
         finally{busy.set(false);}});
     }
     static void download(Activity a,ReleaseManifest r){
         if(!busy.compareAndSet(false,true))return;
-        Toast.makeText(a,"Downloading update; bot stays running…",Toast.LENGTH_LONG).show();
+        SupportLog.record(a,"update_download");Toast.makeText(a,"Downloading update; bot stays running…",Toast.LENGTH_LONG).show();
         worker.submit(()->{
             File file;
             try{file=File.createTempFile("companion-update-",".apk",a.getCacheDir());}catch(IOException e){busy.set(false);a.runOnUiThread(()->message(a,"Download unavailable","Could not create private update staging."));return;}
             try{
                 MessageDigest digest=MessageDigest.getInstance("SHA-256");read(r.url,r.size,file,digest);
                 if(file.length()!=r.size || !hex(digest.digest()).equals(r.sha256))throw new SecurityException("Download integrity check failed");
-                verifyApk(a,file,r);
+                verifyApk(a,file,r);SupportLog.record(a,"update_verified");
                 a.runOnUiThread(()->{
                     if(a.isFinishing()||a.isDestroyed()){file.delete();return;}
                     new AlertDialog.Builder(a).setTitle("Update verified")
@@ -95,7 +95,7 @@ public final class AppUpdater {
                         .setPositiveButton("Install update",(d,w)->install(a,file,r))
                         .setNegativeButton("Later",(d,w)->file.delete()).setOnCancelListener(d->file.delete()).show();
                 });
-            }catch(Exception e){file.delete();a.runOnUiThread(()->message(a,"Download rejected","The update could not be verified. Your current app and bot are unchanged."));}
+            }catch(Exception e){SupportLog.record(a,"update_rejected");file.delete();a.runOnUiThread(()->message(a,"Download rejected","The update could not be verified. Your current app and bot are unchanged."));}
             finally{busy.set(false);}
         });
     }
@@ -107,6 +107,7 @@ public final class AppUpdater {
     }
     static void install(Activity a,File file,ReleaseManifest r){
         if(!a.getPackageManager().canRequestPackageInstalls()){
+            SupportLog.record(a,"update_permission");
             message(a,"Allow companion updates","Enable ‘Allow from this source’ for this companion, then return to Updates and download again. Android will still ask before installation.");
             a.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+a.getPackageName())));file.delete();return;
         }
@@ -125,9 +126,9 @@ public final class AppUpdater {
                     }
                     Intent result=new Intent(a,UpdateInstallerReceiver.class);
                     PendingIntent pi=PendingIntent.getBroadcast(a,id,result,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_MUTABLE);
-                    session.commit(pi.getIntentSender());
+                    SupportLog.record(a,"update_install");session.commit(pi.getIntentSender());
                 }
-            }catch(Exception e){if(id!=-1)try{installer.abandonSession(id);}catch(Exception ignored){} a.runOnUiThread(()->message(a,"Installation unavailable","Android could not start the update. The current app remains installed."));}
+            }catch(Exception e){SupportLog.record(a,"update_install_failed");if(id!=-1)try{installer.abandonSession(id);}catch(Exception ignored){} a.runOnUiThread(()->message(a,"Installation unavailable","Android could not start the update. The current app remains installed."));}
             finally{file.delete();busy.set(false);}
         });
     }

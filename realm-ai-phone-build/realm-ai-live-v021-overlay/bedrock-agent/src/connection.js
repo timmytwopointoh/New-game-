@@ -24,7 +24,7 @@ export class Connection extends EventEmitter {
     this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
   }
   diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
-  status(){return {diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
+  status(){return {support:this.trace?.summary(),diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
       packWaitSeconds:this.packRequestAt&&!this.spawned?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,
       packHeadersReceived:this.packHeadersReceived,packChunksReceived:this.packChunksReceived,authState:this.authState,packStatus:this.packStatus,lastCommand:this.lastCommand,recentMessages:this.recentMessages.slice(-8),authChallenge:this.authChallenge}}
   reconnect(){
@@ -91,6 +91,7 @@ export class Connection extends EventEmitter {
     })
     const client=bedrock.createClient(options)
     this.client=client
+    this.trace?.attachClient(client)
     this.survival.attach(client)
     // These listeners run before the pack handler and record counts only.
     // Never persist pack URLs, auth data, or raw Minecraft packets to logs.

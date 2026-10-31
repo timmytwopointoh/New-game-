@@ -13,7 +13,7 @@ export class WorldView{
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.sections.clear();this.updates.clear();this.entities.clear();this.players.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.attributes={}
-  this.serverAuthoritativeBreaking=typeof packet.server_authoritative_block_breaking==='boolean'?packet.server_authoritative_block_breaking:null;this.blockRevision=0;this.blockRevisions.clear();this.serverPosition={...packet.player_position};this.serverGrounded=null;this.inputLocks={};this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
+  this.serverAuthoritativeBreaking=typeof packet.server_authoritative_block_breaking==='boolean'?packet.server_authoritative_block_breaking:null;this.blockRevision=0;this.blockRevisions.clear();this.serverPosition={...packet.player_position};this.serverGrounded=null;this.inputLocks={};this.hardcore=packet.hardcore===true;this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
   this.gameMode=this.normalizeMode(packet.player_gamemode);this.gameModeSource=this.gameMode?'player-specific start_game':null
   // Bedrock GameMode 5 is the player's explicit "use the world default" value.
   // It is safe to resolve through world_gamemode because the start_game field
@@ -190,6 +190,7 @@ export class WorldView{
   on('inventory_content',p=>{if(p.window_id==='inventory'||p.window_id===0){this.inventory.clear();p.input?.slice(0,256).forEach((v,i)=>this.inventory.set(i,v));this.inventoryKnown=true}})
   on('inventory_slot',p=>{if(p.window_id==='inventory'||p.window_id===0)this.inventory.set(p.slot,p.item)})
   on('mob_effect',p=>{if(String(p.runtime_entity_id)===this.entityId){if(p.event_id==='remove')this.effects.delete(p.effect_id);else if(['add','update'].includes(p.event_id))this.effects.set(p.effect_id,{amplifier:p.amplifier,expires:p.duration<0?Infinity:Date.now()+p.duration*50})}})
+  on('set_health',p=>{if(Number.isFinite(p.health))this.attributes['minecraft:health']=p.health})
   on('update_attributes',p=>{if(String(p.runtime_entity_id)===this.entityId)for(const a of p.attributes||[])this.attributes[a.name]=a.current})
   on('player_hotbar',p=>{if((p.window_id==='inventory'||p.window_id===0)&&p.selected_slot>=0&&p.selected_slot<=8)this.selectedSlot=p.selected_slot})
   on('mob_equipment',p=>{if(String(p.runtime_entity_id)===this.entityId&&p.selected_slot>=0&&p.selected_slot<=8)this.selectedSlot=p.selected_slot})

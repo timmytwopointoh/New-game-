@@ -508,5 +508,12 @@
     "template": "ensure survival",
     "fields": [],
     "note": ""
+  },
+  {
+    "id": "respawn",
+    "label": "Respawn after death",
+    "template": "respawn",
+    "fields": [],
+    "note": "Automatic after server-confirmed death. This retries the normal Respawn input only when dead; it never restores health locally or resumes work."
   }
 ]

@@ -1,0 +1,1 @@
+Owner-authorized publication of locally built, permanently signed Realm AI Live v0.26 test APK. 235 Node and 40 Android tests passed. Reconstruct exact public APK bytes and verify source/package/certificate; no hosted compile or signing secrets. Keep Switch login and permanent Live key.

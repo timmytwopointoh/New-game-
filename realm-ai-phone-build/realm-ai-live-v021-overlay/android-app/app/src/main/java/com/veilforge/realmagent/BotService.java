@@ -24,9 +24,10 @@ public final class BotService extends Service {
     @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        SupportLog.install(this);
         if (intent != null && "STOP".equals(intent.getAction())) {
             // node::Start is not safe to start twice in one process: stop the *isolated* :agent process.
-            AppUpdater.stopMonitor(); stopForeground(true); stopSelf(); Process.killProcess(Process.myPid());
+            SupportLog.record(this,"service_stop");AppUpdater.stopMonitor(); stopForeground(true); stopSelf(); Process.killProcess(Process.myPid());
             return START_NOT_STICKY;
         }
         AppUpdater.startMonitor(this);
@@ -59,9 +60,10 @@ public final class BotService extends Service {
                     // This function blocks on Node's event loop. Never run on Android's UI thread.
                     System.loadLibrary("node");
                     System.loadLibrary("veilforge_bridge");
-                    int exit = startNodeWithArguments(new String[]{"node", entry.getAbsolutePath()});
-                    writeState("Node stopped (code " + exit + ")");
+                    SupportLog.record(this,"runtime_start");int exit = startNodeWithArguments(new String[]{"node", entry.getAbsolutePath()});
+                    SupportLog.record(this,"runtime_exit");writeState("Node stopped (code " + exit + ")");
                 } catch (Throwable error) {
+                    SupportLog.record(this,"runtime_failed");
                     writeState("On-device bot could not start: " + error.getClass().getSimpleName() + " (check runtime and dependencies)");
                 } finally { stopSelf(); }
             }, "veilforge-node-thread").start();

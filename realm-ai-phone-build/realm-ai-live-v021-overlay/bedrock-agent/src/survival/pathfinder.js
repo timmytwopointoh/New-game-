@@ -3,7 +3,7 @@ const key=p=>`${p.x},${p.y},${p.z}`
 const metric=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z)+Math.abs(a.y-b.y)
 export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSteps=false}={}){
  if(![start?.x,start?.y,start?.z,goal?.x,goal?.y,goal?.z].every(Number.isSafeInteger))return {ok:false,reason:'Use whole block coordinates.'}
- if(!allowSteps&&start.y!==goal.y)return {ok:false,reason:'Walking currently stays on one level; jumping and climbing are not implemented.'}
+ if(!allowSteps&&start.y!==goal.y)return {ok:false,reason:'This preview requires a level route. Enable step-aware navigation for jumps.'}
  if(metric(start,goal)>maxDistance)return {ok:false,reason:`Destination exceeds the ${maxDistance}-block walking limit.`}
  if(!world.walkable(start)||!world.walkable(goal))return {ok:false,reason:'Start or destination is unsafe or not observed. Look around near loaded terrain first.'}
  const open=[{p:start,g:0,f:metric(start,goal)}],cost=new Map([[key(start),0]]),parent=new Map(),visited=new Set()
@@ -27,5 +27,5 @@ export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSte
    }
   }
  }
- return {ok:false,reason:visited.size>=maxNodes?'Route search reached its limit. Choose a closer target.':'No safe route through observed level ground.'}
+ return {ok:false,reason:visited.size>=maxNodes?'Route search reached its limit. Choose a closer target.':'No safe route through observed terrain and reachable steps.'}
 }
