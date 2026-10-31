@@ -71,3 +71,15 @@ test('new read-only diagnostic actions are available to mobile command cards',()
  assert.equal(renderDescriptor(inventory),'inventory status')
  assert(commandCatalog.find(c=>c.id==='combat_status')?.fields.length===0)
 })
+
+test('Bedrock player default mode resolves to server world mode rather than guessing Survival',()=>{
+ const {world}=setup()
+ const p={player_gamemode:5,world_gamemode:1,entity_id:42n,runtime_entity_id:11n,player_position:{x:0,y:65.62,z:0},dimension:0}
+ world.initialize(p)
+ assert.equal(world.gameMode,'creative')
+ world.initialize({...p,world_gamemode:0})
+ assert.equal(world.gameMode,'survival')
+ world.initialize({...p,world_gamemode:undefined})
+ assert.equal(world.gameMode,null)
+ world.detach()
+})
