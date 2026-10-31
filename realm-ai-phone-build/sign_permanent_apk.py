@@ -18,7 +18,7 @@ key=backup/'realm-ai-update.p12';pw=backup/'signing-password.txt'
 pin=(backup/'certificate-sha256.txt').read_text().strip().replace(':','').upper()
 if not re.fullmatch('[0-9A-F]{64}',pin): raise SystemExit('Invalid pinned certificate')
 base=['java','-jar',str(jar)]
-subprocess.run(base+['sign','--ks',str(key),'--ks-type','PKCS12','--ks-key-alias','realm-ai-update','--ks-pass','file:'+str(pw),'--key-pass','file:'+str(pw),'--out',str(out),str(source)],check=True)
+subprocess.run(base+['sign','--ks',str(key),'--ks-type','PKCS12','--ks-key-alias','realm-ai-update','--ks-pass','file:'+str(pw),'--out',str(out),str(source)],check=True)
 r=subprocess.run(base+['verify','--verbose','--print-certs',str(out)],check=True,text=True,capture_output=True)
 m=re.search(r'Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]+)',r.stdout)
 if not m or m.group(1).upper()!=pin:
