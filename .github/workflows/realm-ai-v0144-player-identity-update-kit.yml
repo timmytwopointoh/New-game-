@@ -2,9 +2,9 @@ name: Realm AI v0.14.4 original-package local signing kit
 on:
   push:
     branches:
-      - sandbox/realm-ai-v0144-permanent-update-20261031
+      - sandbox/realm-ai-v0144-real-player-identity-20261031
     paths:
-      - '.github/workflows/realm-ai-v0144-local-signing-kit.yml'
+      - '.github/workflows/realm-ai-v0144-player-identity-update-kit.yml'
 permissions:
   contents: write
 concurrency:
