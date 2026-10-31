@@ -92,6 +92,17 @@ export class WorldView{
    } else {this.modeEvidence={...evidence,source};this.gameMode=evidence.mode}
  }
  playerEvidence(connection=null){return realPlayerEvidence(this,connection)}
+ // A spawned player may WALK in Survival, Creative or Adventure. Normal locomotion
+ // does not require operator permissions, mining rights or an ability-layer packet.
+ get walkingAllowed(){return !!this.actor?.ready&&['survival','creative','adventure'].includes(this.gameMode)&&!this.abilityState?.effective?.no_clip&&!this.abilityState?.effective?.flying}
+ get walkingBlockReason(){
+  if(!this.actor?.ready)return 'Minecraft has not supplied both server-assigned player actor IDs.'
+  if(this.gameMode===null)return 'Game mode was not resolved from own server packets.'
+  if(this.gameMode==='spectator')return 'Spectator mode does not permit ordinary ground walking.'
+  if(!['survival','creative','adventure'].includes(this.gameMode))return 'Game mode does not support ordinary ground walking.'
+  if(this.abilityState?.effective?.no_clip||this.abilityState?.effective?.flying)return 'Server reports flying/no-clip. Ground walking is paused.'
+  return ''
+ }
  get survivalVerified(){return this.gameMode==='survival'&&!!this.abilityState?.known&&!this.abilityState.loading&&!this.abilityState.active.length}
  // Collision uses received block shapes in both layers. Unknown cells remain solid.
  clearBody(position){
@@ -215,5 +226,5 @@ export class WorldView{
   on('change_dimension',p=>{this.dimension=dimensionNumber(p.dimension);this.position=p.position;this.sections.clear();this.updates.clear();this.pending.clear();this.entities.clear();this.players.clear()})
  }
  detach(){for(const [c,e,f] of this.listeners)c.off(e,f);this.listeners=[]}
- snapshot(){return {actorSession:this.actor.snapshot(),playerEvidence:this.playerEvidence(),modeEvidence:this.modeEvidence,abilities:this.abilityState,gameMode:this.gameMode,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventory:this.items(),inventoryEvidence:this.inventoryEvidence(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
+ snapshot(){return {walkingAllowed:this.walkingAllowed,walkingBlockReason:this.walkingBlockReason,actorSession:this.actor.snapshot(),playerEvidence:this.playerEvidence(),modeEvidence:this.modeEvidence,abilities:this.abilityState,gameMode:this.gameMode,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventory:this.items(),inventoryEvidence:this.inventoryEvidence(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
 }
