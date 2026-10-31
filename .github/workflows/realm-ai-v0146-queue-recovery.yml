@@ -76,7 +76,7 @@ jobs:
           assert s.count('versionCode 100004')==1
           assert s.count("versionName '0.14-survival-controls'")==1
           assert s.count("buildTypes { debug { signingConfig = null } }")==1
-          p.write_text(s.replace('versionCode 100004','versionCode 100008').replace("versionName '0.14-survival-controls'","versionName '0.14.5-ordered-chat-queue'"))
+          p.write_text(s.replace('versionCode 100004','versionCode 100008').replace("versionName '0.14-survival-controls'","versionName '0.14.6-survival-queue-recovery'"))
           PY
           (cd "$VF_BUILD_ROOT" && python3 tools/prepare_android_node.py)
           gradle -p "$VF_BUILD_ROOT/android-app" :app:assembleDebug :app:testDebugUnitTest --no-daemon --max-workers=2
@@ -89,6 +89,7 @@ jobs:
           test -s "$APK"
           "$SDK/build-tools/35.0.0/aapt" dump badging "$APK" > package-report.txt
           grep -q "package: name='com.veilforge.realmagent' versionCode='100008'" package-report.txt
+          grep -q "versionName='0.14.6-survival-queue-recovery'" package-report.txt
           unzip -t "$APK" | tail -1
           for filename in 'src/survival/language.js' 'src/survival/command-plans.js' 'src/realm-chat.js' 'src/survival/real-player.js'; do
             unzip -Z1 "$APK" | grep -Fxq "assets/nodejs-project/$filename"
