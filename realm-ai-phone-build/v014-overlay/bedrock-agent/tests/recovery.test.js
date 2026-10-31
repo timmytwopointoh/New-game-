@@ -11,7 +11,7 @@ import {SurvivalController} from '../src/survival/controller.js'
 const require=createRequire(import.meta.url),{createSerializer}=require('bedrock-protocol/src/transforms/serializer')
 const empty={network_id:0,count:0,metadata:0,has_stack_id:false,stack_id:0,block_runtime_id:0,extra:{has_nbt:false,can_place_on:[],can_destroy:[]}}
 function fixture(){
- const w=new WorldView();w.initialize({player_gamemode:0,player_position:{x:.5,y:65.62,z:.5},runtime_entity_id:1n,dimension:'overworld',block_network_ids_are_hashes:true})
+ const w=new WorldView();w.initialize({player_gamemode:0,player_position:{x:.5,y:65.62,z:.5},runtime_entity_id:1n,entity_id:42n,dimension:'overworld',block_network_ids_are_hashes:true})
  w.abilityState={known:true,effective:{},active:[],loading:false}
  const ids={};for(const [id,b] of Object.entries(w.registry.blocksByRuntimeId))if(b.stateId===w.registry.blocksByName[b.name]?.defaultState)ids[b.name]=Number(id)
  const set=(x,y,z,name)=>{w.update({position:{x,y,z},block_runtime_id:ids[name],layer:0});w.update({position:{x,y,z},block_runtime_id:ids.air,layer:1})}
