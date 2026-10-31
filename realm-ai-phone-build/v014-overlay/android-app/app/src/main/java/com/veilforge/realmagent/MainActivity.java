@@ -35,10 +35,20 @@ public final class MainActivity extends Activity {
     LinearLayout.LayoutParams space(int pixels){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=d(pixels);return p;}
     EditText edit(String hint){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);e.setHintTextColor(MUTED);e.setTextColor(WHITE);e.setTextSize(15);e.setPadding(d(12),d(12),d(12),d(12));e.setBackground(shape(PANEL));return e;}
     Button button(String s,Runnable action){Button b=new Button(this);b.setAllCaps(false);b.setText(s);b.setTextColor(WHITE);b.setBackground(shape(PANEL));b.setOnClickListener(v->action.run());return b;}
-    JSONArray catalog=new JSONArray(),cards=new JSONArray();JSONObject options=new JSONObject();
+    JSONArray catalog=new JSONArray(),cards=new JSONArray();JSONObject options=new JSONObject();String lastMigrationNotice="";
     @Override public void onCreate(Bundle state){super.onCreate(state);getWindow().setStatusBarColor(BASE);getWindow().setNavigationBarColor(BASE);
         token=getPreferences(MODE_PRIVATE).getString("token","");
-        LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackgroundColor(BASE);setContentView(root);
+        LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackgroundColor(BASE);
+        // Android 15/16 edge-to-edge: keep Stop Bot/title below the status bar and
+        // the input/Save button above the navigation bar even on gesture navigation.
+        if(Build.VERSION.SDK_INT>=30){
+            root.setOnApplyWindowInsetsListener((view,insets)->{
+                android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
+                view.setPadding(d(10)+bars.left,d(8)+bars.top,d(10)+bars.right,d(6)+bars.bottom);
+                return insets;
+            });
+        }else{root.setFitsSystemWindows(true);}
+        setContentView(root);
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header);
         Button stopBot=button("Stop Bot",this::confirmStopBot);stopBot.setBackground(shape(0xff693640));header.addView(stopBot,new LinearLayout.LayoutParams(d(116),d(48)));
         TextView title=txt("VEILFORGE · REALM AI",18,WHITE);title.setPadding(d(10),0,0,0);header.addView(title,new LinearLayout.LayoutParams(0,-2,1));
@@ -108,7 +118,7 @@ public final class MainActivity extends Activity {
     }
     void prepareDescriptor(String id,JSONObject values){try{planAction("prepare",new JSONObject().put("descriptor",new JSONObject().put("id",id).put("values",values)));}catch(Exception e){bubble("VEILFORGE",e.getMessage(),false);}}
     void planAction(String action,JSONObject payload){final long epoch=commandEpoch;io.submit(()->{if(epoch!=commandEpoch)return;try{payload.put("epoch",epoch);JSONObject r=request("POST","/plans/"+action,payload);ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message",r.optBoolean("accepted")?"Plan updated.":"Plan rejected."),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Plan request failed: "+e.getMessage(),false));}});}
-    void syncPlans(JSONObject plans){if(plans==null)return;cards=plans.optJSONArray("cards");if(cards==null)cards=new JSONArray();}
+    void syncPlans(JSONObject plans){if(plans==null)return;cards=plans.optJSONArray("cards");if(cards==null)cards=new JSONArray();String migration=plans.optString("migration","");if(!migration.isEmpty()&&!migration.equals(lastMigrationNotice)){lastMigrationNotice=migration;bubble("VEILFORGE",migration,false);}}
     void showPlans(){io.submit(()->{try{
         JSONObject r=request("GET","/plans",null);ui.post(()->{
             JSONObject planState=r.optJSONObject("plans");syncPlans(planState);
