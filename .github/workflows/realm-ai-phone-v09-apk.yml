@@ -6,6 +6,7 @@ on:
     paths:
       - 'realm-ai-phone-build/source-v09.tar.xz.b64'
       - 'realm-ai-phone-build/v093-pack-overlay.tar.xz.b64'
+      - 'realm-ai-phone-build/patch_disconnect_v094.py'
       - '.github/workflows/realm-ai-phone-v09-apk.yml'
 permissions:
   contents: write
