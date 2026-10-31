@@ -1,0 +1,94 @@
+name: Realm AI Live - requested signed update
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: 'Increasing versionCode (first release is 200001)'
+        required: true
+        type: string
+      tag:
+        description: 'Unique release tag, for example realm-ai-live-0201'
+        required: true
+        type: string
+      notes:
+        description: 'Changes shown on the phone'
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: realm-ai-live-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require this companion's dedicated signing identity
+        env:
+          KEYSTORE: ${{ secrets.REALM_LIVE_KEYSTORE_B64 }}
+          PASSWORD: ${{ secrets.REALM_LIVE_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE" && test -n "$PASSWORD" || { echo 'Configure dedicated REALM_LIVE signing secrets; never reuse VF_ANDROID secrets.'; exit 1; }
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Materialize and verify retained source and runtime
+        env:
+          REQUEST_VERSION: ${{ inputs.version_code }}
+          REQUEST_TAG: ${{ inputs.tag }}
+        run: |
+          set -eu
+          python3 realm-ai-phone-build/live-update/prepare.py "$RUNNER_TEMP/realm-live"
+          python3 - <<'PY'
+          import os,re
+          from pathlib import Path
+          version=os.environ['REQUEST_VERSION'];tag=os.environ['REQUEST_TAG']
+          assert version.isdigit() and 200001<int(version)<2100000000
+          assert re.fullmatch(r'realm-ai-live-[a-zA-Z0-9._-]+',tag)
+          p=Path(os.environ['RUNNER_TEMP'])/'realm-live/veilforge_realm_v09_apk_ready/android-app/app/build.gradle'
+          s=p.read_text();assert s.count('versionCode 200001')==1;p.write_text(s.replace('versionCode 200001','versionCode '+version))
+          PY
+          echo "REALM_BUILD_ROOT=$RUNNER_TEMP/realm-live/veilforge_realm_v09_apk_ready" >> "$GITHUB_ENV"
+      - name: Bot regression and native Android updater checks
+        run: |
+          set -eu
+          (cd "$REALM_BUILD_ROOT/bedrock-agent" && npm test)
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          gradle -p "$REALM_BUILD_ROOT/android-app" :app:assembleDebug :app:testDebugUnitTest --no-daemon --max-workers=2
+      - name: Sign APK and release authorization with the dedicated key
+        env:
+          KEYSTORE: ${{ secrets.REALM_LIVE_KEYSTORE_B64 }}
+          PASSWORD: ${{ secrets.REALM_LIVE_KEYSTORE_PASSWORD }}
+          REQUEST_TAG: ${{ inputs.tag }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+        run: |
+          set -eu
+          umask 077
+          PRIVATE="$RUNNER_TEMP/realm-live-private"
+          mkdir -p "$PRIVATE"
+          printf '%s' "$KEYSTORE" | base64 --decode > "$PRIVATE/key.p12"
+          printf '%s' "$PASSWORD" > "$PRIVATE/password"
+          python3 realm-ai-phone-build/live-update/sign_release.py --apk "$REALM_BUILD_ROOT/android-app/app/build/outputs/apk/debug/app-debug-unsigned.apk" --keystore "$PRIVATE/key.p12" --password-file "$PRIVATE/password" --tools "$ANDROID_HOME/build-tools/35.0.0" --output release-output --url "https://github.com/$GITHUB_REPOSITORY/releases/download/$REQUEST_TAG/Realm-AI-Live.apk" --notes "$RELEASE_NOTES"
+          rm -f "$PRIVATE/key.p12" "$PRIVATE/password"
+      - name: Publish verified update then advance the phone's signed channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_TAG: ${{ inputs.tag }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+        run: |
+          set -eu
+          printf '%s' "$RELEASE_NOTES" > release-notes.txt
+          gh release create "$REQUEST_TAG" release-output/Realm-AI-Live.apk release-output/release.json release-output/verification.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Realm AI Live update $REQUEST_TAG" --notes-file release-notes.txt --prerelease
+          python3 realm-ai-phone-build/live-update/publish_channel.py release-output/release.json
+      - name: Remove private signing staging on failure or cancellation
+        if: always()
+        run: rm -f "$RUNNER_TEMP/realm-live-private/key.p12" "$RUNNER_TEMP/realm-live-private/password"

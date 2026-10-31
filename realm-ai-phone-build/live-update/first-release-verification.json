@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200001,
+  "issuedAt": 1793475662380,
+  "expiresAt": 1794080462380,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-020-secure-updates/Realm-AI-Live.apk",
+  "size": 109737533,
+  "sha256": "4d49d963650bafb41ba4eb88b1b784e58d65838e0ce703ce1151d9abc7861fa9",
+  "notes": "First independently signed Realm AI Live build. Includes the v0.19 companion baseline, a separate Updates screen, background update notifications while the bot runs, signed release verification and user-approved Android installation. Full APK installation restarts the app; saved app data is retained. Live phone and Realm behavior still need device testing.",
+  "certificateSha256": "F268E5085B79197ECA9CA9EA1F94BC625D045F191E5E4704A22178D47696DA06",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}
