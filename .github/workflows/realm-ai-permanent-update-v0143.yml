@@ -1,0 +1,156 @@
+name: Realm AI permanent-key in-place update 0.14.3 (requested)
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v0143-permanent-update-20261031
+    paths:
+      - '.github/workflows/realm-ai-permanent-update-v0143.yml'
+permissions:
+  contents: write
+concurrency:
+  group: realm-ai-permanent-v0143-one-time
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Require the EXISTING permanent signing key, never generate a new key
+        shell: bash
+        env:
+          VF_KEYSTORE_B64: ${{ secrets.VF_ANDROID_KEYSTORE_B64 }}
+          VF_PASSWORD_B64: ${{ secrets.VF_ANDROID_PASSWORD_B64 }}
+          VF_PINNED_CERT: ${{ vars.VF_ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          if test -z "$VF_KEYSTORE_B64" || test -z "$VF_PASSWORD_B64"; then
+            echo "ERROR: Exact permanent key GitHub secrets are not configured. No debug replacement will be published." >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          pinned='B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995'
+          found=os.environ.get('VF_PINNED_CERT','').replace(':','').strip().upper()
+          if found!=pinned:
+              raise SystemExit('ERROR: Repository signing certificate fingerprint differs from installed permanent key. Refusing any build.')
+          print('PASS: Same pinned permanent certificate configured. Private keystore remains in GitHub Secrets.')
+          PY
+      - name: Install reviewed Android SDK 35 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          echo "ANDROID_NDK_HOME=$SDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - name: Reconstruct existing v0.14 source with server inventory and first-person control diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 realm-ai-phone-build/prepare_v014.py "$RUNNER_TEMP/realm-control-preview"
+          ROOT="$RUNNER_TEMP/realm-control-preview/veilforge_realm_v09_apk_ready"
+          test -f "$ROOT/bedrock-agent/src/survival/inventory-evidence.js"
+          test -f "$ROOT/bedrock-agent/tests/inventory-mode-integration.test.js"
+          test -f "$ROOT/bedrock-agent/tests/control-input.test.js"
+          test -f "$ROOT/bedrock-agent/src/survival/control-input.js"
+          test -f "$ROOT/bedrock-agent/src/survival/command-catalog.json"
+          echo "VF_REALM_BUILD_ROOT=$ROOT" >> "$GITHUB_ENV"
+      - name: Run bot regression tests including real serializer and new inventory cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$VF_REALM_BUILD_ROOT/bedrock-agent"
+          # Older regression assumed the equipment request was already confirmed
+          # and expected two packets. New protocol sends one server-authoritative
+          # equipment request; the server echo is tested by integration tests.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/recovery.test.js')
+          text=p.read_text()
+          old="assert.match(s.handle('select slot 1').message,/Selected/);assert.equal(sent[1][0],'mob_equipment');assert.equal(sent[1][1].item.network_id,0)"
+          new="assert.match(s.handle('select slot 1').message,/waiting for server confirmation/);assert.equal(sent.length,1);assert.equal(sent[0][0],'mob_equipment');assert.equal(sent[0][1].item.network_id,0)"
+          assert text.count(old)==1, 'Upstream equipment test changed; review required'
+          text=text.replace(old,new)
+          assert text.count("/not been received/")==1, 'Upstream unknown-slot assertion changed'
+          p.write_text(text.replace("/not been received/","/not been reported/"))
+          PY
+          npm test
+          node --test tests/inventory-mode-diagnostics.test.js tests/inventory-mode-integration.test.js tests/control-input.test.js
+      - name: Build original application ID, same-key update input (unsigned)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          app=Path(os.environ['VF_REALM_BUILD_ROOT'])/'android-app/app/build.gradle'
+          value=app.read_text()
+          assert value.count("versionCode 100004")==1
+          assert value.count("versionName '0.14-survival-controls'")==1
+          assert value.count("buildTypes { debug { signingConfig = null } }")==1
+          value=value.replace("versionCode 100004","versionCode 100005").replace("versionName '0.14-survival-controls'","versionName '0.14.3-permanent-control-update'")
+          # Keep the original applicationId unchanged and keep the build unsigned until the existing key signs it.
+          app.write_text(value)
+          PY
+          (cd "$VF_REALM_BUILD_ROOT" && python3 tools/prepare_android_node.py)
+          gradle -p "$VF_REALM_BUILD_ROOT/android-app" :app:assembleDebug :app:testDebugUnitTest --no-daemon --max-workers=2
+      - name: Sign only with the EXISTING pinned VEILFORGE permanent key
+        shell: bash
+        env:
+          VF_KEYSTORE_B64: ${{ secrets.VF_ANDROID_KEYSTORE_B64 }}
+          VF_PASSWORD_B64: ${{ secrets.VF_ANDROID_PASSWORD_B64 }}
+          VF_EXPECTED_CERT: ${{ vars.VF_ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          OUTPUT_DIR="$VF_REALM_BUILD_ROOT/android-app/app/build/outputs/apk/debug"
+          UNSIGNED="$OUTPUT_DIR/app-debug-unsigned.apk"
+          if ! test -s "$UNSIGNED"; then
+            echo 'Expected unsigned intermediate missing; refusing to sign a different APK' >&2
+            find "$OUTPUT_DIR" -maxdepth 1 -type f -name '*.apk' -printf '%f\\n'
+            exit 1
+          fi
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          python3 realm-ai-phone-build/sign_permanent_apk.py "$SDK/build-tools/35.0.0/lib/apksigner.jar" "$UNSIGNED" VEILFORGE-Realm-AI-v0.14.3-Permanent-Update.apk __github_secrets__
+      - name: Verify real update identity, permanent certificate, native runtime and 16KB alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='VEILFORGE-Realm-AI-v0.14.3-Permanent-Update.apk'
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" > certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995' certificate-report.txt
+          "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK" > alignment-report.txt
+          "$SDK/build-tools/35.0.0/aapt" dump badging "$APK" > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent' versionCode='100005'" package-report.txt
+          unzip -t "$APK" | tail -n 1
+          unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/src/survival/control-input.js$'
+          unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/src/survival/inventory-evidence.js$'
+          unzip -Z1 "$APK" | grep -q '^lib/arm64-v8a/libnode.so$'
+          unzip -Z1 "$APK" | grep -q '^lib/arm64-v8a/libveilforge_bridge.so$'
+          sha256sum "$APK" > VEILFORGE-Realm-AI-v0.14.3-SHA256.txt
+      - name: Publish ONLY verified same-package, same-certificate update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create 'veilforge-realm-ai-v0143-permanent-update' VEILFORGE-Realm-AI-v0.14.3-Permanent-Update.apk VEILFORGE-Realm-AI-v0.14.3-SHA256.txt certificate-report.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VEILFORGE Realm AI v0.14.3 — Permanent-Key In-Place Update" --notes "In-place update from permanent-signed v0.14. Same application ID com.veilforge.realmagent, higher versionCode 100005, exact pinned permanent signing certificate B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995. Do not uninstall v0.14. Preserves application data and Microsoft sign-in. Adds first-person-aligned aim and input/server feedback diagnostics, plus shovel inventory receipts and Survival combat status. No new signing key generated. Live Realm testing remains required; not yet Codex v0.15." --prerelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VEILFORGE-Realm-AI-v0.14.3-Same-Key-Update
+          path: |
+            VEILFORGE-Realm-AI-v0.14.3-Permanent-Update.apk
+            VEILFORGE-Realm-AI-v0.14.3-SHA256.txt
+            certificate-report.txt
+          retention-days: 7
+          if-no-files-found: error
