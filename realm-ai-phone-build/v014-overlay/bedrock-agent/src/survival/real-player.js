@@ -33,7 +33,7 @@ export function gameModeFromUpdate(packet) {
  return {mode:readGameMode(raw),source:'own server game-type update',playerRaw:shown(raw),worldRaw:null,inherited:defaultGameMode(raw)}
 }
 export function realPlayerEvidence(world, connection=null) {
- const actor=!!world.startGameReceived&&world.entityId!==null&&world.uniqueId!==null
+ const actor=!!world.startGameReceived&&!!world.actor?.ready
  return {
   connectionType:'authenticated Minecraft Bedrock protocol client (not a spawned custom mob)',
   gamertag:connection?.username||null,
@@ -43,6 +43,7 @@ export function realPlayerEvidence(world, connection=null) {
   ownRuntimeIdReceived:world.entityId!==null,
   ownUniqueIdReceived:world.uniqueId!==null,
   playerActorIdentified:actor,
+  actorSession:world.actor?.snapshot()||null,
   ownMode:world.gameMode||'unknown',
   modeEvidence:world.modeEvidence||null,
   abilitiesReceived:!!world.abilityState?.known,
