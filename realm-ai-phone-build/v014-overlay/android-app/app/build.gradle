@@ -1,0 +1,40 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.veilforge.realmagent'
+    compileSdk 35
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        applicationId 'com.veilforge.realmagent'
+        minSdk 28
+        targetSdk 35
+        versionCode 100004
+        versionName '0.14-survival-controls'
+        ndk { abiFilters 'arm64-v8a' }
+        externalNativeBuild { cmake { cppFlags '-std=c++20 -fexceptions'; arguments '-DANDROID_STL=c++_shared' } }
+    }
+    externalNativeBuild { cmake { path 'CMakeLists.txt' } }
+    sourceSets.main.assets.srcDir "$buildDir/generated/node-assets"
+    packaging { jniLibs { useLegacyPackaging = true } }
+    buildTypes { debug { signingConfig = null } }
+    testOptions { unitTests.includeAndroidResources = true }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+// Pack the JavaScript engine and its production node_modules inside the APK.
+// Every required dependency must be bundled, not installed on the phone.
+tasks.register('stageBotAssets', Sync) {
+    def src = project.file('../../bedrock-agent')
+    from(src) {
+        exclude 'private/**', 'config.json', 'tests/**', '*.bat', 'node_modules/.cache/**'
+        include 'src/**', 'tools/**', 'pack-template/**', 'node_modules/**', 'package.json'
+    }
+    into "$buildDir/generated/node-assets/nodejs-project"
+    doFirst {
+        if (!file('../../bedrock-agent/node_modules/bedrock-protocol').exists())
+            throw new GradleException('Install production Node dependencies in bedrock-agent/ before building')
+        if (!file('libnode/bin/arm64-v8a/libnode.so').exists() || !file('libnode/include/node/node.h').exists())
+            throw new GradleException('Missing Android ARM64 libnode runtime and headers. See README; do not ship a controller-only APK.')
+    }
+}
+tasks.named('preBuild') { dependsOn('stageBotAssets') }
+
+dependencies { testImplementation "junit:junit:4.13.2"; testImplementation "org.robolectric:robolectric:4.14.1" }

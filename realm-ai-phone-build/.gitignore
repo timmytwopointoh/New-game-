@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.p12
+*.jks
+*signing-password*
+VF_ANDROID_*_B64.txt

@@ -17,6 +17,8 @@ if str(backup)=='__github_secrets__':
 key=backup/'realm-ai-update.p12';pw=backup/'signing-password.txt' 
 pin=(backup/'certificate-sha256.txt').read_text().strip().replace(':','').upper()
 if not re.fullmatch('[0-9A-F]{64}',pin): raise SystemExit('Invalid pinned certificate')
+if pin!='B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995':
+ raise SystemExit('Backup certificate differs from the existing permanent Realm update key')
 base=['java','-jar',str(jar)]
 subprocess.run(base+['sign','--ks',str(key),'--ks-type','PKCS12','--ks-key-alias','realm-ai-update','--ks-pass','file:'+str(pw),'--out',str(out),str(source)],check=True)
 r=subprocess.run(base+['verify','--verbose','--print-certs',str(out)],check=True,text=True,capture_output=True)
