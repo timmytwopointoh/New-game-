@@ -1,0 +1,26 @@
+{
+  "minecraft": {
+    "mode": "realm",
+    "realmInvite": "SET_REALM_INVITE_CODE",
+    "realmId": "",
+    "host": "127.0.0.1",
+    "port": 19132,
+    "username": "VEILFORGE-Bedrock-Auth-Cache",
+    "botPlayerName": "SET_EXACT_BOT_XBOX_GAMERTAG",
+    "offline": false,
+    "version": ""
+  },
+  "ownerPlayerNames": [
+    "SET_EXACT_OWNER_GAMERTAG"
+  ],
+  "localAPI": {
+    "port": 8765,
+    "token": "GENERATED_ON_SETUP"
+  },
+  "worldBridge": {
+    "allowWorldEdits": false,
+    "maxRadius": 10,
+    "maxBlocksPerTask": 12,
+    "followIntervalTicks": 10
+  }
+}
