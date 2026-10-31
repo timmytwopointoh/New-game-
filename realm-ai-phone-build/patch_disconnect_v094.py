@@ -60,7 +60,12 @@ new="""    const failure=(kind,packet)=>{
       if(!this.lastError)this.lastError='Connection ended at '+this.lastPhase+'; no server reason was sent.'
       this.authChallenge=null;this.authState='disconnected'
     })"""
-rep(old,new)
+# Accept both known v0.9.3 error-handler texts, bounded by return client.
+begin=s.index("    client.on('error',")
+end=s.index('    return client\n',begin)
+block=s[begin:end]
+assert "client.on('disconnect'" in block and "client.on('close'" in block and "client.on('end'" in block
+rep(block,new+'\n')
 f.write_text(s)
 s=ui.read_text()
 old='if(!err.isEmpty())connection.setText("Realm error: "+err);'
