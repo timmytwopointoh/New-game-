@@ -30,7 +30,7 @@ export function describeControl(navigation, now=Date.now()) {
   lastServerPoseAt:confirmed,
   serverPoseAgeMs:confirmed?Math.max(0,now-confirmed):null,
   lastConfirmedPosition:navigation.lastServerPosition||null,
-  serverFeedback:confirmed&&now-confirmed<5000?'recent server position/correction received':'no recent server position/correction; actual movement unverified',
+  serverFeedback:confirmed&&now-confirmed<5000?'recent server correction / position packet received':'No recent server correction. Bedrock normally sends no reply when server-authoritative movement input is accepted; check the player in the Realm to confirm motion.',
   lastInputError:navigation.lastInputError||null,
   yaw:Number.isFinite(navigation.yaw)?navigation.yaw:null,
   pitch:Number.isFinite(navigation.pitch)?navigation.pitch:null,
