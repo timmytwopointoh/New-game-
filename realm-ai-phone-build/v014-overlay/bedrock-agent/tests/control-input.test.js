@@ -75,7 +75,7 @@ test('server position evidence is distinct from predicted input output',()=>{
   client.emit('move_player',{runtime_id:1n,position:{x:.7,y:65.62,z:.5},mode:'normal'})
   assert.equal(n.controlStatus().serverPoseSamples,1)
   assert.equal(n.controlStatus().lastConfirmedPosition.x,.7)
-  assert.match(controller.handle('control status').message,/recent server position/)
+  assert.match(controller.handle('control status').message,/recent server correction \/ position packet received/)
   client.emit('correct_player_move_prediction',{position:{x:.8,y:65.62,z:.5}})
   assert.equal(n.controlStatus().serverPoseSamples,2)
  }finally{n.detach();w.detach()}
