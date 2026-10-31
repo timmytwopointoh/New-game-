@@ -23,6 +23,13 @@ export class SurvivalController{
    const report=this.world.scan(),p=this.world.standPosition()
    return answer(`View at ${p?`${p.x},${p.y},${p.z}`:'unknown position'}: ${report.counts.length?report.counts.map(([n,c])=>`${n} ×${c}`).join(', '):'waiting for nearby terrain data'}. ${this.world.sections.size} terrain sections; ${this.world.decodeErrors} decode errors.${this.world.lastError?' '+this.world.lastError:''}`,{survival:this.snapshot()})
   }
+  if(/^(?:control status|camera status|view status|input status)$/.test(s)){
+   const c=this.navigation.controlStatus()
+   const info=c.connected&&c.spawned?'connected and spawned':'not spawned / disconnected'
+   return answer('Control: '+info+'. '+c.view+'. Input: '+c.inputMethod+'. '+c.packetsSent+' packets sent. '+c.serverFeedback+'. Last confirmed position: '+(c.lastConfirmedPosition?Object.values(c.lastConfirmedPosition).join(','):'none')+'. Yaw '+(c.yaw??'unknown')+', pitch '+(c.pitch??'unknown')+'.'+(c.lastInputError?' Last input error: '+c.lastInputError:'')+' No client-side third-person camera is running.',{control:c})
+  }
+  m=s.match(/^look at (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
+  if(m)return this.navigation.aimAt({x:Number(m[1]),y:Number(m[2]),z:Number(m[3])})
   if(s==='view off'){this.world.enabled=false;this.world.sections.clear();this.world.updates.clear();this.world.pending.clear();this.navigation.stop('View switched off.');return answer('View off; walking stopped.')}
   if(/^(?:stop|stop everything|stop following|stop following me|stop mining|stop walking|stay|wait here|cancel job|cancel plan)$/.test(s)){this.commandPlans.interrupt();this.navigation.stop();this.lastPlan=null;return answer('Stopped following, walking and mining. Saved plans kept.')}
   if(/^(?:inventory|inventory status|what do you have|check inventory|where is my shovel)$/.test(s)){
@@ -35,7 +42,7 @@ export class SurvivalController{
    const x=this.world.snapshot(),combat=damageDiagnosis(x.gameMode,x.abilities)
    return answer(combat+' Survival verified: '+x.survivalVerified+'. '+this.verification.snapshot().reason+' Realm '+(this.connection.spawned?'joined':'disconnected/not spawned')+'. Position '+(x.position?Object.values(x.position).join(','):'unknown')+'. Health '+(x.health??'unknown')+', hunger '+(x.hunger??'unknown')+'. Navigation '+this.navigation.state+'. View sections '+x.sections+'.',{survival:this.snapshot()})
   }
-  if(/^(?:help|commands|what can you do|help survival|help movement|show jobs)$/.test(s))return answer('No add-on needed: “look around”, “inventory”, “find oak log”, “route to X Y Z”, “walk to X Y Z”, “stop”, “rejoin realm”, “materials stone”, “recipe stone pickaxe”, “plan get 8 torches”. Follow mode can jump one-block steps with headroom. “movement status”, “follow me”, “clear path to X Y Z”, “select slot 1”, “dig X Y Z”. Clear-path mining is limited to easy natural-looking blocks; containers/build-looking blocks are protected. Crafting/building remain previews.')
+  if(/^(?:help|commands|what can you do|help survival|help movement|show jobs)$/.test(s))return answer('No add-on needed: “look around”, “inventory”, “find oak log”, “route to X Y Z”, “walk to X Y Z”, “stop”, “rejoin realm”, “materials stone”, “recipe stone pickaxe”, “plan get 8 torches”. Follow mode can jump one-block steps with headroom. “control status”, “look at X Y Z”, “movement status”, “follow me”, “clear path to X Y Z”, “select slot 1”, “dig X Y Z”. Clear-path mining is limited to easy natural-looking blocks; containers/build-looking blocks are protected. Crafting/building remain previews.')
   m=s.match(/^follow(?: (.+))?$/)
   if(m){
    let name=m[1]
