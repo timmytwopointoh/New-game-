@@ -1,0 +1,128 @@
+name: Realm AI v0.14.3 original-package local signing kit
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v0143-permanent-update-20261031
+    paths:
+      - '.github/workflows/realm-ai-v0143-local-signing-kit.yml'
+permissions:
+  contents: write
+concurrency:
+  group: realm-ai-v0143-original-package-signing-kit
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install reviewed Android SDK 35 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          echo "ANDROID_NDK_HOME=$SDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - name: Reconstruct existing v0.14 source with server inventory and first-person control diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 realm-ai-phone-build/prepare_v014.py "$RUNNER_TEMP/realm-control-preview"
+          ROOT="$RUNNER_TEMP/realm-control-preview/veilforge_realm_v09_apk_ready"
+          test -f "$ROOT/bedrock-agent/src/survival/inventory-evidence.js"
+          test -f "$ROOT/bedrock-agent/tests/inventory-mode-integration.test.js"
+          test -f "$ROOT/bedrock-agent/tests/control-input.test.js"
+          test -f "$ROOT/bedrock-agent/src/survival/control-input.js"
+          test -f "$ROOT/bedrock-agent/src/survival/command-catalog.json"
+          echo "VF_REALM_BUILD_ROOT=$ROOT" >> "$GITHUB_ENV"
+      - name: Run bot regression tests including real serializer and new inventory cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$VF_REALM_BUILD_ROOT/bedrock-agent"
+          # Older regression assumed the equipment request was already confirmed
+          # and expected two packets. New protocol sends one server-authoritative
+          # equipment request; the server echo is tested by integration tests.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/recovery.test.js')
+          text=p.read_text()
+          old="assert.match(s.handle('select slot 1').message,/Selected/);assert.equal(sent[1][0],'mob_equipment');assert.equal(sent[1][1].item.network_id,0)"
+          new="assert.match(s.handle('select slot 1').message,/waiting for server confirmation/);assert.equal(sent.length,1);assert.equal(sent[0][0],'mob_equipment');assert.equal(sent[0][1].item.network_id,0)"
+          assert text.count(old)==1, 'Upstream equipment test changed; review required'
+          text=text.replace(old,new)
+          assert text.count("/not been received/")==1, 'Upstream unknown-slot assertion changed'
+          p.write_text(text.replace("/not been received/","/not been reported/"))
+          PY
+          npm test
+          node --test tests/inventory-mode-diagnostics.test.js tests/inventory-mode-integration.test.js tests/control-input.test.js
+      - name: Build original application ID, same-key update input (unsigned)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          app=Path(os.environ['VF_REALM_BUILD_ROOT'])/'android-app/app/build.gradle'
+          value=app.read_text()
+          assert value.count("versionCode 100004")==1
+          assert value.count("versionName '0.14-survival-controls'")==1
+          assert value.count("buildTypes { debug { signingConfig = null } }")==1
+          value=value.replace("versionCode 100004","versionCode 100005").replace("versionName '0.14-survival-controls'","versionName '0.14.3-permanent-control-update'")
+          # Keep the original applicationId unchanged and keep the build unsigned until the existing key signs it.
+          app.write_text(value)
+          PY
+          (cd "$VF_REALM_BUILD_ROOT" && python3 tools/prepare_android_node.py)
+          gradle -p "$VF_REALM_BUILD_ROOT/android-app" :app:assembleDebug :app:testDebugUnitTest --no-daemon --max-workers=2
+      - name: Validate unsigned APK package identity and stage signing kit without any private key
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_DIR="$VF_REALM_BUILD_ROOT/android-app/app/build/outputs/apk/debug"
+          UNSIGNED="$OUTPUT_DIR/app-debug-unsigned.apk"
+          test -s "$UNSIGNED"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/build-tools/35.0.0/aapt" dump badging "$UNSIGNED" > original-package-report.txt
+          grep -q "package: name='com.veilforge.realmagent' versionCode='100005'" original-package-report.txt
+          unzip -t "$UNSIGNED" | tail -1
+          unzip -Z1 "$UNSIGNED" | grep -q '^lib/arm64-v8a/libnode.so$'
+          unzip -Z1 "$UNSIGNED" | grep -q '^lib/arm64-v8a/libveilforge_bridge.so$'
+          unzip -Z1 "$UNSIGNED" | grep -q '^assets/nodejs-project/src/survival/control-input.js$'
+          unzip -Z1 "$UNSIGNED" | grep -q '^assets/nodejs-project/src/survival/inventory-evidence.js$'
+          "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$UNSIGNED" > alignment-report.txt
+          # This is NOT signed and must never be presented as an Android-installable update.
+          mkdir -p signing-kit
+          cp "$UNSIGNED" signing-kit/Realm-AI-v0.14.3-unsigned.apk
+          sha256sum signing-kit/Realm-AI-v0.14.3-unsigned.apk > signing-kit/Realm-AI-v0.14.3-unsigned.SHA256.txt
+          cp "$SDK/build-tools/35.0.0/lib/apksigner.jar" signing-kit/apksigner.jar
+          cp realm-ai-phone-build/v0143-signing-kit/sign-v0143-original-key.ps1 signing-kit/
+          cp realm-ai-phone-build/v0143-signing-kit/README-FIRST.txt signing-kit/
+          cp realm-ai-phone-build/v0143-signing-kit/START-HERE.cmd signing-kit/
+          (cd signing-kit && zip -q -9 ../VEILFORGE-Realm-AI-v0143-Sign-On-PC.zip ./*)
+          unzip -t VEILFORGE-Realm-AI-v0143-Sign-On-PC.zip | tail -1
+      - name: Publish verified ORIGINAL-PACKAGE signing kit (not installable until locally signed)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create 'veilforge-realm-ai-v0143-signing-kit' VEILFORGE-Realm-AI-v0143-Sign-On-PC.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VEILFORGE Realm AI v0.14.3 — Original-Package Local Signing Kit" --notes "IMPORTANT: This ZIP contains a verified unsigned ORIGINAL-PACKAGE APK (com.veilforge.realmagent, versionCode 100005), Android apksigner.jar, and a Windows signer. It is NOT directly installable. Extract on the PC where you kept the exact original realm-ai-update.p12 and run START-HERE.cmd, enter the original password, and use the resulting signed VEILFORGE-Realm-AI-v0.14.3-Permanent-Update.apk to update over v0.14 without uninstalling or losing Microsoft login. The script refuses a wrong certificate; no signing private key is uploaded. Existing permanent cert must be B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995. Signed hosted workflow is also ready but could not run because original key GitHub Actions secrets are absent. Includes inventory, Survival, aim and server-input diagnostics. Live Realm testing required." --prerelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VEILFORGE-Realm-AI-v0.14.3-Signing-Kit
+          path: |
+            VEILFORGE-Realm-AI-v0143-Sign-On-PC.zip
+            original-package-report.txt
+            alignment-report.txt
+          retention-days: 7
+          if-no-files-found: error
