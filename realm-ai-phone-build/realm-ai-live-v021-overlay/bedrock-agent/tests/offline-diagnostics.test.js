@@ -60,3 +60,11 @@ test('denied Sisu recovery reports its own stage and does not loop',async()=>{
  await assert.rejects(f.flow.getXboxToken('https://pocket.realms.minecraft.net/'))
  assert.equal(f.counts().sisu,1)
 })
+
+test('Switch authentication never attempts the Android-only Sisu recovery and diagnostics retain Nintendo identity',async()=>{
+ const f=mobileFlow();f.flow.options.deviceType='Nintendo';f.flow.options.authTitle='00000000441cc96b'
+ await assert.rejects(f.flow.getXboxToken('https://pocket.realms.minecraft.net/'),e=>e===f.originalError)
+ assert.equal(f.counts().sisu,0);assert.equal(f.counts().devices,0);assert.equal(f.counts().reads,0)
+ const report=sanitizeDiagnosticReport({clientIdentity:{platform:'Nintendo',deviceOS:12,flow:'live'}})
+ assert.deepEqual(report.clientIdentity,{platform:'Nintendo',deviceOS:12,flow:'live',accessTokenExpiryUnits:'seconds'})
+})

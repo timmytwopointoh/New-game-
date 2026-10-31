@@ -15,7 +15,7 @@ final class ConnectionDiagnostics {
         JSONObject result=new JSONObject();String stage=phase(value.optString("phase"));result.put("phase",stage);
         int code=value.optInt("httpStatus",0);result.put("httpStatus",code>=400&&code<=599?code:JSONObject.NULL);
         result.put("recordedAt",nonnegative(value,"recordedAt"));
-        String explanation=code==403?(stage.equals("xbox-title-token")?"Xbox rejected the Android app title-token request before a Realm connection.":"The account service or Realms rejected access."):code==401?"The account service rejected authentication.":code==429?"The service limited requests.":code>=500?"The remote service is unavailable.":"The connection failed at the reported stage.";
+        String explanation=code==403?(stage.equals("xbox-title-token")?"Xbox rejected the app title-token request before a Realm connection.":"The account service or Realms rejected access."):code==401?"The account service rejected authentication.":code==429?"The service limited requests.":code>=500?"The remote service is unavailable.":"The connection failed at the reported stage.";
         result.put("explanation",explanation);return result;
     }
     static JSONObject sanitize(JSONObject input){
@@ -27,7 +27,7 @@ final class ConnectionDiagnostics {
             for(String field:new String[]{"packHeaders","packChunks","recordedAt"})result.put(field,nonnegative(input,field));
             result.put("failure",failure(input.optJSONObject("failure")));result.put("lastFailure",failure(input.optJSONObject("lastFailure")));
             String state=input.optString("processState");result.put("processState",Arrays.asList("running","stopped","crashed").contains(state)?state:"unknown");
-            JSONObject identity=input.optJSONObject("clientIdentity");if(identity!=null&&identity.optString("platform").equals("Android")&&identity.optInt("deviceOS")==1&&identity.optString("flow").equals("live"))result.put("clientIdentity",new JSONObject().put("platform","Android").put("deviceOS",1).put("flow","live"));
+            JSONObject identity=input.optJSONObject("clientIdentity");if(identity!=null&&((identity.optString("platform").equals("Android")&&identity.optInt("deviceOS")==1)||(identity.optString("platform").equals("Nintendo")&&identity.optInt("deviceOS")==12))&&identity.optString("flow").equals("live"))result.put("clientIdentity",new JSONObject().put("platform",identity.optString("platform")).put("deviceOS",identity.optInt("deviceOS")).put("flow","live"));
             result.put("savedAuthentication","kept");
         }catch(JSONException ignored){}
         return result;

@@ -5,15 +5,17 @@ Private inputs stay outside the repo; no key/password is printed or published.
 import argparse,base64,hashlib,json,re,subprocess,tempfile,time
 from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument('--apk',type=Path,required=True);p.add_argument('--keystore',type=Path,required=True);p.add_argument('--password-file',type=Path,required=True);p.add_argument('--tools',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--url',required=True);p.add_argument('--notes',required=True)
+p.add_argument('--input-aligned',action='store_true',help='Verify existing input alignment instead of creating another intermediate APK')
 a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
 def run(*cmd):return subprocess.run(list(map(str,cmd)),check=True,capture_output=True,text=True).stdout
 if not a.url.startswith('https://github.com/timmytwopointoh/New-game-/releases/download/') or not a.url.endswith('/Realm-AI-Live.apk'):raise SystemExit('Use the dedicated GitHub release APK URL')
 report=run(a.tools/'aapt','dump','badging',a.apk)
 m=re.search(r"package: name='([^']+)' versionCode='(\d+)'",report)
 if not m or m[1]!='com.veilforge.realmagent.live':raise SystemExit('Wrong app; refusing to sign another app')
-version=int(m[2]);aligned=a.output/'aligned-unsigned.apk';signed=a.output/'Realm-AI-Live.apk'
+version=int(m[2]);aligned=a.apk if a.input_aligned else a.output/'aligned-unsigned.apk';signed=a.output/'Realm-AI-Live.apk'
 if signed.exists():raise SystemExit('Choose a fresh output directory; existing release is never overwritten')
-run(a.tools/'zipalign','-f','-P','16','4',a.apk,aligned)
+if a.input_aligned:run(a.tools/'zipalign','-c','-P','16','4',aligned)
+else:run(a.tools/'zipalign','-f','-P','16','4',a.apk,aligned)
 run(a.tools/'apksigner','sign','--ks',a.keystore,'--ks-key-alias','realm-live-update','--ks-pass','file:'+str(a.password_file),'--out',signed,aligned)
 certReport=run(a.tools/'apksigner','verify','--verbose','--print-certs',signed)
 run(a.tools/'zipalign','-c','-P','16','4',signed)
@@ -31,4 +33,5 @@ with tempfile.TemporaryDirectory() as d:
 (a.output/'release.json').write_text(json.dumps(envelope,indent=2)+'\n')
 (a.output/'verification.json').write_text(json.dumps({**data,'certificateSha256':cert,'validation':'signature, package, version, alignment and archive checked; phone installation not tested'},indent=2)+'\n')
 (a.output/'certificate-report.txt').write_text(certReport)
-aligned.unlink();print('Signed separate Realm AI Live release; manifest created; private key not exported')
+if not a.input_aligned:aligned.unlink()
+print('Signed separate Realm AI Live release; manifest created; private key not exported')

@@ -1,0 +1,1 @@
+Owner requested restoring original Nintendo Switch login profile. Publish Live versionCode 200005, same package and 77694D4F signing certificate. Public signed bytes only; no private key access. Verify Switch title/device/OS and all source files before publication and update the signed Live channel.

@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200005,
+  "issuedAt": 1793483262618,
+  "expiresAt": 1794088062618,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-024-switch-sign-in/Realm-AI-Live.apk",
+  "size": 110079110,
+  "sha256": "e884df281e2e6e24765b42aaf3a2f62650612c433cd47a1c56eb3e9886e2e7a9",
+  "notes": "Restores Nintendo Switch authentication: MinecraftNintendoSwitch title, Nintendo device type, DeviceOS 12 and original live flow. Uses a separate persistent Switch auth cache while retaining Android login files. Android-only Sisu recovery is disabled for Switch. Touch movement, offline diagnostics, learning and all merged features retained. Same permanent Live key. 211 Node and 35 Android tests passed; phone login remains unverified.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested",
+  "tests": {
+    "node": {
+      "passed": 211,
+      "failed": 0
+    },
+    "android": {
+      "passed": 35,
+      "failed": 0
+    }
+  },
+  "authenticationProfile": {
+    "platform": "Nintendo",
+    "authTitle": "00000000441cc96b",
+    "deviceOS": 12,
+    "flow": "live",
+    "cache": "private/auth/switch",
+    "androidRecoveryEnabled": false
+  },
+  "movementInput": "touch; no teleport changes",
+  "bundledEnglishWords": 5000,
+  "neuralLanguageModel": false
+}

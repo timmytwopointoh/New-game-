@@ -21,7 +21,7 @@ export function sanitizeDiagnosticReport(input={}){
   report.failure=failure(input.failure);report.lastFailure=failure(input.lastFailure)
   report.processState=['running','stopped','crashed'].includes(input.processState)?input.processState:'unknown'
   const identity=input.clientIdentity
-  if(identity?.platform==='Android'&&identity.deviceOS===1&&identity.flow==='live')report.clientIdentity={platform:'Android',deviceOS:1,flow:'live',accessTokenExpiryUnits:'seconds'}
+  if(identity?.flow==='live'&&((identity.platform==='Android'&&identity.deviceOS===1)||(identity.platform==='Nintendo'&&identity.deviceOS===12)))report.clientIdentity={platform:identity.platform,deviceOS:identity.deviceOS,flow:'live',accessTokenExpiryUnits:'seconds'}
   return report
 }
 

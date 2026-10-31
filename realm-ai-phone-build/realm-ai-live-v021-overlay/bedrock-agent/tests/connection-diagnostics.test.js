@@ -10,16 +10,16 @@ import {buildClientOptions} from '../src/options.js'
 import {createApi} from '../src/api.js'
 const {Authflow,Titles}=createRequire(import.meta.url)('prismarine-auth')
 
-test('login uses the library Android identity, same private cache and original callback without force refresh',()=>{
+test('login uses the library Switch identity and isolated persistent cache, preserving original callback and old files',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'realm-auth-test-'))
  try{
   const callback=()=>{},o=buildClientOptions({mode:'realm',username:'unchanged-cache',offline:false},dir,callback)
-  assert.equal(o.authTitle,Titles.MinecraftAndroid);assert.equal(o.deviceType,'Android');assert.equal(o.deviceOS,1);assert.equal(o.flow,'live')
-  assert.equal(o.profilesFolder,path.join(dir,'private','auth'));assert.equal(o.forceRefresh,undefined)
-  fs.mkdirSync(o.profilesFolder,{recursive:true});const marker=path.join(o.profilesFolder,'existing-session.marker');fs.writeFileSync(marker,'preserve-me')
+  assert.equal(o.authTitle,Titles.MinecraftNintendoSwitch);assert.equal(o.deviceType,'Nintendo');assert.equal(o.deviceOS,12);assert.equal(o.flow,'live')
+  assert.equal(o.profilesFolder,path.join(dir,'private','auth','switch'));assert.equal(o.forceRefresh,undefined)
+  fs.mkdirSync(o.profilesFolder,{recursive:true});const androidMarker=path.join(dir,'private','auth','existing-android-session.marker');fs.writeFileSync(androidMarker,'keep-old-login');const marker=path.join(o.profilesFolder,'existing-session.marker');fs.writeFileSync(marker,'preserve-me')
   const flow=new Authflow(o.username,o.profilesFolder,o,callback),observed=instrumentAuthflow(flow,{getPhase:()=> 'realm-discovery',setPhase:()=>{}})
   assert.strictEqual(observed,flow);assert.strictEqual(flow.codeCallback,callback);assert.strictEqual(flow.options,o)
-  assert.equal(fs.readFileSync(marker,'utf8'),'preserve-me');assert.equal(o.forceRefresh,undefined)
+  assert.equal(fs.readFileSync(marker,'utf8'),'preserve-me');assert.equal(fs.readFileSync(androidMarker,'utf8'),'keep-old-login');assert.equal(buildClientOptions({mode:'realm',username:'unchanged-cache'},dir,callback).profilesFolder,o.profilesFolder);assert.equal(o.forceRefresh,undefined)
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 })
 test('diagnostics preserve method arguments/results and attribute nested 403 to the exact failing token stage',async()=>{

@@ -45,4 +45,7 @@ public class OfflineDiagnosticsTest {
   a.rememberDiagnostics(failure());a.rememberDiagnostics(new JSONObject("{\"phase\":\"starting\"}"));a.showDiagnostics();JSONObject report=new JSONObject(copyLatest());assertEquals("starting",report.getString("phase"));assertEquals(403,report.getJSONObject("lastFailure").getInt("httpStatus"));
   a.getPreferences(Context.MODE_PRIVATE).edit().putString("lastConnectionDiagnostics","{broken").apply();a.showDiagnostics();assertNotNull(new JSONObject(copyLatest()));
  }
+ @Test public void switchPlatformIsClearEvenWhenViewingAnOlderSavedReport()throws Exception{
+  JSONObject report=failure();report.put("clientIdentity",new JSONObject().put("platform","Nintendo").put("deviceOS",12).put("flow","live"));a.rememberDiagnostics(report);a.showDiagnostics();JSONObject copied=new JSONObject(copyLatest());assertEquals("Nintendo Switch",copied.getString("configuredLoginPlatform"));assertEquals("Nintendo",copied.getJSONObject("clientIdentity").getString("platform"));assertEquals(12,copied.getJSONObject("clientIdentity").getInt("deviceOS"));
+ }
 }

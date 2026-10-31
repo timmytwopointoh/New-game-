@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
     }
     String diagnosticText(JSONObject report,String source,boolean reachable){
         JSONObject safe=ConnectionDiagnostics.sanitize(report);
-        try{safe.put("reportSource",source);safe.put("localApiReachable",reachable);safe.put("serviceRequested",serviceStarted);safe.put("applicationId",getPackageName());safe.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);safe.put("copiedAt",System.currentTimeMillis());safe.put("reportAvailable",report!=null);return safe.toString(2);}catch(Exception ignored){return "Connection diagnostics are unavailable. Saved login has not been changed.";}
+        try{safe.put("reportSource",source);safe.put("localApiReachable",reachable);safe.put("serviceRequested",serviceStarted);safe.put("applicationId",getPackageName());safe.put("configuredLoginPlatform","Nintendo Switch");safe.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);safe.put("copiedAt",System.currentTimeMillis());safe.put("reportAvailable",report!=null);return safe.toString(2);}catch(Exception ignored){return "Connection diagnostics are unavailable. Saved login has not been changed.";}
     }
     void showDiagnostics(){
         JSONObject saved=savedDiagnostics();final String[] text={diagnosticText(saved,saved==null?"app-only":"saved",false)};
@@ -125,7 +125,7 @@ public class MainActivity extends Activity {
     void stopServiceNow(){commandEpoch++;try{ComponentName accepted=startService(new Intent(this,BotService.class).setAction("STOP"));if(accepted==null)throw new IllegalStateException("Android did not accept the stop request.");serviceRevision++;serviceStarted=false;apiConnected=false;serviceStateSince=0;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();renderPowerButton();connection.setText("Bot service stopped; saved login and plans kept.");bubble("Progress","Stop request sent to Android. Saved login and plans are kept; plans do not resume automatically.",false);}catch(Exception e){bubble("Progress","Android could not stop the bot service: "+e.getClass().getSimpleName(),false);}}
     void modeAction(String mode){getPreferences(MODE_PRIVATE).edit().putString("modePreference",mode).apply();if(!serviceStarted||token.isEmpty()){bubble("Progress",mode.substring(0,1).toUpperCase(java.util.Locale.ROOT)+mode.substring(1)+" selected for the next session. The server must confirm the bot’s mode and abilities.",false);return;}final long epoch=commandEpoch;io.submit(()->{try{JSONObject r=request("POST","/mode",new JSONObject().put("mode",mode).put("epoch",epoch));ui.post(()->{bubble("Progress",r.optString("message","Waiting for server mode confirmation."),false);updateSettingsStatus(r.optJSONObject("verification"));});}catch(Exception e){ui.post(()->bubble("Progress","Mode request failed: "+e.getMessage(),false));}});}
     void activateQueuedPlans(){planAction("activate-queue",new JSONObject());}
-    void updateSettingsStatus(JSONObject verification){if(settingsStatus==null)return;String status="Connection: "+connection.getText();if(verification!=null){String mode=verification.optString("mode","unknown");status+="\nBot mode: "+mode+" · desired: "+verification.optString("desiredMode","survival")+"\n"+verification.optString("reason","");}else if(lastStatus!=null){JSONObject survival=lastStatus.optJSONObject("survival");JSONObject v=survival==null?null:survival.optJSONObject("verification");if(v!=null)status+="\nBot mode: "+v.optString("mode","unknown")+" · "+v.optString("reason","");}settingsStatus.setText(status);}
+    void updateSettingsStatus(JSONObject verification){if(settingsStatus==null)return;String status="Login identity: Nintendo Switch\nConnection: "+connection.getText();if(verification!=null){String mode=verification.optString("mode","unknown");status+="\nBot mode: "+mode+" · desired: "+verification.optString("desiredMode","survival")+"\n"+verification.optString("reason","");}else if(lastStatus!=null){JSONObject survival=lastStatus.optJSONObject("survival");JSONObject v=survival==null?null:survival.optJSONObject("verification");if(v!=null)status+="\nBot mode: "+v.optString("mode","unknown")+" · "+v.optString("reason","");}settingsStatus.setText(status);}
     void bubble(String who,String body,boolean mine){if(body==null||body.isEmpty())return;LinearLayout row=new LinearLayout(this);row.setGravity(mine?Gravity.RIGHT:Gravity.LEFT);log.addView(row,space(9));
         LinearLayout panel=vertical();panel.setPadding(d(12),d(9),d(12),d(10));panel.setBackground(shape(mine?0xff594278:PANEL));row.addView(panel);
         panel.addView(txt(who,11,PURPLE));TextView content=txt(body,15,WHITE);content.setTextIsSelectable(true);content.setMaxWidth(getResources().getDisplayMetrics().widthPixels-d(94));panel.addView(content,space(4));scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
@@ -203,7 +203,7 @@ public class MainActivity extends Activity {
         String err=r.optString("lastError","").trim();
         JSONObject pack=r.optJSONObject("packStatus");
         String packStage=pack==null?"":pack.optString("stage","");
-        if(!err.isEmpty())connection.setText("Realm error ("+r.optString("lastPhase","unknown stage")+"): "+err);
+        if(!err.isEmpty()){String stage=r.optString("lastPhase","unknown stage");connection.setText((stage.startsWith("xbox-")||stage.startsWith("microsoft-")?"Switch sign-in error (":"Realm error (")+stage+"): "+err);}
         else if(r.optBoolean("spawned")){JSONObject verify=survival==null?null:survival.optJSONObject("verification");connection.setText("In Realm as "+r.optString("username")+" · "+(verify==null?"mode unverified":verify.optString("mode","unknown")+" · "+verify.optString("reason","")));}
         else if("pack-request".equals(packStage))
             connection.setText("Requested Realm packs • waiting "+r.optInt("packWaitSeconds",0)+"s for server data");
@@ -214,7 +214,7 @@ public class MainActivity extends Activity {
         else if(r.optBoolean("joined"))connection.setText("Joined Realm • waiting to spawn");
         else if("microsoft-device-code".equals(phase))connection.setText("Requesting Microsoft device sign-in code");
         else if("microsoft-token-refresh".equals(phase)||"microsoft-session".equals(phase))connection.setText("Checking the saved Microsoft session");
-        else if(phase.startsWith("xbox-"))connection.setText("Checking Xbox access · "+phase);
+        else if(phase.startsWith("xbox-"))connection.setText("Switch sign-in · Xbox account service · "+phase);
         else if("realm-discovery".equals(phase))connection.setText("Checking joined Realms for the signed-in bot account");
         else if("realm-selecting".equals(phase))connection.setText("Microsoft approved • searching joined Realms");
         else if("realm-join-retry".equals(phase))connection.setText("Minecraft Realms temporarily unavailable (503) • retrying with saved login");
