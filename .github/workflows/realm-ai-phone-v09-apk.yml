@@ -26,7 +26,8 @@ jobs:
           base64 --decode realm-ai-phone-build/source-v09.tar.xz.b64 > source-v09.tar.xz
           echo '3f1a70bf640d9bfef51169985be871fb55c299c7cd0fe78392aba3be46b1fac5  source-v09.tar.xz' | sha256sum -c -
           tar -xJf source-v09.tar.xz -C .vf-phone-build --no-same-owner
-          test -f .vf-phone-build/veilforge_realm_v09_apk_ready/bedrock-agent/src/mobile.js
+          unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/src/mobile.js$'
+          unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/src/realm-packs.js$'
           test -f .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/src/main/java/com/veilforge/realmagent/BotService.java
           if grep -riEq 'mraitousir|slenderbender' .vf-phone-build/; then
             echo 'STOP: account-specific text found in source' >&2
@@ -155,69 +156,6 @@ jobs:
           unzip -Z1 "$APK" | grep -q '^lib/arm64-v8a/libnode.so$'
           unzip -Z1 "$APK" | grep -q '^lib/arm64-v8a/libveilforge_bridge.so$'
           unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/src/mobile.js
-          unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/node_modules/bedrock-protocol/package.json$'
-          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          "$SDK/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK"
-          sha256sum "$APK"
-      - name: Publish Peks-style verified APK to a private GitHub prerelease
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
-          cp "$APK" VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk
-          sha256sum VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk > VEILFORGE-Realm-AI-v0.9.3-SHA256.txt
-          TAG="veilforge-realm-ai-v093-pack-support-preview"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk VEILFORGE-Realm-AI-v0.9.3-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk VEILFORGE-Realm-AI-v0.9.3-SHA256.txt \
-              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "VEILFORGE Realm AI v0.9.3 - Realm Pack Support Preview" \
-              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. NO actual Android device install, Microsoft sign-in, Realm connection, or gameplay success is claimed. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
-          fi
-      - name: Upload validated debug APK for 2 days
-        uses: actions/upload-artifact@v4
-        with:
-          name: VEILFORGE-Realm-AI-v0.9.3-PackSupport-APK
-          path: .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 2
-          if-no-files-found: error
-
-          unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/src/realm-packs.js
-          unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/node_modules/bedrock-protocol/package.json$'
-          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          "$SDK/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK"
-          sha256sum "$APK"
-      - name: Publish Peks-style verified APK to a private GitHub prerelease
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
-          cp "$APK" VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk
-          sha256sum VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk > VEILFORGE-Realm-AI-v0.9.3-SHA256.txt
-          TAG="veilforge-realm-ai-v093-pack-support-preview"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk VEILFORGE-Realm-AI-v0.9.3-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.3-PackSupport-debug.apk VEILFORGE-Realm-AI-v0.9.3-SHA256.txt \
-              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "VEILFORGE Realm AI v0.9.3 - Realm Pack Support Preview" \
-              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. NO actual Android device install, Microsoft sign-in, Realm connection, or gameplay success is claimed. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
-          fi
-      - name: Upload validated debug APK for 2 days
-        uses: actions/upload-artifact@v4
-        with:
-          name: VEILFORGE-Realm-AI-v0.9.3-PackSupport-APK
-          path: .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 2
-          if-no-files-found: error
-
           unzip -Z1 "$APK" | grep -q '^assets/nodejs-project/node_modules/bedrock-protocol/package.json$'
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           "$SDK/build-tools/35.0.0/apksigner" verify --verbose "$APK"
