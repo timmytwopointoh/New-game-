@@ -28,5 +28,7 @@
     "Android Gradle/Robolectric suite",
     "live Realm test",
     "Internet search or multi-source misinformation verification"
-  ]
+  ],
+  "recipe_sha256": "091416bed35120cab4ada7352a73a49e7ce0780ccc1752fd595d7fe50596e44f",
+  "recipe_bytes": 2408268
 }

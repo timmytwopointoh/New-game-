@@ -1,0 +1,78 @@
+name: Publish locally signed VEILFORGE Realm AI v0.20 test APK
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v013-adaptive-recovery-20261031
+    paths:
+      - 'realm-ai-phone-build/v020-publish-requests/**'
+permissions:
+  contents: write
+concurrency:
+  group: realm-v020-requested-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reconstruct the exact signed APK from public bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 2 'https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v019-language-chat-test/VEILFORGE-Realm-AI-v0.19-Conversation-TEST.apk' -o public-base.apk
+          python3 realm-ai-phone-build/materialize_v020_apk.py public-base.apk realm-ai-phone-build/v020-public-apk-recipe.json.xz.b64 VEILFORGE-Realm-AI-v0.20-Language-TEST.apk
+          cp realm-ai-phone-build/v020-publication/v020-source.zip .
+          cp realm-ai-phone-build/v020-public-apk-recipe.json.xz.b64 .
+          sha256sum -c realm-ai-phone-build/v020-publication/VEILFORGE-Realm-AI-v0.20-SHA256.txt
+      - name: Install Android verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+      - name: Verify package, alignment, signature and embedded source
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='VEILFORGE-Realm-AI-v0.20-Language-TEST.apk'
+          TOOLS="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify --verbose --print-certs "$APK" > certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995' certificate-report.txt
+          "$TOOLS/zipalign" -c -P 16 -v 4 "$APK" > alignment-report.txt
+          "$TOOLS/aapt" dump badging "$APK" > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent' versionCode='100017'" package-report.txt
+          grep -q "versionName='0.20-language-chat'" package-report.txt
+          python3 - <<'PY'
+          import gzip, json, zipfile
+          apk='VEILFORGE-Realm-AI-v0.20-Language-TEST.apk'
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None
+              for name in ['classes2.dex','assets/nodejs-project/src/conversation.js','assets/nodejs-project/src/survival/command-vocabulary.js','assets/nodejs-project/src/lexicon/lookup.js','assets/nodejs-project/src/lexicon/english-5000.json.gz','assets/nodejs-project/src/lexicon/minecraft-context.json']:
+                  assert name in z.namelist(), name
+              dex=z.read('classes2.dex')
+              assert b'Microsoft device sign-in code. Selectable and shown while sign-in is pending.' in dex
+              assert b'Copy the visible Microsoft device sign-in code' in dex
+              words=json.loads(gzip.decompress(z.read('assets/nodejs-project/src/lexicon/english-5000.json.gz')))
+              assert len(words['words']) == 5000
+              api=z.read('assets/nodejs-project/src/conversation.js').decode()
+              assert 'answerWordQuestion' in api
+          PY
+      - name: Publish APK and public source assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG='veilforge-realm-ai-v020-language-chat-test'
+          APK='VEILFORGE-Realm-AI-v0.20-Language-TEST.apk'
+          ASSETS=("$APK" v020-public-apk-recipe.json.xz.b64 v020-source.zip realm-ai-phone-build/v020-publication/VEILFORGE-Realm-AI-v0.20-SHA256.txt realm-ai-phone-build/v020-publication/verification.json certificate-report.txt alignment-report.txt package-report.txt)
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'VEILFORGE Realm AI v0.20 — Language and Sign-in TEST' --notes-file realm-ai-phone-build/v020-publication/release-notes.md
+          fi
+          gh release upload "$TAG" "${ASSETS[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --title 'VEILFORGE Realm AI v0.20 — Language and Sign-in TEST' --notes-file realm-ai-phone-build/v020-publication/release-notes.md

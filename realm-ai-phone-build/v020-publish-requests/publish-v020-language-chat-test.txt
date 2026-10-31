@@ -1,0 +1,6 @@
+Publish the already-built and locally signed v0.20 test APK. Reconstruct it
+only from the public v0.19 APK and the public-only byte recipe, verify APK
+hash, package ID/version, zip alignment and the pinned existing certificate,
+then attach the APK, source ZIP, reconstruction recipe and public reports to
+veilforge-realm-ai-v020-language-chat-test. This request contains no private
+signing material or passwords.
