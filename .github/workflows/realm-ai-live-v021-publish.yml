@@ -33,5 +33,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          if ! gh release view realm-ai-live-021-new-baseline >/dev/null 2>&1; then
+            gh release create realm-ai-live-021-new-baseline --target "$GITHUB_SHA" --prerelease --title 'Realm AI Live v0.21 — new permanent baseline' --notes-file realm-ai-phone-build/realm-ai-live-v021-overlay/UPDATE-NOTES-v0.21.md
+          fi
           gh release upload realm-ai-live-021-new-baseline Realm-AI-Live.apk realm-ai-phone-build/live-v021-publication/release.json realm-ai-phone-build/live-v021-publication/verification.json certificate-report.txt package-report.txt realm-ai-phone-build/realm-ai-live-v021-source.zip --clobber
           python3 realm-ai-phone-build/realm-ai-live-v021-overlay/release-tooling/publish_channel.py realm-ai-phone-build/live-v021-publication/release.json
