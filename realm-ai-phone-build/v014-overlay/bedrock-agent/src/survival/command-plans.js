@@ -30,7 +30,7 @@ export function renderDescriptor(input){const d=validateDescriptor(input),def=co
 export function parseDescriptor(raw){
  if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f]/.test(raw))throw Error('Use a supported command in one line.')
  let s=raw.trim().replace(/[.!?]+$/,'').replace(/^(?:please |can you |could you )/i,'')
- const aliases={status:'survival status',position:'survival status',look:'look around','view on':'look around',help:'help survival',commands:'help survival',rejoin:'rejoin realm','show plan':'plan status'};s=aliases[s.toLowerCase()]||s
+ const aliases={status:'diagnostics',position:'diagnostics','survival status':'diagnostics','movement status':'diagnostics','combat status':'diagnostics','control status':'diagnostics','player identity':'diagnostics','inventory status':'diagnostics',look:'look around','view on':'look around',help:'help survival',commands:'help survival',rejoin:'rejoin realm','show plan':'plan status'};s=aliases[s.toLowerCase()]||s
  for(const def of commandCatalog){
   const names=[];let pattern=def.template.replace(/[.*+?^$()|[\]\\]/g,'\\$&').replace(/\{(\w+)\}/g,(_,k)=>{names.push(k);const f=def.fields.find(x=>x.id===k);return f.type==='integer'||f.type==='slot'?'(-?\\d+)':'(.+?)'})
   const match=s.match(new RegExp('^'+pattern+'$','i'));if(!match)continue
