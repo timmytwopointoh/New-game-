@@ -56,6 +56,36 @@ test('real 1.26.60 auth-input serializer accepts idle/walking; no teleport packe
  client.emit('correct_player_move_prediction',{position:{x:.5,y:65.62,z:.5}});client.emit('correct_player_move_prediction',{position:{x:-8,y:65.62,z:.5}})
  assert.equal(n.route,null);n.detach()
 })
+test('Creative flat-world walking is real incremental auth input, not teleport; mining still respects mode',()=>{
+ const w=world()
+ floor(w)
+ w.updateOwnGameMode({gamemode:'creative'},'server own gamemode packet')
+ w.abilityState=null // The screenshot: Creative, own abilities packet still unavailable.
+ assert.equal(w.gameMode,'creative')
+ assert.equal(w.survivalVerified,false)
+ assert.equal(w.walkingAllowed,true)
+ const sent=[],client=new EventEmitter(),serializer=createSerializer('1.26.60')
+ client.queue=(name,params)=>{serializer.createPacketBuffer({name,params});sent.push([name,params])}
+ const n=new Navigation(w)
+ n.attach(client);client.emit('start_game',{current_tick:0n,rotation:{x:0,z:0}})
+ n.spawned=true;n.lastRequestAt=Date.now()
+ const walk=n.walk({x:2,y:64,z:0})
+ assert.equal(walk.accepted,true,walk.message)
+ const before={...w.position}
+ for(let i=0;i<8;i++)n.step(Date.now()+i*50)
+ const movement=sent.filter(([name])=>name==='player_auth_input')
+ assert.equal(movement.length,8)
+ assert(movement.some(([,p])=>Math.hypot(p.delta.x,p.delta.z)>0))
+ for(const [,p] of movement){
+  assert(Math.hypot(p.delta.x,p.delta.z)<=.101)
+  assert.equal(p.play_mode,'normal')
+ }
+ assert(w.position.x>before.x)
+ assert(!sent.some(([name])=>['move_player','teleport','command_request','set_player_game_type'].includes(name)))
+ assert.equal(n.mine({x:1,y:63,z:0}).accepted,false) // Creative does not bypass Survival mining validation.
+ n.detach()
+})
+
 test('low health or changed terrain stops movement',()=>{const w=world();floor(w);const c=new EventEmitter();c.queue=()=>{};const n=new Navigation(w);n.attach(c);n.spawned=true;n.walk({x:2,y:64,z:0});w.attributes['minecraft:health']=4;n.step();assert.equal(n.route,null);n.detach()})
 test('catalog looks up all shipped block/item names and plural phrases',()=>{assert(catalogCounts.blocks>1000&&catalogCounts.items>2000);assert.equal(resolveMaterial('stone pickaxes'),'stone_pickaxe');assert.equal(resolveMaterial('oak logs'),'oak_log');assert(searchCatalog('copper').length>0);assert(recipeInfo('stone_pickaxe')[0].verified)})
 test('supply plans round crafting batches, reserve shared supplies and do not invent execution',()=>{
