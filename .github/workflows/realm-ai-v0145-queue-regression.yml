@@ -1,5 +1,5 @@
 name: VEILFORGE Realm AI v0.14.5 queue and chat regression
-# Retry after preserving legacy planner and consolidating diagnostics.
+# Final verification: owner Realm chat executes safely rather than only preparing legacy previews.
 on:
   push:
     branches:
