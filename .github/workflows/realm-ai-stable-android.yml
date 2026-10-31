@@ -68,6 +68,15 @@ jobs:
           node --check "$BASE/bedrock-agent/src/connection.js"
           sed -i 's/versionCode 11/versionCode 12/;s/0.9.2-realm-diagnostics/0.9.3-pack-support/' "$APP/build.gradle"
           grep -q 'attachRealmPacks' "$BASE/bedrock-agent/src/connection.js"
+      - name: Record actual server kicks and last join stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          python3 realm-ai-phone-build/patch_disconnect_v094.py "$BASE"
+          node --check "$BASE/bedrock-agent/src/connection.js"
+          grep -q "client.on('kick'" "$BASE/bedrock-agent/src/connection.js"
+          grep -q 'Realm error (' "$BASE/android-app/app/src/main/java/com/veilforge/realmagent/MainActivity.java"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -190,7 +199,7 @@ jobs:
           TAG="veilforge-realm-ai-stable-$GITHUB_RUN_NUMBER"
           gh release create "$TAG" "VEILFORGE-Realm-AI-Stable-$GITHUB_RUN_NUMBER.apk" "VEILFORGE-Realm-AI-Stable-$GITHUB_RUN_NUMBER-SHA256.txt" \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "VEILFORGE Realm AI Stable Signed Update $GITHUB_RUN_NUMBER" \
+            --title "VEILFORGE Realm AI Stable Signed Diagnostic Update $GITHUB_RUN_NUMBER" \
             --notes "Stable signing certificate pinned and verified. Earlier debug-signed versions may require one final uninstall; all later stable-signed updates keep app data when installed over a previous stable APK. Pack handling is experimental; live Realm joining is not yet verified." --prerelease
       - name: Upload signed APK artifact for 7 days
         uses: actions/upload-artifact@v4
