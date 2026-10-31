@@ -1,0 +1,1 @@
+Publish verified Live v0.23 versionCode 200004, retaining certificate 77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22. Public signed bytes only; no signing-key access. Offline diagnostics and bounded Xbox title recovery are owner-requested continuation fixes.

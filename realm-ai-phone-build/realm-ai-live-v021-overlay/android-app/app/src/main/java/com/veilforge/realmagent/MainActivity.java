@@ -89,9 +89,33 @@ public class MainActivity extends Activity {
         detail+="\nIt remembers your confirmed word corrections and learns from task outcomes. Repeating a failed action shows a reminder to recheck the cause. It does not rewrite its code or learn instructions from ambient player chat.\n\nTry: “what does troll mean?” or “what have you learned?”\nTeach: command teach action dredge = dig\nReview: command vocabulary\nForget: command forget action dredge\n\nAll work still waits for Activate. Stop is immediate.";
         new AlertDialog.Builder(this).setTitle("Language and learning").setMessage(detail).setPositiveButton("Close",null).show();
     }
+    JSONObject savedDiagnostics(){
+        JSONObject cache=null;try{String text=getPreferences(MODE_PRIVATE).getString("lastConnectionDiagnostics","");if(!text.isEmpty())cache=ConnectionDiagnostics.sanitize(new JSONObject(text));}catch(Exception ignored){}
+        JSONObject file=ConnectionDiagnostics.read(new File(getFilesDir(),"nodejs-project/private/diagnostics/connection.json"));
+        if(file!=null&&(cache==null||file.optLong("recordedAt")>=cache.optLong("recordedAt")))return ConnectionDiagnostics.merge(file,cache);
+        if(cache!=null)return ConnectionDiagnostics.merge(cache,file);
+        return lastStatus==null?null:ConnectionDiagnostics.sanitize(lastStatus.optJSONObject("diagnostics"));
+    }
+    void rememberDiagnostics(JSONObject report){
+        if(report==null)return;
+        try{JSONObject safe=ConnectionDiagnostics.sanitize(report);safe.put("recordedAt",System.currentTimeMillis());safe=ConnectionDiagnostics.merge(safe,savedDiagnostics());getPreferences(MODE_PRIVATE).edit().putString("lastConnectionDiagnostics",safe.toString()).apply();}catch(Exception ignored){}
+    }
+    void markControllerAvailable(){
+        apiConnected=true;lastApiSuccessAt=System.currentTimeMillis();
+        if(!serviceStarted){serviceStarted=true;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",true).apply();}
+        renderPowerButton();
+    }
+    String diagnosticText(JSONObject report,String source,boolean reachable){
+        JSONObject safe=ConnectionDiagnostics.sanitize(report);
+        try{safe.put("reportSource",source);safe.put("localApiReachable",reachable);safe.put("serviceRequested",serviceStarted);safe.put("applicationId",getPackageName());safe.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);safe.put("copiedAt",System.currentTimeMillis());safe.put("reportAvailable",report!=null);return safe.toString(2);}catch(Exception ignored){return "Connection diagnostics are unavailable. Saved login has not been changed.";}
+    }
     void showDiagnostics(){
-        if(!apiConnected||token.isEmpty()){bubble("Progress","Start the bot service first so its connection diagnostics can be read.",false);return;}
-        io.submit(()->{try{JSONObject report=request("GET","/diagnostics",null);report.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);report.put("applicationId",getPackageName());String text=report.toString(2);ui.post(()->new AlertDialog.Builder(this).setTitle("Connection diagnostics").setMessage(text).setPositiveButton("Copy diagnostics",(d,w)->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Realm AI Live diagnostics",text));Toast.makeText(this,"Diagnostics copied; paste them into the development chat",Toast.LENGTH_LONG).show();}).setNegativeButton("Close",null).show());}catch(Exception e){ui.post(()->bubble("Progress","The local service did not return connection diagnostics. Saved Microsoft login has not been changed.",false));}});
+        JSONObject saved=savedDiagnostics();final String[] text={diagnosticText(saved,saved==null?"app-only":"saved",false)};
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Connection diagnostics").setMessage(text[0]).setPositiveButton("Copy diagnostics",(d,w)->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Realm AI Live diagnostics",text[0]));Toast.makeText(this,"Diagnostics copied; paste them into the development chat",Toast.LENGTH_LONG).show();}).setNegativeButton("Close",null).show();
+        TextView message=dialog.findViewById(android.R.id.message);if(message!=null)message.setTextIsSelectable(true);
+        if(token.isEmpty()||(!serviceStarted&&!apiConnected))return;
+        final long revision=serviceRevision;
+        io.submit(()->{try{JSONObject report=request("GET","/diagnostics",null);ui.post(()->{if(revision!=serviceRevision)return;markControllerAvailable();rememberDiagnostics(report);text[0]=diagnosticText(savedDiagnostics(),"live",true);if(dialog.isShowing())dialog.setMessage(text[0]);});}catch(Exception e){ui.post(()->{text[0]=diagnosticText(savedDiagnostics(),savedDiagnostics()==null?"app-only":"saved",false);if(dialog.isShowing())dialog.setMessage(text[0]);});}});
     }
     static final int REQUEST_PICK_SHARED_FILE=41021;
     void pickFileToShare(){Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);picker.setType("*/*");try{startActivityForResult(picker,REQUEST_PICK_SHARED_FILE);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open its file picker.",false);}}
@@ -152,7 +176,7 @@ public class MainActivity extends Activity {
         .setPositiveButton("Activate waiting",(a,b)->activateQueuedPlans()).setNegativeButton("Close",null).show();});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Plans unavailable: "+e.getMessage(),false));}});}
     void stopNow(){commandEpoch++;bubble("YOU","STOP",true);urgent.submit(()->{try{JSONObject r=request("POST","/stop?epoch="+commandEpoch,new JSONObject());ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message"),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Stop not confirmed: "+e.getMessage(),false));}});}
     JSONObject lastStatus=null;
-    void showAuth(){if(!apiConnected||token.isEmpty()){bubble("Progress","Start the bot and wait for the local controller before requesting its Microsoft sign-in code.",false);return;}io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showAuth(status);});}catch(Exception e){ui.post(()->bubble("Progress","Could not check Microsoft sign-in status: "+e.getMessage(),false));}});}
+    void showAuth(){if(token.isEmpty()){bubble("Progress","Start the bot and wait for the local controller before requesting its Microsoft sign-in code.",false);return;}io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showAuth(status);});}catch(Exception e){ui.post(()->bubble("Progress","Could not check Microsoft sign-in status: "+e.getMessage(),false));}});}
     void showAuth(JSONObject status){JSONObject info=status!=null?status.optJSONObject("authChallenge"):null;
         if(info==null||info.optString("userCode").isEmpty()){
             bubble("Progress","No Microsoft sign-in code is pending, so there is nothing to copy. The latest connection error is shown above. When Microsoft requests a new code, it and the clickable link will appear here.",false);return;}
@@ -172,7 +196,7 @@ public class MainActivity extends Activity {
         io.submit(()->{if(epoch!=commandEpoch)return;try{JSONObject r=request("POST","/message",new JSONObject().put("message",msg).put("epoch",epoch));ui.post(()->{syncPlans(r.optJSONObject("plans"));if(r.optBoolean("showCatalog"))showJobs();bubble("VEILFORGE",r.optString("message","No response"),false);});}
           catch(Exception e){ui.post(()->bubble("VEILFORGE","Bot not ready: "+e.getMessage(),false));}});}
     void update(){final long revision=serviceRevision;io.submit(()->{try{JSONObject r=request("GET","/updates?after="+cursor,null);ui.post(()->{if(revision!=serviceRevision)return;
-        lastStatus=r;
+        markControllerAvailable();rememberDiagnostics(r.optJSONObject("diagnostics"));lastStatus=r;
         JSONObject survival=r.optJSONObject("survival");if(survival!=null)syncPlans(survival.optJSONObject("plans"));
         JSONObject plan=r.optJSONObject("planner");
         String phase=r.optString("authState","starting");
@@ -217,11 +241,12 @@ public class MainActivity extends Activity {
         JSONArray updates=r.optJSONArray("updates");if(updates!=null)for(int i=0;i<updates.length();i++){JSONObject e=updates.optJSONObject(i);if(e==null||e.optLong("id")<=cursor)continue;cursor=e.optLong("id");bubble(e.optString("source","Realm"),e.optString("message"),false);}
         });}catch(Exception ex){ui.post(()->{if(revision!=serviceRevision)return;apiConnected=false;long reference=Math.max(lastApiSuccessAt,serviceStateSince);if(serviceStarted&&reference>0&&System.currentTimeMillis()-reference>=15000){serviceStarted=false;serviceStateSince=0;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();bubble("Progress","The bot service stopped responding. Your saved login and plans remain; tap the power button to start it again.",false);}renderPowerButton();connection.setText("Waiting for local bot…");File f=new File(getFilesDir(),"boot-status.txt");if(f.exists())try(FileInputStream in=new FileInputStream(f)){byte[] buf=new byte[512];int n=in.read(buf);if(n>0)connection.setText(new String(buf,0,n,StandardCharsets.UTF_8));}catch(Exception ignored){}});}});}
     protected JSONObject request(String verb,String path,JSONObject payload)throws Exception{
+        final long revision=serviceRevision;
         HttpURLConnection c=(HttpURLConnection)new URL("http://127.0.0.1:"+PORT+path).openConnection();try{
             c.setConnectTimeout(4000);c.setReadTimeout(5000);c.setRequestMethod(verb);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");
             if(payload!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream o=c.getOutputStream()){o.write(payload.toString().getBytes(StandardCharsets.UTF_8));}}
             if(c.getResponseCode()!=200)throw new IOException("Local API returned "+c.getResponseCode());
-            try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[2048];int n;while((n=in.read(buf))!=-1){if(out.size()+n>32768)throw new IOException("Response too large");out.write(buf,0,n);}return new JSONObject(out.toString("UTF-8"));}
+            try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[2048];int n;while((n=in.read(buf))!=-1){if(out.size()+n>32768)throw new IOException("Response too large");out.write(buf,0,n);}JSONObject result=new JSONObject(out.toString("UTF-8"));ui.post(()->{if(revision==serviceRevision)markControllerAvailable();});return result;}
         }finally{c.disconnect();}}
     final Runnable refresh=new Runnable(){public void run(){if(!active)return;if(!token.isEmpty())update();ui.postDelayed(this,4500);}};
     @Override protected void onResume(){super.onResume();if(getIntent().getBooleanExtra("showUpdates",false)){getIntent().removeExtra("showUpdates");AppUpdater.show(this);}active=true;ui.removeCallbacks(refresh);ui.post(refresh);}

@@ -3,7 +3,8 @@ export function classifyConnectionFailure(error,phase){
   const value=Number(error?.response?.status??error?.statusCode??error?.status??message.match(/\b(401|403|404|408|429|500|502|503|504)\b/)?.[1]??0)
   const httpStatus=Number.isInteger(value)&&value>=400&&value<=599?value:null
   let category='connection-error',advice='Check the reported stage and try a manual rejoin when ready. Saved authentication is kept.'
-  if(httpStatus===403){category='access-denied';advice='The account service or Realms rejected this request. Confirm that the bot account can join this Realm in official Minecraft. This does not prove that a new login is needed; no cached session was deleted.'}
+  if(httpStatus===403&&phase==='xbox-title-token'){category='access-denied';advice='Xbox rejected the Android app title-token request before any Realm connection. Saved authentication was kept. Retrying Minecraft movement or changing Realm game mode cannot repair this authorization failure.'}
+  else if(httpStatus===403){category='access-denied';advice='The account service or Realms rejected this request. Confirm that the bot account can join this Realm in official Minecraft. This does not prove that a new login is needed; no cached session was deleted.'}
   else if(httpStatus===401){category='authentication-rejected';advice='Authentication was rejected. Use a Microsoft device code only if the service requests one. Saved authentication is kept.'}
   else if(httpStatus===429){category='rate-limited';advice='The service limited requests. Wait before a manual rejoin; no automatic sign-in loop is started.'}
   else if(httpStatus>=500){category='service-unavailable';advice='The remote service is unavailable. Retry later; saved authentication is kept.'}
@@ -31,7 +32,7 @@ export function correctLiveTokenExpiry(flow,{clock=()=>Date.now()}={}){
   return flow
 }
 
-export function instrumentAuthflow(flow,{getPhase,setPhase}){
+export function instrumentAuthflow(flow,{getPhase,setPhase,onTitleRecovery=()=>{}}){
   correctLiveTokenExpiry(flow)
   const wrap=(owner,name,phase)=>{
     if(typeof owner?.[name]!=='function')return
@@ -46,5 +47,25 @@ export function instrumentAuthflow(flow,{getPhase,setPhase}){
   for(const [name,phase] of [['getUserToken','xbox-user-token'],['getDeviceToken','xbox-device-token'],['getTitleToken','xbox-title-token'],['getXSTSToken','xbox-security-token'],['doSisuAuth','xbox-sisu-authentication']])wrap(flow.xbl,name,phase)
   wrap(flow.msa,'authDeviceCode','microsoft-device-code')
   wrap(flow.msa,'refreshTokens','microsoft-token-refresh')
+  // Some mobile app titles reject the legacy title endpoint. Try the library's
+  // supported Sisu exchange ONCE, only for that precise 403, with the current
+  // valid MSA token and a device proof bound to this session's key. No re-login,
+  // platform change, token-cache deletion, or catch-all retry is introduced.
+  if(typeof flow.getXboxToken==='function'&&typeof flow.xbl?.doSisuAuth==='function'&&typeof flow.xbl?.getDeviceToken==='function'){
+    const getXboxToken=flow.getXboxToken;let attempted=false
+    flow.getXboxToken=async function(...args){
+      const previous=getPhase()
+      try{return await getXboxToken.apply(this,args)}catch(error){
+        if(attempted||this.options?.flow!=='live'||authFailurePhase(error)!=='xbox-title-token'||classifyConnectionFailure(error,'xbox-title-token').httpStatus!==403)throw error
+        let cached;try{cached=await this.msa?.getAccessToken()}catch{throw error}
+        if(!cached?.valid||typeof cached.token!=='string'||!cached.token)throw error
+        attempted=true;onTitleRecovery();setPhase('xbox-sisu-authentication')
+        const options={...this.options,relyingParty:args[0]||this.options.relyingParty||'http://xboxlive.com'}
+        const device=await this.xbl.getDeviceToken(options)
+        const result=await this.xbl.doSisuAuth(cached.token,device,options)
+        setPhase(previous);return result
+      }
+    }
+  }
   return flow
 }

@@ -23,7 +23,7 @@ export class Connection extends EventEmitter {
     this.survival=new SurvivalController(this,{plansDirectory:path.join(root,'private','command-plans'),scope:this.config.minecraft.realmId?String(this.config.minecraft.realmId):null});this.lastRejoinAt=0
     this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
   }
-  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,packStage:this.packStatus.stage,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
+  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
   status(){return {diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
       packWaitSeconds:this.packRequestAt&&!this.spawned?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,
       packHeadersReceived:this.packHeadersReceived,packChunksReceived:this.packChunksReceived,authState:this.authState,packStatus:this.packStatus,lastCommand:this.lastCommand,recentMessages:this.recentMessages.slice(-8),authChallenge:this.authChallenge}}
@@ -42,7 +42,7 @@ export class Connection extends EventEmitter {
     }catch(e){this.lastError=String(e.message||e);this.authState='error';return {accepted:false,queued:false,message:'Rejoin failed: '+this.lastError}}
   }
   start(){
-    this.lastFailure=null
+    this.lastFailure=null;this.titleTokenRecoveryAttempted=false
     const m=this.config.minecraft
     const options=buildClientOptions(m,root,data=>{
       const url=String(data?.verification_uri||'https://www.microsoft.com/link')
@@ -52,6 +52,7 @@ export class Connection extends EventEmitter {
       this.authChallenge={verificationUri:url.startsWith('https://www.microsoft.com/')?url:'https://www.microsoft.com/link',userCode:code}
       this.lastPhase='sign-in-required';this.authState='sign-in-required';this.lastError=''
       this.emit('auth-code',this.authChallenge)
+      this.emit('connection-diagnostics',this.diagnostics())
       this.log('Microsoft device-code sign-in needed on this device.')
     })
     // This callback is invoked by Bedrock Realms discovery for the signed-in account.
@@ -85,7 +86,8 @@ export class Connection extends EventEmitter {
     this.clientIdentity={platform:options.deviceType,deviceOS:options.deviceOS,flow:options.flow,accessTokenExpiryUnits:'seconds'}
     options.authflow=instrumentAuthflow(new Authflow(options.username,options.profilesFolder,options,options.onMsaCode),{
       getPhase:()=>this.lastPhase,
-      setPhase:phase=>{this.lastPhase=phase;if(!this.lastError)this.authState=phase}
+      setPhase:phase=>{this.lastPhase=phase;if(!this.lastError)this.authState=phase;this.emit('connection-diagnostics',this.diagnostics())},
+      onTitleRecovery:()=>{this.titleTokenRecoveryAttempted=true;this.emit('connection-diagnostics',this.diagnostics())}
     })
     const client=bedrock.createClient(options)
     this.client=client
@@ -171,6 +173,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       const reason=safeDisconnectMessage(packet)
       if(reason&&!this.lastError)this.lastError=kind+': '+reason
       this.authChallenge=null;this.authState='error'
+      this.emit('connection-diagnostics',this.diagnostics())
       if(this.lastError)this.log('Realm failed at '+this.lastPhase+': '+this.lastError)
     }
     client.on('play_status',p=>{

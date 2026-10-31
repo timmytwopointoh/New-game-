@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200004,
+  "issuedAt": 1793481629283,
+  "expiresAt": 1794086429283,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-023-offline-diagnostics/Realm-AI-Live.apk",
+  "size": 110079110,
+  "sha256": "d37dfb3939a62c82e2946722c151a24f341a03aa7171128ec063f9063ce88208",
+  "notes": "Diagnostics open offline and retain the last sanitized connection failure. Fixes the local-controller availability flag. Includes one bounded same-Android-identity Sisu recovery for Xbox title-token 403 using a valid cached Microsoft session. 210 Node and 34 Android tests pass; phone authentication remains unverified. Same permanent Live signing key; install as an update.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested",
+  "tests": {
+    "node": {
+      "passed": 210,
+      "failed": 0
+    },
+    "android": {
+      "passed": 34,
+      "failed": 0
+    }
+  },
+  "diagnostics": "Available offline; sanitized last-failure report persists across service/app restarts",
+  "authenticationRecovery": "One Sisu attempt only for an Xbox title-token 403, same Android identity and valid cached MSA token; phone acceptance unverified",
+  "bundledEnglishWords": 5000,
+  "neuralLanguageModel": false
+}
