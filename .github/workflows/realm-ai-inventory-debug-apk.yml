@@ -48,6 +48,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "$VF_REALM_BUILD_ROOT/bedrock-agent"
+          echo 'Review prior equipment test before updating its server-acknowledgment contract:'
+          sed -n '114,133p' tests/recovery.test.js
           # Earlier test expected immediate success, which is intentionally no longer true.
           # Updating only this assertion preserves all remaining packet/serializer checks.
           python3 - <<'PY'
