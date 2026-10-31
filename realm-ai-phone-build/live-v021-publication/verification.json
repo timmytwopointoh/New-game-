@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200002,
+  "issuedAt": 1793478500806,
+  "expiresAt": 1794083300806,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-021-new-baseline/Realm-AI-Live.apk",
+  "size": 109676285,
+  "sha256": "124f40a55a2fa759a9aea0b18ec2b2af941af4786424be8b29348172cf661ff0",
+  "notes": "New permanent signing baseline authorized by owner; Microsoft code copy and clickable link restored; one-file sharing in Settings. Replacing the old Live installation is required once.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

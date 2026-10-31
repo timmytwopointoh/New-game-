@@ -1,0 +1,1 @@
+Owner explicitly authorized a new permanent Live signing baseline on 2026-10-31. Publish only verified public signed APK bytes and signed update notice. No private signing material may be uploaded.

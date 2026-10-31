@@ -1,24 +1,9 @@
-# Realm AI Live v0.21 source candidate
+# Realm AI Live v0.21 permanent baseline
 
-This update keeps the Microsoft one-time code copy action and mounts it visibly on
-the home screen while a device-code challenge is pending. The official
-`https://www.microsoft.com/link` URL is now a clickable link both in the status
-area and the sign-in dialog. If no code is pending, Settings explains that there
-is nothing to copy; the app does not clear saved authentication or force a new
-sign-in.
+Package: `com.veilforge.realmagent.live`; versionCode 200002; versionName `0.21-signin-sharing`.
 
-Settings also has the optional one-file share action. Android asks the user to
-choose a file and then a recipient. The app requests only a temporary read grant
-for that selected file, requests no broad storage permission, and does not retain
-file access.
+On 2026-10-31 the owner explicitly authorized creating a new permanent key after the old Live private key could not be recovered. This is a one-time replacement install: the old F268-signed installation must be removed and its app data cannot carry over. Future updates MUST use the new certificate `77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22` and alias `realm-live-update`. Never generate another replacement without explicit owner authorization. The private backup remains outside this repository.
 
-The Android package remains `com.veilforge.realmagent.live` and candidate version
-code is 200002. Updates must use the matching permanent signing certificate
-`F268E5085B79197ECA9CA9EA1F94BC625D045F191E5E4704A22178D47696DA06`. The B5D
-certificate used by the separate `com.veilforge.realmagent` app cannot update this
-package. No replacement key is generated.
+Restores visible pending Microsoft code and Copy controls on home, clickable https://www.microsoft.com/link, and one-file sharing in Settings. The updater verifies release notices against the installed APK certificate. No login cache is cleared by the source changes.
 
-Verification: 13 Android button-action tests passed, including code copy, exact
-Microsoft URL opening, selected-file sharing, cancellation and read-only URI grants.
-The compact phone layout test passed at 360×640 and 360×440. No APK was signed or
-published because the matching private signing key is not available in this session.
+13 Android button tests and the compact phone layout test passed. APK compiled from these Java sources, combined with the verified Live v0.20 native/runtime/assets, and signature/package/alignment/archive verified. No physical phone or live Realm connection test has been performed; this does not establish a fix for the reported 403.
