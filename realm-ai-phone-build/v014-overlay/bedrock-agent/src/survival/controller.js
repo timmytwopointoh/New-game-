@@ -64,7 +64,6 @@ export class SurvivalController{
     return answer(this.world.lastSelectionStatus)
    }catch(e){this.world.lastSelectionStatus='Selection request failed: '+e.message;return answer(this.world.lastSelectionStatus)}
   }
-  }
   m=s.match(/^(?:dig|mine block at) (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
   if(m)return this.navigation.mine({x:Number(m[1]),y:Number(m[2]),z:Number(m[3])})
   m=s.match(/^clear path to (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
