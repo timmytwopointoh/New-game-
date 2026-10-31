@@ -58,7 +58,9 @@ jobs:
           old="assert.match(s.handle('select slot 1').message,/Selected/);assert.equal(sent[1][0],'mob_equipment');assert.equal(sent[1][1].item.network_id,0)"
           new="assert.match(s.handle('select slot 1').message,/waiting for server confirmation/);assert.equal(sent.length,1);assert.equal(sent[0][0],'mob_equipment');assert.equal(sent[0][1].item.network_id,0)"
           assert text.count(old)==1, 'Upstream equipment test changed; review required'
-          p.write_text(text.replace(old,new))
+          text=text.replace(old,new)
+          assert text.count("/not been received/")==1, 'Upstream unknown-slot assertion changed'
+          p.write_text(text.replace("/not been received/","/not been reported/"))
           PY
           npm test
           node --test tests/inventory-mode-diagnostics.test.js tests/inventory-mode-integration.test.js
