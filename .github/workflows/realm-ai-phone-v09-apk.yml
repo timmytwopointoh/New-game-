@@ -1,8 +1,8 @@
-name: VEILFORGE Realm AI v0.9.10 CDN Transfer Ownership APK
+name: VEILFORGE Realm AI v0.9.11 Pack Wire Repair APK
 on:
   push:
     branches:
-      - sandbox/realm-ai-v0910-cdn-owner-20261031
+      - sandbox/realm-ai-v0911-pack-wire-20261031
     paths:
       - '.github/workflows/realm-ai-phone-v09-apk.yml'
 permissions:
@@ -230,6 +230,16 @@ jobs:
           cp realm-ai-phone-build/v0910-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
           sed -i 's/versionCode 18/versionCode 19/;s/0.9.9-one-pack-handler/0.9.10-cdn-owner/' "$BASE/android-app/app/build.gradle"
           (cd "$BASE/bedrock-agent" && npm test)
+      - name: Repair pack response variant discriminants using independent fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          python3 realm-ai-phone-build/patch_pack_wire_v0911.py "$BASE"
+          cp realm-ai-phone-build/v0911-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
+          sed -i 's/versionCode 19/versionCode 100001/;s/0.9.10-cdn-owner/0.9.11-pack-wire/' "$BASE/android-app/app/build.gradle"
+          node realm-ai-phone-build/verify_pack_wire_v0911.cjs "$BASE"
+          (cd "$BASE/bedrock-agent" && npm test)
       - name: Acquire checksum-verified Android 16 KB Node native runtime
         working-directory: .vf-phone-build/veilforge_realm_v09_apk_ready
         run: python3 tools/prepare_android_node.py
@@ -266,28 +276,18 @@ jobs:
           "$SDK/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK"
           sha256sum "$APK"
-      - name: Publish Peks-style verified APK to a private GitHub prerelease
+      - name: Stage signer tool for private local permanent signing
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
-          cp "$APK" VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk
-          sha256sum VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk > VEILFORGE-Realm-AI-v0.9.10-SHA256.txt
-          TAG="veilforge-realm-ai-v0910-cdn-owner-preview"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk VEILFORGE-Realm-AI-v0.9.10-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk VEILFORGE-Realm-AI-v0.9.10-SHA256.txt \
-              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "VEILFORGE Realm AI v0.9.10 - Isolate CDN Transfer State" \
-              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. Retains exclusive pack handshake ownership and prevents server chunk headers from modifying active CDN transfer state. Real device Realm join remains unverified. Still debug-signed; updating an existing debug APK may require reinstall. NEW DEBUG signing key may require reinstall and Microsoft re-login. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
-          fi
-      - name: Upload validated debug APK for 2 days
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          mkdir -p signing-tool
+          cp "$SDK/build-tools/35.0.0/lib/apksigner.jar" signing-tool/apksigner.jar
+      - name: Upload verified APK and signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: VEILFORGE-Realm-AI-v0.9.10-CdnOwner-APK
-          path: .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 2
+          name: VEILFORGE-Realm-AI-v0.9.11-Verified-APK
+          path: |
+            .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
+            signing-tool/apksigner.jar
+          retention-days: 7
           if-no-files-found: error
