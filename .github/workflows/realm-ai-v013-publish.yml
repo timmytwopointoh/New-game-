@@ -1,0 +1,50 @@
+name: Publish requested same-key adaptive recovery download
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v013-adaptive-recovery-20261031
+    paths:
+      - '.github/workflows/realm-ai-v013-publish.yml'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: VEILFORGE-Realm-AI-v0.13-Adaptive-Verified-APK
+          run-id: 41187631312
+          github-token: ${{ github.token }}
+          path: original-build
+      - name: Verify exact permanent-key adaptive APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE="$(find original-build -name app-debug.apk -type f -print -quit)"
+          SIGNER="$(find original-build -name apksigner.jar -type f -print -quit)"
+          python3 realm-ai-phone-build/materialize_v013_apk.py "$SOURCE" realm-ai-phone-build/v013-permanent-apk-recipe.json.xz.b64 VEILFORGE-Realm-AI-v0.13-Adaptive-Permanent.apk
+          java -jar "$SIGNER" verify --verbose --print-certs VEILFORGE-Realm-AI-v0.13-Adaptive-Permanent.apk > certificate-report.txt
+          cat certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995' certificate-report.txt
+          sha256sum VEILFORGE-Realm-AI-v0.13-Adaptive-Permanent.apk > VEILFORGE-Realm-AI-v0.13-SHA256.txt
+      - name: Publish requested adaptive recovery preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create veilforge-realm-ai-v013-adaptive-preview VEILFORGE-Realm-AI-v0.13-Adaptive-Permanent.apk VEILFORGE-Realm-AI-v0.13-SHA256.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VEILFORGE Realm AI v0.13 — Adaptive Follow and Recovery" --notes "Install over the existing permanent-key app; no uninstall. Same application ID/certificate and higher versionCode 100003 verified. Adds server-feedback stuck detection, following a visible player with one-block jump/drop routes, solo detours, tool/hardness-aware explicit clearing and single-block mining requests. Following and ordinary walking never mine. Containers, crafted/build-looking blocks and construction-adjacent blocks are protected; block placement history is unavailable, so ordinary player-placed terrain materials cannot be identified reliably. Normal mining input waits for server block changes rather than faking local success. Bounded recovery, stop/disconnect/low-health cancellation. 140 Node tests passed, including actual input/mining/equipment serializers. Live Realm follow/jump/mining remain unverified. No add-ons required. Crafting/building execution remains planning-only. See realm-ai-phone-build/ADAPTIVE_RECOVERY.md for commands and limits. SHA256 f49bc97c3a695317e238a2784b52490619abe55a0a53144a0ccba7506d7c44cf." --prerelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VEILFORGE-Realm-AI-v0.13-Adaptive-Permanent-Download
+          path: |
+            VEILFORGE-Realm-AI-v0.13-Adaptive-Permanent.apk
+            VEILFORGE-Realm-AI-v0.13-SHA256.txt
+          retention-days: 7
