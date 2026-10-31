@@ -64,7 +64,7 @@ test('Player Identity card surfaces server packet evidence and preserves movemen
  const connection={connected:true,spawned:true,username:'ActualGamertag',events:[],nextEventId:0,emit(){},client}
  const c=new SurvivalController(connection)
  c.world.initialize({player_gamemode:5,world_gamemode:'creative',entity_id:42n,runtime_entity_id:99n,player_position:{x:1,y:65.62,z:2},dimension:0})
- assert.equal(parseDescriptor('player identity').id,'player_identity')
+ assert.equal(parseDescriptor('player identity').id,'diagnostics')
  const r=c.handle('player identity')
  assert.equal(r.accepted,true)
  assert.match(r.message,/server-provided player identity/)
