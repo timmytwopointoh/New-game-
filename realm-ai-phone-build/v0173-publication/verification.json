@@ -1,0 +1,10 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100014,
+  "versionName": "0.17.3-android-touch-controls",
+  "signerCertificateSha256": "8e902e783e7b4bd45ffe2f99b45c53b0e15d4b8e36092532cc6e969a956815c5",
+  "apkSha256": "a43499d8f5a09910c64c063e099a0697c30058a596686bc7c82c1bbc4def82d2",
+  "sourceOverlaySha256": "b5400cf2d8e78a0272964b9f49a53f858ac8d50eea6ff7460cc28d323df9d2e9",
+  "nodeTests": 175,
+  "androidUnitTests": "passed"
+}

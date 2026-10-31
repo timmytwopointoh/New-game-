@@ -1,6 +1,10 @@
 import path from 'node:path'
 export function buildClientOptions(m,projectRoot,onMsaCode){
+ // Keep the Microsoft live-token cache location stable, but identify this
+ // phone-hosted client as Minecraft Android (not bedrock-protocol's Switch default).
  const options={username:m.username,offline:m.offline===true,profilesFolder:path.join(projectRoot,'private','auth'),onMsaCode,
+  authTitle:'0000000048183522',deviceType:'Android',deviceOS:1,flow:'live',
+  skinData:{CurrentInputMode:2,DefaultInputMode:2},
   raknetBackend:'jsp-raknet'}
  if(m.mode==='realm'){
    // Realms lookup handles host/port and negotiated transport; never try direct IP here.
