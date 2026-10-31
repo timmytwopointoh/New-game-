@@ -17,7 +17,7 @@ export class Navigation{
   on('start_game',p=>{this.tick=BigInt(p.current_tick||0);this.yaw=Number(p.rotation?.z||0);this.pitch=Number(p.rotation?.x||0);this.spawned=false;this.lastPoseAt=Date.now()})
   on('spawn',()=>{this.spawned=true;this.timer=setInterval(()=>this.step(),50);this.timer.unref?.()})
   const correction=p=>this.observeServer(p,Date.now())
-  on('move_player',p=>{if(String(p.runtime_id)===this.world.entityId)correction(p)})
+  on('move_player',p=>{if(this.world.actor.checkRuntime(p.runtime_id,'move_player'))correction(p)})
   on('correct_player_move_prediction',correction)
   on('change_dimension',()=>{this.stop('Dimension changed; work cancelled.');this.progress.reset();this.blocked.clear()})
   on('close',()=>this.detach());on('disconnect',()=>this.stop('Disconnected. Rejoin the Realm before moving.'))
@@ -35,7 +35,7 @@ export class Navigation{
  }
  controlStatus(now=Date.now()){return describeControl(this,now)}
  aimAt(block){
-  if(!this.spawned||!this.client||!this.world.position)return {accepted:false,queued:false,message:'Join and spawn before aiming.'}
+  if(!this.spawned||!this.client||!this.world.position||!this.world.actor?.ready)return {accepted:false,queued:false,message:'Waiting for a spawned, server-issued player actor before aiming.'}
   if(this.job||this.flight||this.mining.job)return {accepted:false,queued:false,message:'Stop the current movement/mining job before aiming.'}
   let aim
   try{aim=aimAtBlock(this.world.position,block)}catch(e){return {accepted:false,queued:false,message:e.message}}
@@ -52,6 +52,7 @@ export class Navigation{
  }
  assignRoute(plan){this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
  walk(goal,{allowMining=false}={}){
+  if(!this.world.actor?.ready)return {accepted:false,queued:false,message:'The Realm has not yet assigned this client a real player runtime and unique ID.'}
   if(!this.world.survivalVerified)return {accepted:false,queued:false,message:'Survival mode is not verified by the server; movement/mining refused.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   const start=this.world.standPosition()
@@ -67,6 +68,7 @@ export class Navigation{
   return {accepted:true,queued:!!this.route.length,message:this.route.length?`Solo route: ${this.route.length} steps. I will try another route if blocked${allowMining?', then consider one natural-looking, easy block if necessary':''}.`:'Already in that block according to the client position.'}
  }
  follow(name){
+  if(!this.world.actor?.ready)return {accepted:false,queued:false,message:'The Realm has not yet assigned this client a real player runtime and unique ID.'}
   if(!this.world.survivalVerified)return {accepted:false,queued:false,message:'Survival mode is not verified by the server; movement/mining refused.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.job={kind:'follow',name,allowMining:false};this.state='following';this.lastFollowPlan=0
@@ -95,6 +97,7 @@ export class Navigation{
   this.route=null;const terrainKnown=this.world.terrainKnown({x:target.x,y:target.y,z:target.z});this.state=terrainKnown?'blocked':'waiting-for-terrain';this.reason=terrainKnown?'Observed obstacles prevent a verified route; waiting for player movement.':'Terrain near the player is unknown; requesting terrain before planning a route.';if(!terrainKnown)try{this.world.requestNearby(this.client)}catch{}
  }
  mine(position,options={}){
+  if(!this.world.actor?.ready)return {accepted:false,queued:false,message:'The Realm has not yet assigned this client a real player runtime and unique ID.'}
   if(!this.world.survivalVerified)return {accepted:false,queued:false,message:'Survival mode is not verified by the server; movement/mining refused.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn first.'}
   this.stop('',false);this.progress.reset();const result=this.mining.begin(position,{...options,explicit:true});if(result.accepted){this.job={kind:'mine',allowMining:true};this.state='mining'}return result
@@ -170,7 +173,7 @@ export class Navigation{
  }
  step(now=Date.now()){if(this.inStep)return;this.inStep=true;try{this.inputStep(now)}finally{this.inStep=false}}
  inputStep(now=Date.now()){
-  if(!this.spawned||!this.client||!this.world.position)return
+  if(!this.spawned||!this.client||!this.world.position||!this.world.actor?.ready)return
   if(now-this.lastInputAt>500&&this.lastInputAt&&(this.job||this.flight))this.stop('Phone paused; work stopped.')
   this.lastInputAt=now
   this.checkVerification?.()
