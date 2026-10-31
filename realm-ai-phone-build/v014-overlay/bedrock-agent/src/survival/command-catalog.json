@@ -283,20 +283,6 @@
     "note": "Fixed 5 × 5 shelter, 3-block walls, floor, roof and 2-block doorway. Preview only."
   },
   {
-    "id": "status",
-    "label": "Survival / connection status",
-    "template": "survival status",
-    "fields": [],
-    "note": ""
-  },
-  {
-    "id": "movement",
-    "label": "Movement status",
-    "template": "movement status",
-    "fields": [],
-    "note": ""
-  },
-  {
     "id": "look",
     "label": "Look around / enable view",
     "template": "look around",
@@ -333,20 +319,6 @@
     "note": "Turns the headless player's view toward the center of a block within 16 blocks, using player_auth_input. Does not create a rendered camera."
   },
   {
-    "id": "control_status",
-    "label": "Control input / camera status",
-    "template": "control status",
-    "fields": [],
-    "note": "Read-only: input packet count, yaw/pitch, server-position evidence. No rendered third-person camera."
-  },
-  {
-    "id": "player_identity",
-    "label": "Real player / character identity",
-    "template": "player identity",
-    "fields": [],
-    "note": "Read-only: own server actor IDs, authentic session/spawn, health, game-mode evidence, and why Survival is paused. The bot is a player, not a custom mob."
-  },
-  {
     "id": "view_off",
     "label": "Disable view",
     "template": "view off",
@@ -359,20 +331,6 @@
     "template": "inventory",
     "fields": [],
     "note": ""
-  },
-  {
-    "id": "inventory_status",
-    "label": "Inventory receipts / missing shovel",
-    "template": "inventory status",
-    "fields": [],
-    "note": "Shows only inventory changes actually reported by the server, not invented pickups."
-  },
-  {
-    "id": "combat_status",
-    "label": "Combat / invulnerability diagnostic",
-    "template": "combat status",
-    "fields": [],
-    "note": "Reports own game mode and effective abilities; PvP and spawn protection must be verified on the Realm."
   },
   {
     "id": "help",
@@ -401,5 +359,12 @@
     "template": "ensure survival",
     "fields": [],
     "note": ""
+  },
+  {
+    "id": "diagnostics",
+    "label": "Diagnostics — all status checks",
+    "template": "diagnostics",
+    "fields": [],
+    "note": "One read-only report: player identity, actual game mode and ability evidence, control input, movement, inventory receipts, health and Realm connection."
   }
 ]
