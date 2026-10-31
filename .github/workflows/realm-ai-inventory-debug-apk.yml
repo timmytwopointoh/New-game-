@@ -48,16 +48,17 @@ jobs:
         run: |
           set -euo pipefail
           cd "$VF_REALM_BUILD_ROOT/bedrock-agent"
-          echo 'Review prior equipment test before updating its server-acknowledgment contract:'
-          sed -n '114,133p' tests/recovery.test.js
-          # Earlier test expected immediate success, which is intentionally no longer true.
-          # Updating only this assertion preserves all remaining packet/serializer checks.
+          # Older regression assumed the equipment request was already confirmed
+          # and expected two packets. New protocol sends one server-authoritative
+          # equipment request; the server echo is tested by integration tests.
           python3 - <<'PY'
           from pathlib import Path
           p=Path('tests/recovery.test.js')
           text=p.read_text()
-          assert text.count('/Selected/') == 1, 'Review changed upstream recovery assertion'
-          p.write_text(text.replace('/Selected/', '/waiting for server confirmation/'))
+          old="assert.match(s.handle('select slot 1').message,/Selected/);assert.equal(sent[1][0],'mob_equipment');assert.equal(sent[1][1].item.network_id,0)"
+          new="assert.match(s.handle('select slot 1').message,/waiting for server confirmation/);assert.equal(sent.length,1);assert.equal(sent[0][0],'mob_equipment');assert.equal(sent[0][1].item.network_id,0)"
+          assert text.count(old)==1, 'Upstream equipment test changed; review required'
+          p.write_text(text.replace(old,new))
           PY
           npm test
           node --test tests/inventory-mode-diagnostics.test.js tests/inventory-mode-integration.test.js
