@@ -22,7 +22,7 @@ export class SurvivalVerification{
   const w=this.world
   if(w.survivalVerified){this.requested=false;this.flightStopped=false;this.pending=false;this.reason='Own server mode and effective abilities verify Survival.';return this.snapshot()}
   if(w.abilityState?.effective.flying&&!this.flightStopped){
-   try{const p=w.standPosition()||{x:0,y:0,z:0};this.client?.queue('player_action',{runtime_entity_id:BigInt(w.entityId),action:'stop_flying',position:p,result_position:p,face:0});this.navigation.pendingFlags.push('stop_flying');this.flightStopped=true}catch(e){this.reason='Could not send normal stop-flying input: '+e.message}
+   try{const p=w.standPosition()||{x:0,y:0,z:0};this.client?.queue('player_action',{runtime_entity_id:w.actor.runtimeForPacket(),action:'stop_flying',position:p,result_position:p,face:0});this.navigation.pendingFlags.push('stop_flying');this.flightStopped=true}catch(e){this.reason='Could not send normal stop-flying input: '+e.message}
   }
   if(this.pending&&now-this.requestAt>5000){this.pending=false;this.reason='Server has not confirmed Survival with normal abilities. Autonomous work remains paused.'}
   if(w.abilityState?.loading){this.reason='Temporary loading abilities reported; waiting for loading to finish.';return this.snapshot()}
@@ -32,7 +32,7 @@ export class SurvivalVerification{
   if(!['operator','automation','host','owner','internal',1,2,3,4,5].includes(w.abilityState.commandPermission)){this.reason='Survival is not verified and the server has not granted command permission. Ask the Realm owner to check this player; PvP/spawn protection is separate.';return this.snapshot()}
   if(!this.client)return this.snapshot()
   this.requested=true;this.pending=true;this.requestAt=now;this.requestId=crypto.randomUUID();this.reason='Requested /gamemode survival @s; waiting for server mode and ability confirmation.'
-  try{this.client.queue('command_request',{command:'/gamemode survival @s',origin:{type:'player',uuid:this.requestId,request_id:this.requestId,player_entity_id:BigInt(w.uniqueId)},internal:false,version:''});this.report(this.reason)}catch(e){this.pending=false;this.reason='Survival request failed: '+e.message}
+  try{this.client.queue('command_request',{command:'/gamemode survival @s',origin:{type:'player',uuid:this.requestId,request_id:this.requestId,player_entity_id:w.actor.uniqueForPacket()},internal:false,version:''});this.report(this.reason)}catch(e){this.pending=false;this.reason='Survival request failed: '+e.message}
   return this.snapshot()
  }
  snapshot(){return {verified:this.world.survivalVerified,pending:this.pending,reason:this.reason,mode:this.world.gameMode,abilities:this.world.abilityState}}
