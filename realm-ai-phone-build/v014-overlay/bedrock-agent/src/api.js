@@ -1,4 +1,5 @@
 import {commandCatalog,parseDescriptor,formOptions} from './survival/command-plans.js'
+import {understandCommand} from './survival/language.js'
 import http from 'node:http'
 import crypto from 'node:crypto'
 import {parseCommand} from '../pack-template/scripts/commands.js'
@@ -30,22 +31,23 @@ export function createApi(config,connection,log=console.log){
  })
  // This handler is intentionally shared by the Android HTTPS API and owner-only Realm chat.
  const message=raw=>{
-   if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim())){
-     planner.cancel();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
+   const command=understandCommand(raw)||String(raw||'').trim()
+   if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(command)){
+     planner.cancel();connection.survival?.commandPlans?.interrupt('Stopped by owner.')
+     const result=connection.survival?.handle('stop')
+     return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}:{accepted:true,queued:false,message:'Stopped.'}
    }
-   let output
-   if(connection.survival?.commandPlans){
-    const plans=connection.survival.commandPlans
-    try{
-     const text=String(raw).trim();let m
-     if((m=text.match(/^select plan (\d+)$/i)))output={accepted:true,message:'Selected plan '+m[1]+'.',plans:plans.select(Number(m[1]))}
-     else if(/^(activate selected plan|start plan)$/i.test(text))output=plans.activate(plans.selected)
-     else if(text==='saved plans')output={accepted:true,message:'Saved plan cards.',plans:plans.snapshot()}
-     else output=plans.prepare(parseDescriptor(raw))
-    }catch(e){output={accepted:false,queued:false,message:e.message,plans:plans.snapshot()}}
-   }else output=planner.handle(raw)||(planner.snapshot().state==='running'?{accepted:true,queued:false,message:'A plan is running; cancel it first.'}:chatDispatch(raw,connection))
-   return output
+   if(command==='hello')return {accepted:true,queued:false,message:'Hello! I am your Realm AI player. Use Commands, or say a safe instruction.'}
+   const plans=connection.survival?.commandPlans
+   if(!plans)return {accepted:false,queued:false,message:'Plan service is not ready.'}
+   try{
+    if(/^(?:run queue|start plan|start queue|run all plans)$/i.test(command))return plans.startAll()
+    if(/^(?:saved plans|show queue|queue status)$/i.test(command))return {accepted:true,queued:false,message:'Saved command queue (first to last).',plans:plans.snapshot()}
+    const descriptor=parseDescriptor(command)
+    return plans.prepare(descriptor)
+   }catch(e){return {accepted:false,queued:false,message:e.message,plans:plans.snapshot()}}
  }
+
  const controller={planner,message}
  let stopEpoch=0
  const token=config.localAPI.token
@@ -79,9 +81,9 @@ export function createApi(config,connection,log=console.log){
         try{
          let result
          if(pathname==='/plans/prepare')result=p.prepare(data.descriptor)
-         else if(pathname==='/plans/select')result={accepted:true,message:'Plan selected.',plans:p.select(data.id)}
+         else if(pathname==='/plans/move')result={accepted:true,message:'Command moved.',plans:p.move(data.id,data.direction)}
          else if(pathname==='/plans/delete')result={accepted:true,message:'Plan deleted.',plans:p.delete(data.id)}
-         else if(pathname==='/plans/activate')result=p.activate(data.id)
+         else if(pathname==='/plans/run-all'||pathname==='/plans/activate')result=p.startAll()
          else return send(404,{error:'Unknown plan action'})
          return send(200,result)
         }catch(e){return send(200,{accepted:false,queued:false,message:e.message,plans:p.snapshot()})}
