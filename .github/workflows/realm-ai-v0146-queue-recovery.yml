@@ -3,7 +3,7 @@ name: VEILFORGE Realm AI v0.14.6 fallback and queue recovery regression
 on:
   push:
     branches:
-      - sandbox/realm-ai-v0146-chat-ordered-queue-20261031
+      - sandbox/realm-ai-v0146-chat-progress-20261031
     paths:
       - '.github/workflows/realm-ai-v0146-queue-recovery.yml'
 permissions:
