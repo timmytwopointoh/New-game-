@@ -4,7 +4,7 @@
 export function actorId(value){
  if(typeof value==='bigint')return value.toString(10)
  if(typeof value==='number'){if(!Number.isSafeInteger(value))return null;return BigInt(value).toString()}
- if(typeof value==='string'&&/^-?\\d+$/.test(value))return BigInt(value).toString()
+ if(typeof value==='string'&&/^-?[0-9]+$/.test(value))return BigInt(value).toString()
  return null
 }
 export class PlayerActorSession{
