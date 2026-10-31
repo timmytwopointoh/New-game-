@@ -1,5 +1,5 @@
 import {abilityEvidence} from './verification.js'
-import {PlayerActorSession} from './player-actor-session.js'
+import {PlayerActorSession, actorId} from './player-actor-session.js'
 import {readGameMode, defaultGameMode, gameModeFromStart, gameModeFromUpdate, realPlayerEvidence} from './real-player.js'
 import {playerInventoryWindow, inventoryTotals, inventorySlotChanges} from './inventory-evidence.js'
 import registryFactory from 'prismarine-registry'
@@ -206,7 +206,7 @@ export class WorldView{
   on('update_attributes',p=>{if(this.actor.checkRuntime(p.runtime_entity_id,'update_attributes'))for(const a of p.attributes||[])this.attributes[a.name]=a.current})
   on('player_hotbar',p=>{if(playerInventoryWindow(p.window_id))this.confirmEquipmentSlot(p.selected_slot,'player_hotbar')})
   on('mob_equipment',p=>{if(this.actor.checkRuntime(p.runtime_entity_id,'mob_equipment'))this.confirmEquipmentSlot(p.selected_slot,'mob_equipment')})
-  on('add_player',p=>{if(!this.actor.checkRuntime(p.runtime_id,'add_player')){this.players.set(String(p.runtime_id),{name:p.username,position:p.position,uniqueId:String(p.unique_id)});while(this.players.size>64)this.players.delete(this.players.keys().next().value)}})
+  on('add_player',p=>{if(this.actor.runtimeId!==actorId(p.runtime_id)){this.players.set(String(p.runtime_id),{name:p.username,position:p.position,uniqueId:String(p.unique_id)});while(this.players.size>64)this.players.delete(this.players.keys().next().value)}})
   on('move_player',p=>{const player=this.players.get(String(p.runtime_id));if(player)player.position=p.position})
   on('move_entity_delta',p=>{const e=this.players.get(String(p.runtime_entity_id))||this.entities.get(String(p.runtime_entity_id));if(e)for(const k of ['x','y','z'])if(Number.isFinite(p[k]))e.position[k]=p[k]})
   on('add_entity',p=>{this.entities.set(String(p.runtime_id),{type:p.entity_type,position:p.position,uniqueId:String(p.unique_id)});while(this.entities.size>256)this.entities.delete(this.entities.keys().next().value)})
