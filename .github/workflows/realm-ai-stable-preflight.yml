@@ -1,0 +1,69 @@
+name: VEILFORGE Realm AI signing pipeline preflight (no private keys)
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-stable-signing-20261030
+    paths:
+      - '.github/workflows/realm-ai-stable-preflight.yml'
+      - '.github/workflows/realm-ai-stable-android.yml'
+      - 'realm-ai-phone-build/configure_stable_signing.py'
+      - 'realm-ai-phone-build/patch_disconnect_v094.py'
+      - 'realm-ai-phone-build/patch_auth_ui.py'
+      - 'realm-ai-phone-build/patch_realm_status_v092.py'
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17 for temporary MOCK test keystore
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Node 24 for resource-pack simulated tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Extract verified source, apply all patches, and validate mock release signing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vf-preflight
+          base64 --decode realm-ai-phone-build/source-v09.tar.xz.b64 > "$RUNNER_TEMP/source.tar.xz"
+          echo '3f1a70bf640d9bfef51169985be871fb55c299c7cd0fe78392aba3be46b1fac5  '"$RUNNER_TEMP/source.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/source.tar.xz" -C .vf-preflight --no-same-owner
+          BASE='.vf-preflight/veilforge_realm_v09_apk_ready'
+          APP="$BASE/android-app/app"
+          python3 realm-ai-phone-build/patch_auth_ui.py "$APP/src/main/java/com/veilforge/realmagent/MainActivity.java"
+          sed -i 's/versionCode 9/versionCode 10/;s/0.9.0-phone-prototype/0.9.1-signin-code/' "$APP/build.gradle"
+          python3 realm-ai-phone-build/patch_realm_status_v092.py "$BASE"
+          sed -i 's/versionCode 10/versionCode 11/;s/0.9.1-signin-code/0.9.2-realm-diagnostics/' "$APP/build.gradle"
+          base64 --decode realm-ai-phone-build/v093-pack-overlay.tar.xz.b64 > "$RUNNER_TEMP/overlay.tar.xz"
+          echo 'ea9771fe3a29fbf38f196b4affd8606f276ce91cce84be86d5a5823db45b9d98  '"$RUNNER_TEMP/overlay.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/overlay.tar.xz" -C "$BASE" --no-same-owner
+          sed -i 's/lastError", ""/lastError",""/' "$BASE/tools/apply-pack-support.py"
+          python3 "$BASE/tools/apply-pack-support.py" "$BASE"
+          sed -i 's/versionCode 11/versionCode 12/;s/0.9.2-realm-diagnostics/0.9.3-pack-support/' "$APP/build.gradle"
+          python3 realm-ai-phone-build/patch_disconnect_v094.py "$BASE"
+          (cd "$BASE/bedrock-agent" && node --test tests/resource-packs.test.js)
+          node --check "$BASE/bedrock-agent/src/connection.js"
+          # Throwaway mock key for Gradle configuration ONLY. NEVER uploaded or published as an APK.
+          MOCK="$RUNNER_TEMP/preflight-mock.p12"
+          export VF_ANDROID_KEYSTORE_FILE="$MOCK"
+          export VF_ANDROID_STORE_PASSWORD='preflight-mock-not-a-production-secret'
+          export VF_ANDROID_KEY_PASSWORD="$VF_ANDROID_STORE_PASSWORD"
+          export VF_ANDROID_KEY_ALIAS='realm-ai-update'
+          keytool -genkeypair -noprompt -storetype PKCS12 -keystore "$MOCK" -alias "$VF_ANDROID_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 2 -dname 'CN=UNTRUSTED PREFLIGHT ONLY' -storepass "$VF_ANDROID_STORE_PASSWORD" -keypass "$VF_ANDROID_KEY_PASSWORD"
+          python3 realm-ai-phone-build/configure_stable_signing.py "$APP/build.gradle" 100001
+          grep -q "versionCode 100001" "$APP/build.gradle"
+          grep -q "signingConfig signingConfigs.stableUpdate" "$APP/build.gradle"
+          grep -q "applicationId 'com.veilforge.realmagent'" "$APP/build.gradle"
+          # Verify Android Gradle DSL and release task configuration; this is NOT an APK build.
+          gradle -p "$BASE/android-app" :app:tasks --no-daemon --max-workers=2 >/tmp/veilforge-preflight-gradle.txt
+          grep -q 'assembleRelease' /tmp/veilforge-preflight-gradle.txt
+          echo 'PASS: all v0.9.4 patches and stable-signing Gradle DSL validated; NO private production key was used.'
