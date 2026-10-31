@@ -53,6 +53,8 @@ test('own game-type changes are applied only to the bot identity, without creati
  emitter.emit('set_player_game_type',{game_type:0})
  assert.equal(w.gameMode,'survival')
  assert.match(w.modeEvidence.source,/set_player/)
+ emitter.emit('set_player_game_type',{gamemode:5})
+ assert.equal(w.gameMode,'survival') // own Default explicitly inherits actual server world mode
  emitter.emit('set_player_game_type',{gamemode:-1})
  assert.equal(w.gameMode,null)
  w.detach()
