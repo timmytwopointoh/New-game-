@@ -4,7 +4,7 @@ on:
     branches:
       - sandbox/realm-ai-v0911-pack-wire-20261031
     paths:
-      - '.github/workflows/realm-ai-phone-v09-apk.yml'
+      - 'realm-ai-phone-build/stable-build-requests/**'
 permissions:
   contents: write
 concurrency:
@@ -237,7 +237,7 @@ jobs:
           BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
           python3 realm-ai-phone-build/patch_pack_wire_v0911.py "$BASE"
           cp realm-ai-phone-build/v0911-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
-          sed -i 's/versionCode 19/versionCode 100001/;s/0.9.10-cdn-owner/0.9.11-pack-wire/' "$BASE/android-app/app/build.gradle"
+          sed -i "s/versionCode 19/versionCode $((100001 + GITHUB_RUN_NUMBER))/;s/0.9.10-cdn-owner/0.9.11-pack-wire/" "$BASE/android-app/app/build.gradle"
           node realm-ai-phone-build/verify_pack_wire_v0911.cjs "$BASE"
           (cd "$BASE/bedrock-agent" && npm test)
       - name: Acquire checksum-verified Android 16 KB Node native runtime
@@ -282,12 +282,31 @@ jobs:
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           mkdir -p signing-tool
           cp "$SDK/build-tools/35.0.0/lib/apksigner.jar" signing-tool/apksigner.jar
+      - name: Sign future update with permanent key and verify pinned certificate
+        shell: bash
+        env:
+          VF_KEYSTORE_B64: ${{ secrets.VF_ANDROID_KEYSTORE_B64 }}
+          VF_PASSWORD_B64: ${{ secrets.VF_ANDROID_PASSWORD_B64 }}
+          VF_EXPECTED_CERT: ${{ vars.VF_ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
+          python3 realm-ai-phone-build/sign_permanent_apk.py signing-tool/apksigner.jar "$APK" VEILFORGE-Realm-AI-Permanent-update.apk __github_secrets__
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/build-tools/35.0.0/zipalign" -c -P 16 -v 4 VEILFORGE-Realm-AI-Permanent-update.apk
+          sha256sum VEILFORGE-Realm-AI-Permanent-update.apk > VEILFORGE-Realm-AI-Permanent-update-SHA256.txt
+      - name: Publish permanently signed update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "veilforge-realm-ai-permanent-$GITHUB_RUN_NUMBER" VEILFORGE-Realm-AI-Permanent-update.apk VEILFORGE-Realm-AI-Permanent-update-SHA256.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VEILFORGE Realm AI Permanent Update $GITHUB_RUN_NUMBER" --notes "Permanent signing certificate verified. Install over v0.9.11 permanent-key build to retain app data. Realm joining remains subject to real-device testing." --prerelease
       - name: Upload verified APK and signing tool
         uses: actions/upload-artifact@v4
         with:
           name: VEILFORGE-Realm-AI-v0.9.11-Verified-APK
           path: |
-            .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
+            VEILFORGE-Realm-AI-Permanent-update.apk
             signing-tool/apksigner.jar
           retention-days: 7
           if-no-files-found: error
