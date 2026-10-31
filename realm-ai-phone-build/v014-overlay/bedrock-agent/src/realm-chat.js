@@ -39,10 +39,10 @@ export class RealmChat{
   this.last.set(actor,now)
   let result
   try{
-   if(canonical==='hello')result={accepted:true,message:'Hello! I am here. I can follow, walk, aim, inspect and mine when Survival is verified.'}
+   if(canonical==='hello')result={accepted:true,message:this.connection.spawned?'I am in the Realm as '+(this.connection.username||'your AI player')+'.':'I have not spawned in the Realm yet.'}
    else if(canonical==='run queue'||canonical==='saved plans')result=this.controller.message(canonical)
    else if(canonical==='stop')result=this.controller.message('stop')
-   else result=this.connection.survival.handle(canonical)
+   else result=this.connection.survival?.handle?this.connection.survival.handle(canonical):this.controller.message(canonical)
    if(!result)result={accepted:false,message:'I cannot perform that command yet.'}
   }catch(e){result={accepted:false,message:'Command blocked: '+String(e.message||e).slice(0,130)}}
   if(Array.isArray(this.connection.events)&&Number.isSafeInteger(this.connection.nextEventId)){
