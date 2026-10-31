@@ -1,4 +1,5 @@
 import {CommandPlans} from './command-plans.js'
+import {assessHotbarSelection,damageDiagnosis,inventoryItemName} from './inventory-evidence.js'
 import {SurvivalVerification} from './verification.js'
 import {WorldView} from './world.js'
 import {Navigation} from './navigation.js'
@@ -24,10 +25,16 @@ export class SurvivalController{
   }
   if(s==='view off'){this.world.enabled=false;this.world.sections.clear();this.world.updates.clear();this.world.pending.clear();this.navigation.stop('View switched off.');return answer('View off; walking stopped.')}
   if(/^(?:stop|stop everything|stop following|stop following me|stop mining|stop walking|stay|wait here|cancel job|cancel plan)$/.test(s)){this.commandPlans.interrupt();this.navigation.stop();this.lastPlan=null;return answer('Stopped following, walking and mining. Saved plans kept.')}
-  if(/^(?:inventory|what do you have|check inventory)$/.test(s)){
-   const items=Object.entries(this.world.items());return answer(this.world.inventoryKnown?(items.length?'Inventory: '+items.slice(0,16).map(([n,c])=>`${n} ×${c}`).join(', '):'Inventory is empty.'):'Waiting for the server inventory snapshot.')
+  if(/^(?:inventory|inventory status|what do you have|check inventory|where is my shovel)$/.test(s)){
+   const items=Object.entries(this.world.items()),e=this.world.inventoryEvidence()
+   const inventory=this.world.inventoryKnown?(items.length?'Server inventory: '+items.slice(0,16).map(([n,c])=>n+' ×'+c).join(', '):'Server inventory snapshot shows no items.'):'Still waiting for the full server inventory snapshot; partial slot messages are not proof that the inventory is empty.'
+   const recent=e.serverChanges.flatMap(x=>x.changes.map(c=>'slot '+(c.slot+1)+' '+c.before+' ×'+c.beforeCount+' → '+c.after+' ×'+c.afterCount)).slice(-6)
+   return answer(inventory+' Received '+e.serverPackets+' player-inventory packets. '+(recent.length?'Recent server changes: '+recent.join('; ')+'.':'No server-confirmed item additions/removals observed yet.')+' '+e.selectionStatus,{inventoryEvidence:e})
   }
-  if(/^(?:status|position|where are you|health|survival status)$/.test(s)){const x=this.world.snapshot();return answer(`Mode ${x.gameMode||'unknown'}; Survival verified: ${x.survivalVerified}. Realm ${this.connection.spawned?'joined':'disconnected/not spawned'}. Position ${x.position?Object.values(x.position).join(','):'unknown'}. Health ${x.health??'unknown'}, hunger ${x.hunger??'unknown'}. Navigation ${this.navigation.state}. View sections ${x.sections}.`,{survival:this.snapshot()})}
+  if(/^(?:status|position|where are you|health|survival status|combat status|damage status|why can't you be hit)$/.test(s)){
+   const x=this.world.snapshot(),combat=damageDiagnosis(x.gameMode,x.abilities)
+   return answer(combat+' Survival verified: '+x.survivalVerified+'. '+this.verification.snapshot().reason+' Realm '+(this.connection.spawned?'joined':'disconnected/not spawned')+'. Position '+(x.position?Object.values(x.position).join(','):'unknown')+'. Health '+(x.health??'unknown')+', hunger '+(x.hunger??'unknown')+'. Navigation '+this.navigation.state+'. View sections '+x.sections+'.',{survival:this.snapshot()})
+  }
   if(/^(?:help|commands|what can you do|help survival|help movement|show jobs)$/.test(s))return answer('No add-on needed: “look around”, “inventory”, “find oak log”, “route to X Y Z”, “walk to X Y Z”, “stop”, “rejoin realm”, “materials stone”, “recipe stone pickaxe”, “plan get 8 torches”. Follow mode can jump one-block steps with headroom. “movement status”, “follow me”, “clear path to X Y Z”, “select slot 1”, “dig X Y Z”. Clear-path mining is limited to easy natural-looking blocks; containers/build-looking blocks are protected. Crafting/building remain previews.')
   m=s.match(/^follow(?: (.+))?$/)
   if(m){
@@ -42,10 +49,21 @@ export class SurvivalController{
   }
   m=s.match(/^select (?:hotbar )?slot ([1-9])$/)
   if(m){
-   if(!this.connection.spawned||!this.world.inventoryKnown)return answer('Join and receive inventory first.')
+   if(!this.connection.spawned||!this.world.inventoryKnown)return answer('Join and receive a full server inventory snapshot first.')
    const slot=Number(m[1])-1
-   if(!this.world.inventory.has(slot))return answer('That inventory slot has not been received.')
-   try{this.connection.client.queue('player_hotbar',{selected_slot:slot,window_id:'inventory',select_slot:true});this.connection.client.queue('mob_equipment',{runtime_entity_id:BigInt(this.world.entityId),item:this.world.inventory.get(slot),slot,selected_slot:slot,window_id:'inventory'});this.world.selectedSlot=slot;return answer(`Selected hotbar slot ${slot+1}. The server still validates equipment and durability.`)}catch(e){return answer('Could not select slot: '+e.message)}
+   const selection=assessHotbarSelection(this.world.inventory,slot)
+   if(!selection.ok)return answer(selection.reason)
+   if(this.world.pendingSlot!==null&&Date.now()-this.world.pendingSlotAt<5000)return answer('Waiting for the server to confirm previous hotbar selection. Check inventory status.')
+   this.world.pendingSlot=null
+   try{
+    // MobEquipment is the bidirectional held-slot notification. Do not send a second
+    // PlayerHotbar request or invent an inventory move; the server owns every stack.
+    this.connection.client.queue('mob_equipment',{runtime_entity_id:BigInt(this.world.entityId),item:selection.item,slot,selected_slot:slot,window_id:'inventory'})
+    this.world.pendingSlot=slot;this.world.pendingSlotAt=Date.now()
+    this.world.lastSelectionStatus='Requested '+inventoryItemName(selection.item,this.world.registry?.items)+' in hotbar slot '+(slot+1)+'; waiting for server confirmation.'
+    return answer(this.world.lastSelectionStatus)
+   }catch(e){this.world.lastSelectionStatus='Selection request failed: '+e.message;return answer(this.world.lastSelectionStatus)}
+  }
   }
   m=s.match(/^(?:dig|mine block at) (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
   if(m)return this.navigation.mine({x:Number(m[1]),y:Number(m[2]),z:Number(m[3])})
