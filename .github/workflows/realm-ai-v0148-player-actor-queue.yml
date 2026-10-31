@@ -1,5 +1,5 @@
 name: VEILFORGE Realm AI v0.14.8 player actor ID and queue manager integration
-# Second gate: real server-assigned actor IDs in historical packet fixtures and normal queue management.
+# Third gate: complete real-player identity coverage in historical movement and inventory fixtures.
 on:
   push:
     branches:
