@@ -1,0 +1,57 @@
+name: Realm AI Live - owner-requested first APK delivery
+on:
+  push:
+    branches: [feature/realm-running-updates-20261031]
+    paths: ['.github/workflows/realm-live-deliver-request.yml']
+permissions:
+  contents: write
+concurrency:
+  group: realm-live-first-delivery
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Reconstruct owner-requested locally compiled and signed APK (no private key)
+        run: |
+          set -eu
+          curl -fLsS --max-time 180 'https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v020-language-chat-test/VEILFORGE-Realm-AI-v0.20-Language-TEST.apk' -o runtime-base.apk
+          python3 realm-ai-phone-build/live-update/materialize_first_release.py runtime-base.apk Realm-AI-Live.apk
+      - name: Verify independent APK identity, dedicated certificate and 16 KB alignment
+        run: |
+          set -eu
+          curl -fLsS --max-time 180 'https://dl.google.com/android/repository/build-tools_r35_linux.zip' -o build-tools.zip
+          mkdir -p "$RUNNER_TEMP/realm-android-tools"
+          unzip -q build-tools.zip -d "$RUNNER_TEMP/realm-android-tools"
+          TOOLS="$(dirname "$(find "$RUNNER_TEMP/realm-android-tools" -type f -name apksigner -print -quit)")"
+          test -x "$TOOLS/apksigner"
+          "$TOOLS/apksigner" verify --verbose --print-certs Realm-AI-Live.apk > certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: f268e5085b79197eca9ca9ea1f94bc625d045f191e5e4704a22178d47696da06' certificate-report.txt
+          "$TOOLS/zipalign" -c -P 16 -v 4 Realm-AI-Live.apk > alignment-report.txt
+          "$TOOLS/aapt" dump badging Realm-AI-Live.apk > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200001'" package-report.txt
+      - name: Publish APK and signed phone-update channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          TAG='realm-ai-live-020-secure-updates'
+          cp realm-ai-phone-build/live-update/first-release-notice.json release.json
+          cp realm-ai-phone-build/live-update/first-release-verification.json verification.json
+          cat > release-notes.md <<'NOTES'
+          Independently signed Realm AI Live test build based on the retained v0.19 companion. Install Realm-AI-Live.apk once, then use Updates for future signed releases. Update checks and downloads leave the bot running. Android-approved APK installation restarts the app and disconnects it. This separate installation starts with fresh data and does not use the other app's key.
+
+          Local validation: 186 bot tests and 24 Android policy/UI tests passed; APK signature, package/version, archive integrity, 16 KB alignment and packaged source/native libraries verified. The delivery job rechecks the exact compiled/signed bytes. No phone or live Realm test performed. Future hosted signing needs dedicated REALM_LIVE secrets; no signing private key is in this release.
+          NOTES
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Realm AI Live v0.20 — Separate Key and Secure Updates' --notes-file release-notes.md --prerelease
+          fi
+          gh release upload "$TAG" Realm-AI-Live.apk release.json verification.json certificate-report.txt --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --notes-file release-notes.md
+          python3 realm-ai-phone-build/live-update/publish_channel.py release.json
