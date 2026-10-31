@@ -1,4 +1,5 @@
 name: VEILFORGE Realm AI v0.14.5 queue and chat regression
+# Retry after preserving legacy planner and consolidating diagnostics.
 on:
   push:
     branches:
