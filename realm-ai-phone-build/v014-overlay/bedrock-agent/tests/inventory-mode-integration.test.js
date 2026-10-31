@@ -8,7 +8,7 @@ import {parseDescriptor,renderDescriptor,commandCatalog} from '../src/survival/c
 function setup(){
  const client=new EventEmitter(),sent=[]
  client.queue=(name,data)=>sent.push({name,data})
- const world=new WorldView();world.registry={items:{301:{name:'iron_shovel'}}};world.entityId='11'
+ const world=new WorldView();world.registry={items:{301:{name:'iron_shovel'}}};world.actor.start({runtime_entity_id:11n,entity_id:42n});world.entityId=world.actor.runtimeId;world.uniqueId=world.actor.uniqueId
  world.attach(client)
  const connection={spawned:true,client,events:[],nextEventId:0,emit(){}}
  const controller=new SurvivalController(connection)
