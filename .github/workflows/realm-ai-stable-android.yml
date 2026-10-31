@@ -177,6 +177,15 @@ jobs:
           python3 realm-ai-phone-build/patch_bedrock_realm_join_v098.py "$BASE"
           node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/client/auth.js"
           node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/client/realmJoin503Retry.js"
+      - name: Disable Bedrock built-in completed response so custom downloads own handshake
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          python3 realm-ai-phone-build/patch_single_pack_owner_v099.py "$BASE"
+          node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/createClient.js"
+          node realm-ai-phone-build/verify_single_pack_owner_v099.cjs "$BASE"
+          (cd "$BASE/bedrock-agent" && node --test tests/cdn-packs.test.js tests/resource-packs.test.js)
       - name: Verify official 1.26.60 packet response bytes on permanently signed builds
         shell: bash
         run: |
