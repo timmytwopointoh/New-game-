@@ -1,5 +1,5 @@
 import {abilityEvidence} from './verification.js'
-import {readGameMode, gameModeFromStart, gameModeFromUpdate, realPlayerEvidence} from './real-player.js'
+import {readGameMode, defaultGameMode, gameModeFromStart, gameModeFromUpdate, realPlayerEvidence} from './real-player.js'
 import {playerInventoryWindow, inventoryTotals, inventorySlotChanges} from './inventory-evidence.js'
 import registryFactory from 'prismarine-registry'
 import blockFactory from 'prismarine-block'
@@ -9,13 +9,14 @@ const dangerous=/^(?:flowing_)?(?:lava|water)$|fire|campfire|cactus|magma|powder
 const airNames=new Set(['air','cave_air','void_air'])
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.modeEvidence=null;this.startGameReceived=false;this.registry=null;this.Block=null;this.sections=new Map();this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.inventoryPackets=0;this.inventoryHistory=[];this.lastInventoryAt=null;this.pendingSlot=null;this.pendingSlotAt=0;this.lastSelectionStatus='No server-confirmed hotbar selection yet.';this.attributes={};this.entities=new Map();this.players=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set()}
+ reset(){this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.modeEvidence=null;this.startGameReceived=false;this.worldModeRaw=null;this.registry=null;this.Block=null;this.sections=new Map();this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.inventoryPackets=0;this.inventoryHistory=[];this.lastInventoryAt=null;this.pendingSlot=null;this.pendingSlotAt=0;this.lastSelectionStatus='No server-confirmed hotbar selection yet.';this.attributes={};this.entities=new Map();this.players=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set()}
  initialize(packet,version='1.26.60'){
   this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.sections.clear();this.updates.clear();this.entities.clear();this.players.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryPackets=0;this.inventoryHistory=[];this.lastInventoryAt=null;this.pendingSlot=null;this.pendingSlotAt=0;this.lastSelectionStatus='Waiting for player inventory and equipment packets.';this.attributes={}
   this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
+   this.worldModeRaw=packet.world_gamemode??packet.world_game_mode??null
    this.modeEvidence=gameModeFromStart(packet);this.gameMode=this.modeEvidence.mode
    this.startGameReceived=true
    this.position=packet.player_position?{...packet.player_position}:null
@@ -80,7 +81,15 @@ export class WorldView{
  }
  airAt(p){return [0,1].every(layer=>{const b=this.block(p,layer);return b&&airNames.has(b.name)})}
  normalizeMode(value){return readGameMode(value)}
- updateOwnGameMode(packet,source){const evidence=gameModeFromUpdate(packet);this.modeEvidence={...evidence,source};this.gameMode=evidence.mode}
+ updateOwnGameMode(packet,source){
+   const evidence=gameModeFromUpdate(packet)
+   if(evidence.inherited){
+    // Only inherit from world mode if the OWN player update explicitly says Default.
+    const worldMode=readGameMode(this.worldModeRaw)
+    this.modeEvidence={...evidence,mode:worldMode,worldRaw:this.worldModeRaw===null?'not sent':String(this.worldModeRaw),source:source+' (default inherits server world mode)'}
+    this.gameMode=worldMode
+   } else {this.modeEvidence={...evidence,source};this.gameMode=evidence.mode}
+ }
  playerEvidence(connection=null){return realPlayerEvidence(this,connection)}
  get survivalVerified(){return this.gameMode==='survival'&&!!this.abilityState?.known&&!this.abilityState.loading&&!this.abilityState.active.length}
  // Collision uses received block shapes in both layers. Unknown cells remain solid.
