@@ -1,0 +1,23 @@
+// CI check: verify protocol 2225's actual serialized Minecraft Bedrock pack response.
+const assert=require('node:assert/strict')
+const path=require('node:path')
+const base=path.resolve(process.argv[2])
+const mcData=require(path.join(base,'bedrock-agent/node_modules/minecraft-data'))
+const packet=mcData('bedrock_1.26.60').protocol.types.packet_resource_pack_client_response
+const status=packet[1].find(x=>x.name==='response_status')
+assert.deepEqual(status.type[1].mappings,{'1':'refused','2':'send_packs','3':'have_all_packs','4':'completed'})
+const {createSerializer,createDeserializer}=require(path.join(base,'bedrock-agent/node_modules/bedrock-protocol/src/transforms/serializer'))
+const writer=createSerializer('1.26.60')
+const reader=createDeserializer('1.26.60')
+const props={response_status:'send_packs',response_status_name:'Downloading',resourcepackids:['abcdef_1.0.0']}
+const b=writer.createPacketBuffer({name:'resource_pack_client_response',params:props})
+assert(b.length>15 && b.length<500,'Unexpected encoded response length')
+assert.equal(b[0],0x08,'Bedrock packet ID must be 8')
+assert.equal(b[1],0x02,'Official v1.26.60 Downloading response is 2, never 1')
+assert(b.includes(Buffer.from('Downloading')),'Packet must include the official response status name')
+const decoded=reader.parsePacketBuffer(b)
+assert.equal(decoded.data.name,'resource_pack_client_response')
+assert.equal(decoded.data.params.response_status,'send_packs')
+assert.equal(decoded.data.params.response_status_name,'Downloading')
+assert.deepEqual(decoded.data.params.resourcepackids,props.resourcepackids)
+console.log('PASS: 1.26.60 Bedrock client pack response wire code=2, text=Downloading, UUID version included')
