@@ -7,7 +7,7 @@ import path from 'node:path'
 import {WorldView} from '../src/survival/world.js'
 import {Navigation} from '../src/survival/navigation.js'
 import {SurvivalController} from '../src/survival/controller.js'
-import {CommandPlans,validateDescriptor,parseDescriptor,renderDescriptor,commandCatalog} from '../src/survival/command-plans.js'
+import {CommandPlans,validateDescriptor,parseDescriptor,parseCommandRequest,renderDescriptor,commandCatalog} from '../src/survival/command-plans.js'
 import {abilityEvidence,SurvivalVerification} from '../src/survival/verification.js'
 import {createApi} from '../src/api.js'
 import {createRequire} from 'node:module'
@@ -45,14 +45,28 @@ test('world default does not verify own Survival; mode change cancels active job
 test('Stop immediately emits neutral input and aborts mining with no later movement',()=>{
  const {w,n,sent}=fixture();assert(n.walk({x:2,y:64,z:0}).accepted);n.step();const before=sent.length;n.stop();assert.equal(sent.length,before+1);assert.deepEqual(sent.at(-1)[1].move_vector,{x:0,z:0});const x=w.position.x;n.step(Date.now()+50);assert.equal(w.position.x,x);assert.equal(n.job,null);n.detach()
 })
-test('five Realm-scoped cards persist; selected-only activation, duplicate protection and no restart resume',()=>{
+test('five Realm-scoped cards persist; selected activation, duplicate protection and no restart resume',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vf-plans-'));try{
   const {w,n}=fixture(),connection={config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection,{plansDirectory:dir,scope:'realm-A'});s.world=w;s.navigation=n;let calls=0;s.handle=raw=>{calls++;return {accepted:true,queued:false,message:raw}}
   const p=s.commandPlans;for(let i=0;i<5;i++){p.prepare({id:'status',values:{}});assert.equal(p.selected,i+1)}assert.equal(calls,0);assert.throws(()=>p.prepare({id:'status',values:{}}),/Five/);assert.throws(()=>p.activate(1),/selected/)
-  p.select(4);const r=p.activate(4);assert(r.accepted);assert.equal(calls,1);assert.throws(()=>p.activate(4),/already activated/);p.select(4);p.activate(4);assert.equal(calls,2)
+  p.select(4);const r=p.activate(4);assert(r.accepted);assert.equal(calls,1);assert.throws(()=>p.activate(4),/already activated/);p.select(4);p.activate(4);assert.equal(calls,2);p.interrupt('test cleanup')
   const restored=new CommandPlans(s,{directory:dir,scope:'realm-A'});assert.equal(restored.cards.length,5);assert.equal(restored.selected,4);assert.equal(restored.running,null);assert(restored.cards.every(c=>c.state==='waiting'))
   const other=new CommandPlans(s,{directory:dir,scope:'realm-B'});assert.equal(other.cards.length,0);restored.delete(1);assert.equal(restored.cards.length,4);assert(!JSON.stringify(JSON.parse(fs.readFileSync(restored.file))).includes('token'));n.detach()
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
+})
+test('selected command runs first, queued commands reactivate after a delay, and Stop cancels later items',async()=>{
+ const {w,n}=fixture(),connection={config:{ownerPlayerNames:[]},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection);s.world=w;s.navigation=n;const calls=[];s.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
+ const p=s.commandPlans;p.batchDelayMs=15;p.prepare({id:'inventory',values:{}});p.prepare({id:'help',values:{}});p.prepare({id:'look',values:{}});const result=p.activateQueue();assert(result.accepted);assert.deepEqual(calls,['look around']);assert.throws(()=>p.activateQueue(),/batch/)
+ await new Promise(r=>setTimeout(r,50));assert.deepEqual(calls,['look around','inventory','help survival']);assert.equal(p.batch,null);assert(p.cards.every(c=>c.state==='completed'))
+ p.select(p.cards[0].id);p.prepare({id:'status',values:{}});p.batchDelayMs=60;calls.length=0;p.activateQueue();assert.equal(calls.length,1);p.interrupt('Stop pressed');await new Promise(r=>setTimeout(r,80));assert.equal(calls.length,1);assert.equal(p.batch,null);n.detach()
+})
+test('a mining queue item holds the batch until the server confirms the break',async()=>{
+ const {w,n}=fixture(),connection={config:{ownerPlayerNames:[]},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection);s.world=w;s.navigation=n;const calls=[];s.handle=raw=>{calls.push(raw);if(raw.startsWith('dig ')){n.job={kind:'mine'};n.state='mining';return {accepted:true,queued:true,message:'Mining until server block update.'}}return {accepted:true,queued:false,message:raw}}
+ const p=s.commandPlans;p.batchDelayMs=10;p.prepare({id:'dig',values:{x:0,y:63,z:0}});p.prepare({id:'inventory',values:{}});p.select(1);p.activateQueue();assert.deepEqual(calls,['dig 0 63 0']);assert.equal(p.cards[0].state,'running');n.mining.result='confirmed';n.job=null;n.state='confirmed';n.reason='Server confirmed block removal.';p.pollBatch();await new Promise(r=>setTimeout(r,25));assert.deepEqual(calls,['dig 0 63 0','inventory']);assert.equal(p.cards[0].state,'completed');assert.equal(p.batch,null);n.detach()
+})
+test('a rejected queued action is reported honestly and leaves later work waiting',()=>{
+ const {w,n}=fixture(),connection={config:{ownerPlayerNames:[]},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection);s.world=w;s.navigation=n;let calls=0;s.handle=()=>{calls++;return {accepted:false,queued:false,message:'Survival not verified.'}}
+ const p=s.commandPlans;p.prepare({id:'inventory',values:{}});p.prepare({id:'status',values:{}});const result=p.activateQueue();assert.equal(result.accepted,false);assert.match(result.message,/Survival not verified/);assert.equal(calls,1);assert.equal(p.cards.find(c=>c.id===1).state,'waiting');assert.equal(p.cards.find(c=>c.id===2).state,'blocked');assert.equal(p.batch,null);n.detach()
 })
 test('API Stop cancels both controllers and rejects delayed requests from before Stop',async()=>{
  const c=new EventEmitter();Object.assign(c,{events:[],nextEventId:0,spawned:true,status:()=>({}),send:()=>({accepted:true})});const calls=[];c.survival={handle:s=>{calls.push(s);return {accepted:true,message:'Stopped.'}}}
@@ -65,6 +79,12 @@ test('API Stop cancels both controllers and rejects delayed requests from before
 test('shared catalog validates popup ranges and unknown commands before any plan is saved',()=>{
  assert(commandCatalog.length>=20);for(const [id,values] of [['supply',{material:'torch',count:257}],['wall',{material:'stone',width:13,height:2}],['hotbar',{slot:0}],['walk',{x:0,y:'no',z:0}]])assert.throws(()=>validateDescriptor({id,values}))
  assert.throws(()=>parseDescriptor('move forward 3 blocks'),/Unsupported/);assert.equal(renderDescriptor(parseDescriptor('plan build wall 3 by 2 with stone')),'plan build wall 3 by 2 with stone')
+})
+test('command wording separates height from stacks and asks before treating slab blocks as a build',()=>{
+ const height=parseCommandRequest('build a five-block-high wall from stone slabs');assert.match(height.clarification,/height, not 5 stacks/);assert.match(height.clarification,/slab placement is not supported/i)
+ const quantity=parseCommandRequest('make five stacks of slabs');assert.match(quantity.clarification,/item quantity, not a structure height/)
+ const ambiguous=parseCommandRequest('make blocks of slabs');assert.match(ambiguous.clarification,/could mean slab items or a structure/)
+ assert.equal(parseCommandRequest('inventory').descriptor.id,'inventory')
 })
 test('slabs and partial-height supports land at shape height rather than full-cube height',()=>{
  const {w,set,n}=fixture();const state=Object.entries(w.registry.blocksByRuntimeId).find(([,b])=>{if(!b.name.includes('slab'))return false;const shapes=w.Block.fromStateId(b.stateId,0).shapes;return shapes.length===1&&shapes[0][1]===0&&shapes[0][4]===.5})
@@ -87,11 +107,16 @@ test('permission-gated Ensure Survival sends only @s request, waits for confirma
 test('unknown terrain triggers bounded terrain requests and disconnect, retaining authentication',()=>{
  const {w,n,client}=fixture();w.updates.clear();w.sections.clear();let closed=0;client.disconnect=()=>closed++;const at=Date.now();n.step(at);n.step(at+5001);assert.equal(closed,1);assert.equal(n.spawned,false);assert.match(n.reason,/five seconds/)
 })
-test('manual chat and authenticated plan endpoints prepare only; selected plan alone activates',async()=>{
+test('read-only chat and authenticated plan endpoints; selected activation deduplicates',async()=>{
  const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,spawned:true,status(){return {survival:this.survival.snapshot()}},send(){throw Error('No legacy bridge')}});c.survival=new SurvivalController(c);const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
  const server=createApi({localAPI:{token:'test-token'}},c,()=>{});await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port
  const post=async(endpoint,body)=>{const r=await fetch(url+endpoint,{method:'POST',headers:{Authorization:'Bearer test-token'},body:JSON.stringify(body)});return r.json()}
- try{await post('/message',{message:'inventory'});await post('/plans/prepare',{descriptor:{id:'look',values:{}}});assert.deepEqual(calls,[]);assert.equal(c.survival.commandPlans.selected,2);assert(!(await post('/plans/activate',{id:1})).accepted);await post('/plans/select',{id:1});assert((await post('/plans/activate',{id:1})).accepted);assert.deepEqual(calls,['inventory']);assert(!(await post('/plans/activate',{id:1})).accepted);const auth=await fetch(url+'/plans');assert.equal(auth.status,401)}finally{await new Promise(r=>server.close(r))}
+ try{await post('/message',{message:'inventory'});await post('/plans/prepare',{descriptor:{id:'look',values:{}}});assert.deepEqual(calls,['inventory']);assert.equal(c.survival.commandPlans.selected,1);c.survival.commandPlans.batchDelayMs=5;assert((await post('/plans/activate',{id:1})).accepted);assert.deepEqual(calls,['inventory','look around']);assert(!(await post('/plans/activate',{id:1})).accepted);await new Promise(r=>setTimeout(r,20));const auth=await fetch(url+'/plans');assert.equal(auth.status,401)}finally{await new Promise(r=>server.close(r))}
+})
+test('typed command opens catalog; prefixed actions prepare while unprefixed action-like text never executes',()=>{
+ const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:[]},events:[],nextEventId:0,spawned:true,status(){return {}},send(){throw Error('Legacy bridge must not run')}});c.survival=new SurvivalController(c);const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
+ const api=createApi({localAPI:{token:'local-test'}},c,()=>{});assert(api.controller.message('command').showCatalog);assert(api.controller.message('command walk').showCatalog);assert.equal(api.controller.message('inventory').message,'inventory');const plain=api.controller.message('dig 1 2 3');assert.match(plain.message,/question\/chat message/);assert.equal(calls.length,1);assert.equal(c.survival.commandPlans.cards.length,0)
+ const prepared=api.controller.message('command dig 1 2 3');assert(prepared.accepted);assert.equal(c.survival.commandPlans.cards.length,1);assert.equal(calls.length,1);assert.equal(api.controller.message('five block high slab blocks').accepted,true);assert.equal(c.survival.commandPlans.cards.length,1);api.controller.message('command stop');assert.equal(calls.at(-1),'stop')
 })
 
 test('running plan locks other cards; interruption preserves reusable descriptors',()=>{

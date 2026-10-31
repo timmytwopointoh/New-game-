@@ -1,0 +1,78 @@
+name: Publish locally signed VEILFORGE Realm AI v0.18 test APK
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-v013-adaptive-recovery-20261031
+    paths:
+      - 'realm-ai-phone-build/v018-publish-requests/**'
+permissions:
+  contents: write
+concurrency:
+  group: realm-v018-requested-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reconstruct the exact locally signed APK from public APK bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 2 'https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v0173-android-touch-controls-test/VEILFORGE-Realm-AI-v0.17.3-Android-Touch-Controls-TEST.apk' -o public-base.apk
+          python3 realm-ai-phone-build/materialize_v018_apk.py public-base.apk realm-ai-phone-build/v018-public-apk-recipe.json.xz.b64 VEILFORGE-Realm-AI-v0.18-Command-Batch-TEST.apk
+          sha256sum -c realm-ai-phone-build/v018-publication/VEILFORGE-Realm-AI-v0.18-SHA256.txt
+          sha256sum -c realm-ai-phone-build/v018-publication/source-overlay-sha256.txt
+      - name: Install pinned Android verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+      - name: Verify signature, package version, alignment, and bundled runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='VEILFORGE-Realm-AI-v0.18-Command-Batch-TEST.apk'
+          TOOLS="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify --verbose --print-certs "$APK" > certificate-report.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995' certificate-report.txt
+          "$TOOLS/zipalign" -c -P 16 -v 4 "$APK" > alignment-report.txt
+          tail -n 1 alignment-report.txt
+          "$TOOLS/aapt" dump badging "$APK" > package-report.txt
+          head -n 1 package-report.txt
+          grep -q "package: name='com.veilforge.realmagent' versionCode='100015'" package-report.txt
+          grep -q "versionName='0.18-command-batch'" package-report.txt
+          python3 - <<'PY'
+          import zipfile
+          apk='VEILFORGE-Realm-AI-v0.18-Command-Batch-TEST.apk'
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert all(not n.endswith(('.p12','.pfx','.jks','.node')) and 'private/' not in n and 'signing-password' not in n for n in names)
+              for name in ['lib/arm64-v8a/libnode.so','lib/arm64-v8a/libveilforge_bridge.so','assets/nodejs-project/src/api.js','assets/nodejs-project/src/survival/command-plans.js','assets/nodejs-project/src/survival/command-catalog.json']:
+                  assert name in names, name
+              source=z.read('assets/nodejs-project/src/survival/command-plans.js').decode()
+              assert 'two seconds after server-confirmed completion' in source
+              assert 'activateQueue()' in source
+          PY
+      - name: Publish the test APK, source overlay, recipe, and public verification reports
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG='veilforge-realm-ai-v018-command-batch-test'
+          APK='VEILFORGE-Realm-AI-v0.18-Command-Batch-TEST.apk'
+          ASSETS=("$APK" realm-ai-phone-build/v018-source-overlay.tar.xz realm-ai-phone-build/v018-public-apk-recipe.json.xz.b64 realm-ai-phone-build/v018-publication/VEILFORGE-Realm-AI-v0.18-SHA256.txt realm-ai-phone-build/v018-publication/source-overlay-sha256.txt realm-ai-phone-build/v018-publication/verification.json certificate-report.txt alignment-report.txt package-report.txt)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --title 'VEILFORGE Realm AI v0.18 — Command Batch TEST' --notes-file realm-ai-phone-build/v018-publication/release-notes.md
+          else
+            gh release create "$TAG" "${ASSETS[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'VEILFORGE Realm AI v0.18 — Command Batch TEST' --notes-file realm-ai-phone-build/v018-publication/release-notes.md
+          fi

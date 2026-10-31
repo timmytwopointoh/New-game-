@@ -1,0 +1,11 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100015,
+  "versionName": "0.18-command-batch",
+  "signerCertificateSha256": "B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995",
+  "apkSha256": "13c2969f26904d6cedd6ba524c03191217ef7aaf70dbcda2eba0260d94134eb7",
+  "sourceOverlaySha256": "050859eb904c27e9a7c0677e863ea4b697766a491dbe54baf2ae0afb4161e2cd",
+  "nodeTests": 180,
+  "androidUnitTests": "13 focused tests passed; Java and test sources compile",
+  "delivery": "test APK signed locally with owner-supplied permanent key; public recipe contains only APK bytes"
+}

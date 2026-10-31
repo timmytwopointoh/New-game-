@@ -1,4 +1,4 @@
-import {commandCatalog,parseDescriptor,formOptions} from './survival/command-plans.js'
+import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
 import http from 'node:http'
 import crypto from 'node:crypto'
 import {parseCommand} from '../pack-template/scripts/commands.js'
@@ -30,7 +30,7 @@ export function createApi(config,connection,log=console.log){
  })
  // This handler is intentionally shared by the Android HTTPS API and owner-only Realm chat.
  const message=raw=>{
-   if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim())){
+   if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
      planner.cancel();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
    }
    let output
@@ -39,9 +39,19 @@ export function createApi(config,connection,log=console.log){
     try{
      const text=String(raw).trim();let m
      if((m=text.match(/^select plan (\d+)$/i)))output={accepted:true,message:'Selected plan '+m[1]+'.',plans:plans.select(Number(m[1]))}
-     else if(/^(activate selected plan|start plan)$/i.test(text))output=plans.activate(plans.selected)
+     else if(/^(activate selected plan|start plan|activate queue|run queue)$/i.test(text))output=plans.activateQueue()
      else if(text==='saved plans')output={accepted:true,message:'Saved plan cards.',plans:plans.snapshot()}
-     else output=plans.prepare(parseDescriptor(raw))
+     else if(/^(?:command|commands)$/i.test(text))output={accepted:true,queued:false,showCatalog:true,message:'Supported commands: '+commandCatalog.map(d=>d.label).join('; '),catalog:commandCatalog.map(d=>({id:d.id,label:d.label,fields:d.fields,note:d.note})),plans:plans.snapshot()}
+     else if(/^command\s+/i.test(text)){
+      try{const intent=parseCommandRequest(text.slice(text.search(/\s/)+1));output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}
+      catch(e){output={accepted:false,queued:false,showCatalog:true,message:e.message+' Choose an option to open its required fields.',plans:plans.snapshot()}}
+     }else{
+      const candidate=text.replace(/[.!?]+$/,'').trim();let descriptor=null
+      try{descriptor=parseDescriptor(candidate)}catch{}
+      const safeQuestion=descriptor&&['status','movement','look','inventory','help','plan_status','find','materials','about','recipe','route'].includes(descriptor.id)
+      if(safeQuestion)output=connection.survival.handle(renderDescriptor(descriptor))
+      else output={accepted:true,queued:false,message:'I treated that as a question/chat message; no action was started. Prefix an action with “command” (or type “command” to open the full command list).',plans:plans.snapshot()}
+     }
     }catch(e){output={accepted:false,queued:false,message:e.message,plans:plans.snapshot()}}
    }else output=planner.handle(raw)||(planner.snapshot().state==='running'?{accepted:true,queued:false,message:'A plan is running; cancel it first.'}:chatDispatch(raw,connection))
    return output
@@ -89,6 +99,7 @@ export function createApi(config,connection,log=console.log){
          else if(pathname==='/plans/select')result={accepted:true,message:'Plan selected.',plans:p.select(data.id)}
          else if(pathname==='/plans/delete')result={accepted:true,message:'Plan deleted.',plans:p.delete(data.id)}
          else if(pathname==='/plans/activate')result=p.activate(data.id)
+         else if(pathname==='/plans/activate-queue')result=p.activateQueue()
          else return send(404,{error:'Unknown plan action'})
          return send(200,result)
         }catch(e){return send(200,{accepted:false,queued:false,message:e.message,plans:p.snapshot()})}
