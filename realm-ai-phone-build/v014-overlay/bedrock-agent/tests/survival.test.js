@@ -13,7 +13,7 @@ const {createSerializer}=require('bedrock-protocol/src/transforms/serializer')
 function varint(n){n=n>>>0;const b=[];do{const v=n&127;n>>>=7;b.push(v|(n?128:0))}while(n);return Buffer.from(b)}
 const signed=n=>varint(((n<<1)^(n>>31))>>>0)
 const singleton=(y,id)=>Buffer.concat([Buffer.from([9,1,y&255,1]),signed(id)])
-function world(){const w=new WorldView();w.initialize({player_gamemode:0,player_position:{x:.5,y:65.62,z:.5},runtime_entity_id:1n,dimension:'overworld',block_network_ids_are_hashes:true});w.abilityState={known:true,effective:{},active:[],loading:false};return w}
+function world(){const w=new WorldView();w.initialize({player_gamemode:0,player_position:{x:.5,y:65.62,z:.5},runtime_entity_id:1n,entity_id:42n,dimension:'overworld',block_network_ids_are_hashes:true});w.abilityState={known:true,effective:{},active:[],loading:false};return w}
 const runtimeCaches=new WeakMap()
 function runtimeId(w,name){
  let ids=runtimeCaches.get(w)
