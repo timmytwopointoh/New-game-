@@ -26,7 +26,7 @@ export class SurvivalController{
   if(/^(?:diagnostics|all diagnostics|diagnostic status|check everything)$/.test(s)){
    const w=this.world,p=w.playerEvidence(this.connection),c=this.navigation.controlStatus(),inv=w.inventoryEvidence()
    const report='Player '+(p.playerActorIdentified?'confirmed':'not confirmed')+'; mode '+p.ownMode+'; Survival '+(p.survivalVerified?'verified':'paused')+'; abilities '+(p.abilitiesReceived?'received':'unknown')+'; health '+(w.attributes['minecraft:health']??'?')+'; inventory '+(inv.serverSnapshotReceived?'received':'unknown')+'; inputs '+c.packetsSent+'; movement '+this.navigation.state+'.'
-   return answer(report+' '+(p.whyPaused||'No reported Survival block.'),{diagnostics:{player:p,control:c,inventory:inv,nav:this.navigation.snapshot(),connection:{spawned:!!this.connection.spawned,connected:!!this.connection.connected},gameMode:w.modeEvidence}})
+   return answer(report+' '+(p.whyPaused||'No reported Survival block.'),{diagnostics:{player:p,control:c,inventory:inv,nav:this.navigation.snapshot(),connection:{spawned:!!this.connection.spawned,connected:!!this.connection.connected},gameMode:w.modeEvidence,actorSession:w.actor.snapshot()}})
   }
   if(/^(?:player identity|player status|character status|am i a real player|entity status)$/.test(s)){
    const e=this.world.playerEvidence(this.connection),mode=e.modeEvidence||{}
@@ -74,7 +74,7 @@ export class SurvivalController{
    try{
     // MobEquipment is the bidirectional held-slot notification. Do not send a second
     // PlayerHotbar request or invent an inventory move; the server owns every stack.
-    this.connection.client.queue('mob_equipment',{runtime_entity_id:BigInt(this.world.entityId),item:selection.item,slot,selected_slot:slot,window_id:'inventory'})
+    this.connection.client.queue('mob_equipment',{runtime_entity_id:this.world.actor.runtimeForPacket(),item:selection.item,slot,selected_slot:slot,window_id:'inventory'})
     this.world.pendingSlot=slot;this.world.pendingSlotAt=Date.now()
     this.world.lastSelectionStatus='Requested '+inventoryItemName(selection.item,this.world.registry?.items)+' in hotbar slot '+(slot+1)+'; waiting for server confirmation.'
     return answer(this.world.lastSelectionStatus)
