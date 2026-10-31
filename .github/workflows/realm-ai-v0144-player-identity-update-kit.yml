@@ -56,6 +56,9 @@ jobs:
           assert text.count('/not been received/')==1,'Unknown slot regression must be reviewed'
           p.write_text(text.replace('/not been received/','/not been reported/'))
           PY
+          node --check src/survival/real-player.js
+          node --check src/survival/world.js
+          node --check src/survival/controller.js
           npm test
           node --test tests/real-player.test.js
       - name: Compile unsigned same-package Android APK (never substitute a debug signing key)
