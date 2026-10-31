@@ -1,0 +1,32 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100017,
+  "versionName": "0.20-language-chat",
+  "apk_sha256": "87b92b7746edf849e0d5caf69018c667190bcd9336691be02a22fa995b8a1b51",
+  "apk_bytes": 110061672,
+  "source_archive": "v020-source.zip",
+  "source_sha256": "54f6e7a5216006c1383ae3834161f444bd985fa835bc19353fa1fc93f560a2a2",
+  "source_archive_bytes": 570578,
+  "signature_certificate_sha256": "B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995",
+  "signing_key_reused": true,
+  "english_glossary_words": 5000,
+  "english_glossary_source": "wordfreq English frequency data, top 7,568 raw entries after filters; Open English WordNet 2025 senses",
+  "node_tests": {
+    "passed": 189,
+    "failed": 0
+  },
+  "android_code_visibility": "Verified in packaged classes2.dex disassembly: selectable sign-in code and Copy button are attached to home screen.",
+  "checks": {
+    "apk_zip_integrity": true,
+    "zipalign_16": true,
+    "package_identity": true,
+    "version_code_increased": true,
+    "pinned_signature": true,
+    "source_assets_match": true
+  },
+  "not_run": [
+    "Android Gradle/Robolectric suite",
+    "live Realm test",
+    "Internet search or multi-source misinformation verification"
+  ]
+}
