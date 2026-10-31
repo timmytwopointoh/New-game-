@@ -280,7 +280,7 @@
         "type": "block"
       }
     ],
-    "note": "Fixed 5 \u00d7 5 shelter, 3-block walls, floor, roof and 2-block doorway. Preview only."
+    "note": "Fixed 5 × 5 shelter, 3-block walls, floor, roof and 2-block doorway. Preview only."
   },
   {
     "id": "status",
@@ -316,6 +316,20 @@
     "template": "inventory",
     "fields": [],
     "note": ""
+  },
+  {
+    "id": "inventory_status",
+    "label": "Inventory receipts / missing shovel",
+    "template": "inventory status",
+    "fields": [],
+    "note": "Shows only inventory changes actually reported by the server, not invented pickups."
+  },
+  {
+    "id": "combat_status",
+    "label": "Combat / invulnerability diagnostic",
+    "template": "combat status",
+    "fields": [],
+    "note": "Reports own game mode and effective abilities; PvP and spawn protection must be verified on the Realm."
   },
   {
     "id": "help",
