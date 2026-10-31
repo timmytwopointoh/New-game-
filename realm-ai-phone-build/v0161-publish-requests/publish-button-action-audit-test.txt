@@ -1,0 +1,1 @@
+Publish the locally built and verified v0.16.1 test APK using only the public APK-byte reconstruction recipe. Do not build or sign on GitHub. Preserve the permanent signing identity; no signing secret is needed by this publication workflow.

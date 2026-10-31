@@ -1,0 +1,14 @@
+{
+  "applicationId": "com.veilforge.realmagent",
+  "versionCode": 100010,
+  "versionName": "0.16.1-button-action-audit",
+  "apkBytes": 109704576,
+  "apkSha256": "f645a16c6e393dbc7bad27721714a0645e6e182b0bc25e5addfd7e899a3981f6",
+  "sourceApkSha256": "8fe136843779e13e44ac4caa3957934222b49cf5ba56702047f16ec0f2e7eaa0",
+  "permanentCertificateSha256": "8e902e783e7b4bd45ffe2f99b45c53b0e15d4b8e36092532cc6e969a956815c5",
+  "sourceOverlayTarSha256": "aa7ee691f83c039a99f0f4bc4fb157420e76e0faa5828661faa99383f8dfa295",
+  "androidUnitTests": "12 passed; Robolectric, 360x640 phone layout",
+  "bedrockAgentTests": "174 passed",
+  "zipIntegrity": "verified",
+  "16kbZipAlignment": "verified"
+}
