@@ -52,6 +52,9 @@ jobs:
           python3 realm-ai-phone-build/patch_disconnect_v094.py "$BASE"
           python3 realm-ai-phone-build/patch_pack_response_v095.py "$BASE"
           python3 realm-ai-phone-build/patch_cdn_v096.py "$BASE"
+          python3 realm-ai-phone-build/patch_pack_wait_v097.py "$BASE"
+          grep -q 'packWaitSeconds:' "$BASE/bedrock-agent/src/connection.js"
+          grep -q 'Requested Realm packs' "$APP/src/main/java/com/veilforge/realmagent/MainActivity.java"
           cp realm-ai-phone-build/v096-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
           (cd "$BASE/bedrock-agent" && node --test tests/cdn-packs.test.js tests/resource-packs.test.js)
           node --check "$BASE/bedrock-agent/src/cdn-download.js"
