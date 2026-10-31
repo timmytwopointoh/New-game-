@@ -87,6 +87,18 @@ jobs:
           python3 realm-ai-phone-build/patch_pack_response_v095.py "$BASE"
           node --check "$BASE/bedrock-agent/src/realm-packs.js"
           grep -q "response_status_name:(" "$BASE/bedrock-agent/src/realm-packs.js"
+      - name: Add CDN packs and refresh bundled bot on Android update without clearing OAuth
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          APP="$BASE/android-app/app"
+          python3 realm-ai-phone-build/patch_cdn_v096.py "$BASE"
+          cp realm-ai-phone-build/v096-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
+          (cd "$BASE/bedrock-agent" && node --test tests/cdn-packs.test.js tests/resource-packs.test.js)
+          grep -q 'asset_bundle_version' "$APP/src/main/java/com/veilforge/realmagent/BotService.java"
+          node --check "$BASE/bedrock-agent/src/cdn-download.js"
+          node --check "$BASE/bedrock-agent/src/realm-packs.js"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
