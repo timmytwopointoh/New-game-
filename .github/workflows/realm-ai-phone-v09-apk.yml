@@ -1,21 +1,9 @@
-name: VEILFORGE Realm AI v0.9.9 Exclusive Resource Pack Handshake APK
+name: VEILFORGE Realm AI v0.9.10 CDN Transfer Ownership APK
 on:
   push:
     branches:
-      - sandbox/realm-ai-v099-single-pack-handler-20261031
+      - sandbox/realm-ai-v0910-cdn-owner-20261031
     paths:
-      - 'realm-ai-phone-build/source-v09.tar.xz.b64'
-      - 'realm-ai-phone-build/patch_single_pack_owner_v099.py'
-      - 'realm-ai-phone-build/verify_single_pack_owner_v099.cjs'
-      - 'realm-ai-phone-build/patch_bedrock_realm_join_v098.py'
-      - 'realm-ai-phone-build/patch_join_503_status_v098.py'
-      - 'realm-ai-phone-build/realm-join-503-retry.cjs'
-      - 'realm-ai-phone-build/realm-join-503-retry.test.cjs'
-      - 'realm-ai-phone-build/v093-pack-overlay.tar.xz.b64'
-      - 'realm-ai-phone-build/patch_cdn_v096.py'
-      - 'realm-ai-phone-build/v096-cdn-download.js'
-      - 'realm-ai-phone-build/v096-cdn-tests.test.js'
-      - 'realm-ai-phone-build/patch_disconnect_v094.py'
       - '.github/workflows/realm-ai-phone-v09-apk.yml'
 permissions:
   contents: write
@@ -233,6 +221,15 @@ jobs:
           BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
           python3 realm-ai-phone-build/fix_bedrock_12660_schema.py "$BASE"
           node realm-ai-phone-build/verify_12660_pack_wire.cjs "$BASE"
+      - name: Keep CDN transfer state independent from server chunk headers (v0.9.10)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          python3 realm-ai-phone-build/patch_cdn_owner_v0910.py "$BASE"
+          cp realm-ai-phone-build/v0910-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
+          sed -i 's/versionCode 18/versionCode 19/;s/0.9.9-one-pack-handler/0.9.10-cdn-owner/' "$BASE/android-app/app/build.gradle"
+          (cd "$BASE/bedrock-agent" && npm test)
       - name: Acquire checksum-verified Android 16 KB Node native runtime
         working-directory: .vf-phone-build/veilforge_realm_v09_apk_ready
         run: python3 tools/prepare_android_node.py
@@ -276,21 +273,21 @@ jobs:
         run: |
           set -euo pipefail
           APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
-          cp "$APK" VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk
-          sha256sum VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk > VEILFORGE-Realm-AI-v0.9.9-SHA256.txt
-          TAG="veilforge-realm-ai-v099-single-pack-handler-preview"
+          cp "$APK" VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk
+          sha256sum VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk > VEILFORGE-Realm-AI-v0.9.10-SHA256.txt
+          TAG="veilforge-realm-ai-v0910-cdn-owner-preview"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk VEILFORGE-Realm-AI-v0.9.9-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk VEILFORGE-Realm-AI-v0.9.10-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk VEILFORGE-Realm-AI-v0.9.9-SHA256.txt \
+            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.10-CdnOwner-debug.apk VEILFORGE-Realm-AI-v0.9.10-SHA256.txt \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "VEILFORGE Realm AI v0.9.9 - Fix Competing Resource Pack Handlers" \
-              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. Removes bedrock-protocol competing automatic completed response during Realm pack negotiation. Real device Realm join remains unverified. Still debug-signed; updating an existing debug APK may require reinstall. NEW DEBUG signing key may require reinstall and Microsoft re-login. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
+              --title "VEILFORGE Realm AI v0.9.10 - Isolate CDN Transfer State" \
+              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. Retains exclusive pack handshake ownership and prevents server chunk headers from modifying active CDN transfer state. Real device Realm join remains unverified. Still debug-signed; updating an existing debug APK may require reinstall. NEW DEBUG signing key may require reinstall and Microsoft re-login. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
           fi
       - name: Upload validated debug APK for 2 days
         uses: actions/upload-artifact@v4
         with:
-          name: VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-APK
+          name: VEILFORGE-Realm-AI-v0.9.10-CdnOwner-APK
           path: .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 2
           if-no-files-found: error
