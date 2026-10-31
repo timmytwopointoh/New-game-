@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.18.1)
+project(veilforge_realm_native LANGUAGES CXX)
+add_library(node SHARED IMPORTED)
+set_target_properties(node PROPERTIES IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/libnode/bin/${ANDROID_ABI}/libnode.so")
+add_library(veilforge_bridge SHARED src/main/cpp/bridge.cpp)
+target_include_directories(veilforge_bridge PRIVATE "${CMAKE_SOURCE_DIR}/libnode/include/node")
+target_compile_features(veilforge_bridge PRIVATE cxx_std_20)
+target_link_libraries(veilforge_bridge node log)

@@ -1,0 +1,7 @@
+Offline English glossary attribution
+
+Word frequency ordering: wordfreq, by Robyn Speer, Apache-2.0 code; included corpus-derived data under CC BY-SA 4.0. Source: https://github.com/rspeer/wordfreq (commit 912caf64b657478d1dff1138efdc078947d54bb1).
+
+Definitions: Open English WordNet 2025, based on Princeton WordNet; Open English WordNet data CC BY 4.0 and Princeton WordNet License. Source: https://github.com/globalwordnet/english-wordnet (release 2025-edition, commit dc343f2683279ecbb13fab4e2fd778d7b162d287).
+
+The application uses this data offline. Word senses are ranked lexical descriptions, not authoritative Minecraft instructions; action routing uses a separate, limited, explicit set of supported terms.

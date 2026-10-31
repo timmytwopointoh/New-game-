@@ -1,0 +1,30 @@
+{
+  "troll": [
+    {"p":"noun","d":"In online chat or multiplayer games, a person who deliberately provokes or annoys others to get a reaction. The word also has older folklore meanings; context matters."},
+    {"p":"noun","d":"In folklore, a supernatural being, often described as a giant or creature living in caves or mountains."}
+  ],
+  "trolling": [
+    {"p":"verb","d":"Posting or saying provocative things to bait a reaction. In a game, the same word can also mean playful joking, so ask what the speaker intends before treating it as hostile."}
+  ],
+  "griefing": [
+    {"p":"noun","d":"In multiplayer games, deliberately disrupting other players, such as damaging their builds or repeatedly interfering with play. This describes behavior, not proof of someone's intent."}
+  ],
+  "goofing": [
+    {"p":"verb","d":"Playing around or acting silly rather than making a serious request."}
+  ],
+  "survival": [
+    {"p":"noun","d":"Minecraft game mode where a player normally has health, hunger, and resource limits. The bot verifies its own server-reported mode before autonomous work."}
+  ],
+  "creative": [
+    {"p":"adjective","d":"Minecraft game mode with building-focused abilities. The bot does not grant itself Creative; any mode change must be explicitly requested and authorized by the server."}
+  ],
+  "redstone": [
+    {"p":"noun","d":"Minecraft material and system used to transmit signals and build mechanisms; the name also refers to redstone dust, ore, blocks, and related components."}
+  ],
+  "ore": [
+    {"p":"noun","d":"A naturally occurring Minecraft block that can contain a resource, such as coal, iron, copper, gold, redstone, lapis lazuli, diamond, or emerald."}
+  ],
+  "strip mining": [
+    {"p":"noun","d":"A planned mining pattern using parallel tunnels or lanes. Before any automation, confirm the target, depth, tunnel length, spacing, and safe return path; this app does not yet implement a verified multi-lane strip-mining plan."}
+  ]
+}
