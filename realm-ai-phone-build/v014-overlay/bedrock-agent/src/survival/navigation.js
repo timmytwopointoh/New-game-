@@ -53,7 +53,8 @@ export class Navigation{
  assignRoute(plan){this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
  walk(goal,{allowMining=false}={}){
   if(!this.world.actor?.ready)return {accepted:false,queued:false,message:'The Realm has not yet assigned this client a real player runtime and unique ID.'}
-  if(!this.world.survivalVerified)return {accepted:false,queued:false,message:'Survival mode is not verified by the server; movement/mining refused.'}
+  if(!this.world.walkingAllowed)return {accepted:false,queued:false,message:'Cannot walk: '+this.world.walkingBlockReason}
+  if(allowMining&&!this.world.survivalVerified)return {accepted:false,queued:false,message:'Clear-path mining requires verified Survival; ordinary walking is still available.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   const start=this.world.standPosition()
   if(!start||![goal?.x,goal?.y,goal?.z].every(Number.isSafeInteger)||goal.y!==start.y||Math.abs(goal.x-start.x)+Math.abs(goal.z-start.z)>48)return {accepted:false,queued:false,message:'Choose whole coordinates on the current level within 48 blocks.'}
@@ -69,7 +70,7 @@ export class Navigation{
  }
  follow(name){
   if(!this.world.actor?.ready)return {accepted:false,queued:false,message:'The Realm has not yet assigned this client a real player runtime and unique ID.'}
-  if(!this.world.survivalVerified)return {accepted:false,queued:false,message:'Survival mode is not verified by the server; movement/mining refused.'}
+  if(!this.world.walkingAllowed)return {accepted:false,queued:false,message:'Cannot walk: '+this.world.walkingBlockReason}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.job={kind:'follow',name,allowMining:false};this.state='following';this.lastFollowPlan=0
   this.updateFollow(Date.now(),true)
@@ -180,7 +181,8 @@ export class Navigation{
   const health=this.world.attributes['minecraft:health']
   if(health===0){this.stop('Player died; work stopped.');return}
   if(this.job&&health!==undefined&&health<=6)this.stop('Health is low; work stopped.')
-  if(this.job&&!this.world.survivalVerified)this.stop('Server Survival verification lost; work stopped.')
+  if(this.job&&!this.world.walkingAllowed)this.stop('Walking denied: '+this.world.walkingBlockReason)
+   if(this.job&&(this.job.kind==='mine'||this.job.allowMining)&&!this.world.survivalVerified)this.stop('Mining paused: Survival and ability evidence are not verified.')
   if(this.job&&!this.world.enabled)this.stop('View is off; work stopped.')
   if(this.job?.kind==='solo'&&now-this.startedAt>60000)this.stop('Travel time limit reached.')
   if(this.clearing&&!this.mining.job){
