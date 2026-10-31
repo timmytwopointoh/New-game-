@@ -8,7 +8,7 @@ This is a separate installation of the Realm companion requested by its owner on
 * Key alias: `realm-live-update`; public certificate fingerprint is recorded in
   `certificate-sha256.txt`. All future releases must use this exact key.
 * Baseline: released v0.19 source overlay and native libraries, with independently
-  verified SHA256 values in `prepare.py`. Its 186 Node tests passed locally.
+  verified SHA256 values in `prepare.py` and the public first-release verification record. Its 186 Node tests passed locally.
   Earlier branch tests are not mixed into this release's complete source overlay.
 * No private signing material belongs in this repository or public release assets.
 
@@ -95,6 +95,11 @@ notice signature using the new public certificate. No real device test ran.
 
 The direct release-storage upload was rejected (401). The explicit owner-requested
 one-time delivery job reconstructs the already compiled and signed APK from a
-public-byte recipe and the pinned v019 APK. The recipe contains no private key.
+public-byte recipe and a pinned retained runtime APK. The recipe contains no private key.
 Both input and output SHA256, signature, package and alignment are checked again
 before publishing. The general source/release compiler remains manual-only.
+
+The earlier v019 release assets were removed from GitHub during this work. Its
+verified source overlay is now retained in this branch as `baseline-v019-source.tar.xz.b64`.
+Future source builds use this independent first release as their pinned native
+baseline, so they do not rely on the removed release links.

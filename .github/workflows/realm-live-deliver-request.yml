@@ -21,8 +21,8 @@ jobs:
       - name: Reconstruct owner-requested locally compiled and signed APK (no private key)
         run: |
           set -eu
-          curl -fLsS --max-time 180 'https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v019-language-chat-test/VEILFORGE-Realm-AI-v0.19-Conversation-TEST.apk' -o original-v019.apk
-          python3 realm-ai-phone-build/live-update/materialize_first_release.py original-v019.apk Realm-AI-Live.apk
+          curl -fLsS --max-time 180 'https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v020-language-chat-test/VEILFORGE-Realm-AI-v0.20-Language-TEST.apk' -o runtime-base.apk
+          python3 realm-ai-phone-build/live-update/materialize_first_release.py runtime-base.apk Realm-AI-Live.apk
       - name: Verify independent APK identity, dedicated certificate and 16 KB alignment
         run: |
           set -eu

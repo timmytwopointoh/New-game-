@@ -5,7 +5,7 @@ import base64,hashlib,json,lzma,sys,zipfile
 source,output=map(Path,sys.argv[1:]);here=Path(__file__).resolve().parent
 if output.exists():raise SystemExit('Refusing to overwrite an existing APK')
 a=source.read_bytes();expected=json.loads((here/'first-release-verification.json').read_text())['sha256']
-if hashlib.sha256(a).hexdigest()!='252c1e3e7c6078927b5477c04bf8645d4546606a0666edf0a5f476225de74072':raise SystemExit('Wrong original v019 APK')
+if hashlib.sha256(a).hexdigest()!='87b92b7746edf849e0d5caf69018c667190bcd9336691be02a22fa995b8a1b51':raise SystemExit('Wrong retained runtime baseline APK')
 r=json.loads(lzma.decompress(base64.b64decode((here/'first-release-recipe.json.xz.b64').read_bytes())))
 if r['source_sha256']!=hashlib.sha256(a).hexdigest() or r['target_sha256']!=expected or r['target_bytes']>256*1024*1024:raise SystemExit('Recipe identity rejected')
 try:
