@@ -304,6 +304,42 @@
     "note": ""
   },
   {
+    "id": "look_at",
+    "label": "Aim at block (first-person-aligned)",
+    "template": "look at {x} {y} {z}",
+    "fields": [
+      {
+        "id": "x",
+        "label": "Block X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Block Y",
+        "type": "integer",
+        "min": -64,
+        "max": 320
+      },
+      {
+        "id": "z",
+        "label": "Block Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Turns the headless player's view toward the center of a block within 16 blocks, using player_auth_input. Does not create a rendered camera."
+  },
+  {
+    "id": "control_status",
+    "label": "Control input / camera status",
+    "template": "control status",
+    "fields": [],
+    "note": "Read-only: input packet count, yaw/pitch, server-position evidence. No rendered third-person camera."
+  },
+  {
     "id": "view_off",
     "label": "Disable view",
     "template": "view off",
