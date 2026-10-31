@@ -30,6 +30,8 @@ From that same folder run: `powershell -ExecutionPolicy Bypass -File .\request-s
 
 This commits a harmless timestamped request into `stable-build-requests/`, triggers `.github/workflows/realm-ai-stable-android.yml`, rebuilds the phone-hosted AI, verifies the permanent certificate, increments `versionCode`, and publishes a signed APK to the repository's GitHub Releases.
 
+You can also request a future update directly from your phone: open this branch on GitHub, choose **Add file → Create new file**, give it a unique name such as `realm-ai-phone-build/stable-build-requests/next-build-2.txt`, type `build`, and commit to the stable-signing branch. The same signed release workflow will run. Use a different filename each time.
+
 The user downloads the APK and installs it **over the existing stable-signed app**. Do not uninstall it: doing so erases the saved Microsoft sign-in data.
 
 ## Important limits
