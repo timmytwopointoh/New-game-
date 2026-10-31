@@ -1,10 +1,12 @@
-name: VEILFORGE Realm AI v0.9.8 Retry Realm 503 Joining APK
+name: VEILFORGE Realm AI v0.9.9 Exclusive Resource Pack Handshake APK
 on:
   push:
     branches:
-      - sandbox/realm-ai-v098-join-503-retry-20261031
+      - sandbox/realm-ai-v099-single-pack-handler-20261031
     paths:
       - 'realm-ai-phone-build/source-v09.tar.xz.b64'
+      - 'realm-ai-phone-build/patch_single_pack_owner_v099.py'
+      - 'realm-ai-phone-build/verify_single_pack_owner_v099.cjs'
       - 'realm-ai-phone-build/patch_bedrock_realm_join_v098.py'
       - 'realm-ai-phone-build/patch_join_503_status_v098.py'
       - 'realm-ai-phone-build/realm-join-503-retry.cjs'
@@ -146,6 +148,14 @@ jobs:
           node --check "$BASE/bedrock-agent/src/connection.js"
           grep -q "onRealmJoinRetry" "$BASE/bedrock-agent/src/connection.js"
           grep -q 'versionCode 17' "$APP/build.gradle"
+      - name: Increment version for exclusive pack handler (v0.9.9)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          APP="$BASE/android-app/app"
+          sed -i 's/versionCode 17/versionCode 18/;s/0.9.8-join-retries/0.9.9-one-pack-handler/' "$APP/build.gradle"
+          grep -q 'versionCode 18' "$APP/build.gradle"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -207,6 +217,15 @@ jobs:
           node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/client/auth.js"
           node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/client/realmJoin503Retry.js"
           grep -q "joinRealmWithRetry" "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/client/auth.js"
+      - name: Remove competing Bedrock pack auto-complete, verify exactly one handshake owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          python3 realm-ai-phone-build/patch_single_pack_owner_v099.py "$BASE"
+          node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/createClient.js"
+          node realm-ai-phone-build/verify_single_pack_owner_v099.cjs "$BASE"
+          (cd "$BASE/bedrock-agent" && node --test tests/cdn-packs.test.js tests/resource-packs.test.js)
       - name: Correct 1.26.60 packet enum and validate REAL serializer bytes
         shell: bash
         run: |
@@ -257,21 +276,21 @@ jobs:
         run: |
           set -euo pipefail
           APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
-          cp "$APK" VEILFORGE-Realm-AI-v0.9.8-Join503Retry-debug.apk
-          sha256sum VEILFORGE-Realm-AI-v0.9.8-Join503Retry-debug.apk > VEILFORGE-Realm-AI-v0.9.8-SHA256.txt
-          TAG="veilforge-realm-ai-v098-join-503-retry-preview"
+          cp "$APK" VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk
+          sha256sum VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk > VEILFORGE-Realm-AI-v0.9.9-SHA256.txt
+          TAG="veilforge-realm-ai-v099-single-pack-handler-preview"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.8-Join503Retry-debug.apk VEILFORGE-Realm-AI-v0.9.8-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk VEILFORGE-Realm-AI-v0.9.9-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.8-Join503Retry-debug.apk VEILFORGE-Realm-AI-v0.9.8-SHA256.txt \
+            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-debug.apk VEILFORGE-Realm-AI-v0.9.9-SHA256.txt \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "VEILFORGE Realm AI v0.9.8 - Retry Temporary Realm 503 Errors" \
-              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. Adds request elapsed time, transport close reason, and count of server pack headers/chunks; does not imply successful Realm join. Still debug-signed; updating an existing debug APK may require reinstall. NEW DEBUG signing key may require reinstall and Microsoft re-login. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
+              --title "VEILFORGE Realm AI v0.9.9 - Fix Competing Resource Pack Handlers" \
+              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. Removes bedrock-protocol competing automatic completed response during Realm pack negotiation. Real device Realm join remains unverified. Still debug-signed; updating an existing debug APK may require reinstall. NEW DEBUG signing key may require reinstall and Microsoft re-login. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
           fi
       - name: Upload validated debug APK for 2 days
         uses: actions/upload-artifact@v4
         with:
-          name: VEILFORGE-Realm-AI-v0.9.8-Join503Retry-APK
+          name: VEILFORGE-Realm-AI-v0.9.9-SinglePackHandler-APK
           path: .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 2
           if-no-files-found: error
