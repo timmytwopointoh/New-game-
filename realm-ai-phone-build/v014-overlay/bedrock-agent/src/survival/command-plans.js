@@ -128,6 +128,53 @@ export class CommandPlans{
   try{this.persist()}catch(e){this.cards=before;throw e}
   return this.snapshot()
  }
+ clearAll(){
+  if(this.runActive)throw Error('Stop the queue before clearing it.')
+  if(this.readOnly)throw Error(this.loadError||'Queue is read-only.')
+  if(this.directory&&!this.scope)throw Error('Join a Realm before clearing its queue.')
+  const prior=this.cards,priorSequence=this.sequence
+  this.cards=[];this.sequence=0;this.cursor=0;this.nextAt=null
+  try{this.persist()}catch(e){this.cards=prior;this.sequence=priorSequence;throw e}
+  this.migrationNote=''
+  return {accepted:true,message:'Current Realm queue cleared. Other Realms and login untouched.',plans:this.snapshot()}
+ }
+ otherSavedQueues(){
+  if(!this.directory||!this.scope||!fs.existsSync(this.directory))return []
+  const groups=new Map()
+  for(const entry of fs.readdirSync(this.directory,{withFileTypes:true})){
+   if(!entry.isFile())continue
+   const match=entry.name.match(/^([a-f0-9]{64})\.json(\.pre-v0146[\w.+-]*)?$/)
+   if(!match)continue
+   const id=match[1]
+   if(path.basename(this.file)===id+'.json')continue
+   const full=path.join(this.directory,entry.name),st=fs.lstatSync(full)
+   if(!st.isFile()||st.isSymbolicLink())continue
+   const item=groups.get(id)||{id,modifiedAt:0,count:null,backups:0,hasQueue:false}
+   item.modifiedAt=Math.max(item.modifiedAt,st.mtimeMs)
+   if(match[2])item.backups++
+   else{
+    item.hasQueue=true
+    if(st.size<=131072){
+     try{const parsed=JSON.parse(fs.readFileSync(full,'utf8'));item.count=Array.isArray(parsed.cards)?parsed.cards.length:null}
+     catch{item.count=null}
+    }
+   }
+   groups.set(id,item)
+  }
+  return [...groups.values()].sort((a,b)=>b.modifiedAt-a.modifiedAt)
+ }
+ deleteSavedQueue(id){
+  if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))throw Error('Invalid saved queue identifier.')
+  if(!this.directory||!this.scope)throw Error('Join a Realm first.')
+  if(path.basename(this.file)===id+'.json')throw Error('Use Clear Current Queue instead.')
+  const names=fs.readdirSync(this.directory,{withFileTypes:true}).filter(e=>e.isFile()&&e.name.startsWith(id+'.json'))
+    .filter(e=>/^\.json(?:\.pre-v0146[\w.+-]*)?$/.test(e.name.slice(64)))
+    .map(e=>path.join(this.directory,e.name))
+  if(!names.length)throw Error('Old queue already deleted.')
+  for(const file of names){const st=fs.lstatSync(file);if(!st.isFile()||st.isSymbolicLink())throw Error('Unsafe queue file.')}
+  for(const file of names)fs.unlinkSync(file)
+  return {accepted:true,message:'Old saved queue and recovery copies deleted. Current queue and login untouched.',plans:this.snapshot()}
+ }
  move(id,direction){
   if(this.runActive)throw Error('Stop the queue before changing order.')
   if(direction!==-1&&direction!==1)throw Error('Choose up or down.')
