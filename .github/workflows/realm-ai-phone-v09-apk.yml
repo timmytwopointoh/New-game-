@@ -1,11 +1,14 @@
-name: VEILFORGE Realm AI v0.9.5 Bedrock Resource-Pack Protocol Fix APK
+name: VEILFORGE Realm AI v0.9.6 HTTPS CDN Resource Pack APK
 on:
   push:
     branches:
-      - sandbox/realm-ai-v095-pack-protocol-fix-20261030
+      - sandbox/realm-ai-v096-cdn-packs-20261031
     paths:
       - 'realm-ai-phone-build/source-v09.tar.xz.b64'
       - 'realm-ai-phone-build/v093-pack-overlay.tar.xz.b64'
+      - 'realm-ai-phone-build/patch_cdn_v096.py'
+      - 'realm-ai-phone-build/v096-cdn-download.js'
+      - 'realm-ai-phone-build/v096-cdn-tests.test.js'
       - 'realm-ai-phone-build/patch_disconnect_v094.py'
       - '.github/workflows/realm-ai-phone-v09-apk.yml'
 permissions:
@@ -101,6 +104,20 @@ jobs:
           node --check "$BASE/bedrock-agent/src/realm-packs.js"
           grep -q "response_status_name:(" "$BASE/bedrock-agent/src/realm-packs.js"
           grep -q 'versionCode 14' "$APP/build.gradle"
+      - name: Add HTTPS CDN pack downloads and safe cached-session APK code refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          APP="$BASE/android-app/app"
+          python3 realm-ai-phone-build/patch_cdn_v096.py "$BASE"
+          cp realm-ai-phone-build/v096-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
+          sed -i 's/versionCode 14/versionCode 15/;s/0.9.5-pack-protocol/0.9.6-cdn-support/' "$APP/build.gradle"
+          node --check "$BASE/bedrock-agent/src/cdn-download.js"
+          node --check "$BASE/bedrock-agent/src/realm-packs.js"
+          (cd "$BASE/bedrock-agent" && node --test tests/cdn-packs.test.js tests/resource-packs.test.js)
+          grep -q 'asset_bundle_version' "$APP/src/main/java/com/veilforge/realmagent/BotService.java"
+          grep -q 'versionCode 15' "$APP/build.gradle"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -202,21 +219,21 @@ jobs:
         run: |
           set -euo pipefail
           APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
-          cp "$APK" VEILFORGE-Realm-AI-v0.9.5-PackProtocol-debug.apk
-          sha256sum VEILFORGE-Realm-AI-v0.9.5-PackProtocol-debug.apk > VEILFORGE-Realm-AI-v0.9.5-SHA256.txt
-          TAG="veilforge-realm-ai-v095-pack-protocol-preview"
+          cp "$APK" VEILFORGE-Realm-AI-v0.9.6-CDNPacks-debug.apk
+          sha256sum VEILFORGE-Realm-AI-v0.9.6-CDNPacks-debug.apk > VEILFORGE-Realm-AI-v0.9.6-SHA256.txt
+          TAG="veilforge-realm-ai-v096-cdn-packs-preview"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.5-PackProtocol-debug.apk VEILFORGE-Realm-AI-v0.9.5-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.6-CDNPacks-debug.apk VEILFORGE-Realm-AI-v0.9.6-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.5-PackProtocol-debug.apk VEILFORGE-Realm-AI-v0.9.5-SHA256.txt \
+            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.6-CDNPacks-debug.apk VEILFORGE-Realm-AI-v0.9.6-SHA256.txt \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "VEILFORGE Realm AI v0.9.5 - Bedrock Pack Protocol Repair" \
-              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. Corrects Minecraft 1.26.60 pack protocol text and enum 1-4 and tests serialized packet; live Realm joining is not yet verified. NEW DEBUG signing key may require reinstall and Microsoft re-login. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
+              --title "VEILFORGE Realm AI v0.9.6 - HTTPS CDN Realm Pack Support" \
+              --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. Supports bounded HTTPS CDN resource-pack downloads and app-private cache; local package tests passed, live Realm joining is not yet verified. Still debug-signed; updating an existing debug APK may require reinstall. NEW DEBUG signing key may require reinstall and Microsoft re-login. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
           fi
       - name: Upload validated debug APK for 2 days
         uses: actions/upload-artifact@v4
         with:
-          name: VEILFORGE-Realm-AI-v0.9.5-PackProtocol-APK
+          name: VEILFORGE-Realm-AI-v0.9.6-CDNPacks-APK
           path: .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 2
           if-no-files-found: error
