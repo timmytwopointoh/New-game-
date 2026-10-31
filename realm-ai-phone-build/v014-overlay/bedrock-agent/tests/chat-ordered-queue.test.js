@@ -123,3 +123,22 @@ test('in-game owner commands execute via bot as authenticated player and answer 
  assert.equal(actions.length,1) // cooldown avoids rapid repeated commands from same owner after case normalization
  chat.stop()
 })
+
+test('queued step events get truthful short Realm chat replies only for a chat-started queue',()=>{
+ const conn=new EventEmitter(),replies=[],planner=new EventEmitter()
+ Object.assign(conn,{username:'RealmAI',config:{minecraft:{botPlayerName:'RealmAI'}},spawned:true,say:text=>{replies.push(text);return true},events:[],nextEventId:0,survival:{handle:()=>({accepted:true,message:'okay'})}})
+ const controller={planner,message:()=>({accepted:true,message:'Queued',plans:{runActive:true}})}
+ const chat=new RealmChat(conn,controller,{ownerPlayerNames:['Owner']},()=>{},{clock:()=>10000})
+ conn.emit('realm-queue-progress',{active:true,message:'Step 1/2: requested but not confirmed'})
+ assert.equal(replies.length,0)
+ conn.emit('player-chat',{source:'Owner',message:'!ai run queue'})
+ assert.equal(chat.observingPlan,true)
+ conn.emit('realm-queue-progress',{active:true,message:'Step 2/2 sent-unverified'})
+ assert.match(replies.at(-1),/sent-unverified/)
+ conn.emit('realm-queue-progress',{active:false,message:'Queue complete; server confirmation pending'})
+ assert.match(replies.at(-1),/confirmation pending/)
+ assert.equal(chat.observingPlan,false)
+ const len=replies.length;chat.stop()
+ conn.emit('realm-queue-progress',{active:true,message:'do not post'})
+ assert.equal(replies.length,len)
+})
