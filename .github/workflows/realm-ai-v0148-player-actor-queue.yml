@@ -3,7 +3,7 @@ name: VEILFORGE Realm AI v0.14.8 player actor ID and queue manager integration
 on:
   push:
     branches:
-      - sandbox/realm-ai-v0148-chat-progress-20261031
+      - sandbox/realm-ai-v0148-player-session-experiment-20261031
     paths:
       - '.github/workflows/realm-ai-v0148-player-actor-queue.yml'
 permissions:
