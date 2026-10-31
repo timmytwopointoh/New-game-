@@ -1,32 +1,24 @@
-# Realm AI Live v0.21 source candidate
+# Realm AI Live v0.22 — merged language and learning
 
-This is the complete source candidate based on the owner-provided Realm AI Live v0.20
-archive, including its native Android updater, Java UI, embedded Node bot, tests and
-C++ bridge. Application ID: com.veilforge.realmagent.live. Candidate versionCode:
-200002. See `UPDATE-NOTES-v0.21.md` for the current UI fixes and signing requirement.
+Current complete source for package `com.veilforge.realmagent.live`, versionCode 200003 (`0.22-learning-merge`). The directory name retains v021 for the permanent baseline; this is the canonical source for future Live work. Source from the separate `com.veilforge.realmagent` app has been merged here. Keep Live’s updater, identity and permanent key.
 
-Generated build files, Node dependencies, machine-specific SDK/proxy settings,
-compiled native libraries, signing private keys and passwords are excluded.
+## Included
 
-## Build
+- Existing join/resource-pack handling, saved Microsoft login, continuous gravity, snow/partial-block collision, real movement inputs, bounded navigation, held mining input and server-confirmed building.
+- Five saved plans, command forms, reusable cards, selected-first activation of waiting work, two-second sequencing and immediate Stop.
+- The other app’s 5,000-word offline glossary, attribution, Minecraft context, chat categories and supported action synonyms.
+- Private per-Realm confirmed word corrections (up to 200), review/forget controls, and automatic memory of server-confirmed task results, failures and interruptions. Outcome reminders help recheck a previously failed task; they never grant new abilities or auto-activate work.
+- Live updater, Microsoft code/copy/clickable link, one-file sharing, Learning panel and copyable connection diagnostics.
+- Corrects the bundled authentication library’s seconds/milliseconds access-token-expiry bug while preserving existing cached credentials. Error stages now distinguish Microsoft, Xbox token steps and Realm discovery/join.
 
-Use JDK 21, Gradle 8.9 and Android SDK platform 35/build-tools 35.0.0.
-1. Run `python3 tools/fetch_native_runtime.py` to obtain the hash-verified ARM64
-   native libraries from the published first release. No signing key is downloaded.
-2. In bedrock-agent run `npm ci --omit=dev --ignore-scripts --no-audit --no-fund`.
-3. Run `npm test` in bedrock-agent.
-4. Configure ANDROID_HOME or android-app/local.properties for your SDK.
-5. Run `gradle -p android-app :app:assembleDebug :app:testDebugUnitTest`.
+This is a glossary/rule-based assistant, not an embedded neural language model. It does not train model weights, rewrite code, search the internet, or verify current claims against multiple web sources. Private data from a separate Android app is not automatically migrated.
 
-The APK output is unsigned. For an update, increment versionCode and sign with the
-same dedicated Realm Live private key from your PRIVATE signing backup.
-Release-tooling/sign_release.py signs APKs and release notices; see --help.
-Never commit the private key or password. Public certificate fingerprint is included.
+## Build and tests
 
-Checks/downloads can run alongside the bot. Full APK installation requires Android
-approval and restarts the application. This is not uninterrupted code hot swapping.
-Validation of the delivered build: 186 Node tests and 24 Android tests passed;
-APK/package/signature/alignment verified. No physical phone upgrade test was run.
+Use JDK 17+, Gradle 8.9 and Android SDK 35/build-tools 35.0.0. Run `python3 tools/fetch_native_runtime.py`, `npm ci --omit=dev --ignore-scripts --no-audit --no-fund` in bedrock-agent, then `gradle -p android-app :app:assembleDebug :app:testDebugUnitTest`. Node tests: `node --test tests/*.test.js` in bedrock-agent. All dependencies and native files are excluded from this source archive.
 
-Repository changes: https://github.com/timmytwopointoh/New-game-/pull/10
-Original reconstruction tooling remains on feature/realm-running-updates-20261031.
+205 Node tests and 28 Android tests passed. APK/source parity, native/runtime preservation, package/version, signing certificate and alignment verified. Real phone connection remains unverified; the cache fix is not proof that every 403 is resolved.
+
+## Permanent update key
+
+Use alias `realm-live-update` and certificate SHA256 `77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22` for all future Live APKs and release notices. The owner authorized that replacement baseline in v0.21; do not generate another key. Install this version over that Live v0.21 to keep app data. Private signing backup stays outside this repository.

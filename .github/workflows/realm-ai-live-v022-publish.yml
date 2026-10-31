@@ -1,0 +1,41 @@
+name: Publish owner-requested Realm AI Live v0.22 merged learning
+on:
+  push:
+    branches: [sandbox/realm-ai-v013-adaptive-recovery-20261031]
+    paths: ['realm-ai-phone-build/live-v022-publish-requests/**']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reconstruct and verify public signed APK
+        run: |
+          set -euo pipefail
+          curl -fL --retry 2 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-021-new-baseline/Realm-AI-Live.apk' -o base.apk
+          python3 realm-ai-phone-build/materialize_live_v022_apk.py base.apk realm-ai-phone-build/live-v022-public-recipe.json.xz.b64 Realm-AI-Live.apk
+          echo '496d618768857e20b50a1c3e90359d9574d5a0a80505afd3ff344806083e97d2  Realm-AI-Live.apk' | sha256sum -c -
+          python3 realm-ai-phone-build/verify_live_merged_apk.py Realm-AI-Live.apk realm-ai-phone-build/realm-ai-live-v021-overlay base.apk
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          if [ ! -x "$TOOLS/apksigner" ]; then "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'; fi
+          "$TOOLS/apksigner" verify --verbose --print-certs Realm-AI-Live.apk > certificate-report.txt
+          grep -qi '77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' certificate-report.txt
+          "$TOOLS/zipalign" -c -P 16 4 Realm-AI-Live.apk
+          "$TOOLS/aapt" dump badging Realm-AI-Live.apk > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200003'" package-report.txt
+      - name: Publish public assets and signed update notice
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view realm-ai-live-022-merged-learning >/dev/null 2>&1; then
+            gh release create realm-ai-live-022-merged-learning --target "$GITHUB_SHA" --prerelease --title 'Realm AI Live v0.22 — merged language and learning' --notes-file realm-ai-phone-build/realm-ai-live-v021-overlay/UPDATE-NOTES-v0.22.md
+          fi
+          gh release upload realm-ai-live-022-merged-learning Realm-AI-Live.apk realm-ai-phone-build/live-v022-publication/release.json realm-ai-phone-build/live-v022-publication/verification.json certificate-report.txt package-report.txt realm-ai-phone-build/live-v022-publication/Realm-AI-Live-v0.22-source.zip realm-ai-phone-build/live-v022-publication/SHA256SUMS.txt realm-ai-phone-build/live-v022-publication/signing-certificate.der --clobber
+          python3 realm-ai-phone-build/realm-ai-live-v021-overlay/release-tooling/publish_channel.py realm-ai-phone-build/live-v022-publication/release.json

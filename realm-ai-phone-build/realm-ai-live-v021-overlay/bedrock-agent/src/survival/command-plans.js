@@ -75,7 +75,7 @@ export class CommandPlans{
   if(this.cards.length>=5)throw Error('Five plans are saved. Delete a card before preparing another.')
   const d=validateDescriptor(descriptor);this.validateChoices(d);const previous=this.selected,card={id:++this.sequence,descriptor:d,state:'waiting',result:'',activationLocked:false};this.cards.push(card);this.selected=card.id
   try{this.persist()}catch(e){this.cards.pop();this.selected=previous;this.sequence--;throw e}
-  return {accepted:true,queued:false,message:'Saved and selected plan #'+card.id+': '+renderDescriptor(d)+'. Activate starts only this plan. Nothing executed yet.',plans:this.snapshot()}
+  return {accepted:true,queued:false,message:'Saved and selected plan #'+card.id+': '+renderDescriptor(d)+'. Activate runs the waiting queue, selected first. Nothing executed yet.'+(this.controller.learning?.guidance(d)?' '+this.controller.learning.guidance(d):''),plans:this.snapshot()}
  }
  validateChoices(d){
   const w=this.controller.world
@@ -110,11 +110,11 @@ export class CommandPlans{
   try{
    const d=validateDescriptor(card.descriptor);this.validateChoices(d);card.activationLocked=true;card.state='running';this.running=card.id;this.activeStartedAt=Date.now();this.activeServerPoseAt=this.controller.world?.lastPoseAt||0;this.activeGoal=d.id==='walk'||d.id==='clear'?{x:d.values.x,y:d.values.y,z:d.values.z}:null
    const result=this.controller.handle(renderDescriptor(d));card.result=result?.message||''
-   if(!result?.accepted){card.state='blocked';this.running=null;this.finishBatch(`Queue stopped at #${card.id}: ${card.result}`);return result||{accepted:false,queued:false,message:card.result}}
+   if(!result?.accepted){this.controller.learning?.record(d,'blocked',card.result);card.state='blocked';this.running=null;this.finishBatch(`Queue stopped at #${card.id}: ${card.result}`);return result||{accepted:false,queued:false,message:card.result}}
    this.controller.report?.(`Queue ${this.batch.index+1}/${this.batch.ids.length}: started #${card.id} ${renderDescriptor(d)}.`)
-   if(!this.controller.navigation?.job&&!result?.queued&&!['ensure','rejoin'].includes(d.id)){card.state='completed';card.result=card.result||'Completed.';this.running=null;this.controller.report?.(`Command #${card.id} completed. Next queued command starts in two seconds.`);this.scheduleNext();return result}
+   if(!this.controller.navigation?.job&&!result?.queued&&!['ensure','rejoin'].includes(d.id)){this.controller.learning?.record(d,'unverified',card.result);card.state='completed';card.result=card.result||'Completed.';this.running=null;this.controller.report?.(`Command #${card.id} completed. Next queued command starts in two seconds.`);this.scheduleNext();return result}
    this.startPoll();return result
-  }catch(e){card.state='failed';card.result=e.message;this.running=null;this.finishBatch(`Queue stopped: ${e.message}`);return {accepted:false,queued:false,message:e.message}}
+  }catch(e){this.controller.learning?.record(card.descriptor,'blocked',e.message);card.state='failed';card.result=e.message;this.running=null;this.finishBatch(`Queue stopped: ${e.message}`);return {accepted:false,queued:false,message:e.message}}
  }
  startPoll(){if(this.batchPoll)return;this.batchPoll=setInterval(()=>this.pollBatch(),200);this.batchPoll.unref?.()}
  pollBatch(){
@@ -146,11 +146,11 @@ export class CommandPlans{
   }
   if(elapsed>180000)this.failActive('Command timed out without server confirmation; remaining queue stayed waiting.')
  }
- completeActive(reason){const card=this.cards.find(c=>c.id===this.running);if(card){card.state='completed';card.result=reason;this.controller.report?.(`Command #${card.id} confirmed complete. Next queued command starts in two seconds.`)}this.running=null;this.persist();this.scheduleNext()}
- failActive(reason){const card=this.cards.find(c=>c.id===this.running);if(card){card.state='blocked';card.result=reason}this.running=null;this.finishBatch(`Queue stopped at #${card?.id||'?'}: ${reason}`)}
+ completeActive(reason){const card=this.cards.find(c=>c.id===this.running);if(card){this.controller.learning?.record(card.descriptor,'confirmed',reason);card.state='completed';card.result=reason;this.controller.report?.(`Command #${card.id} confirmed complete. Next queued command starts in two seconds.`)}this.running=null;this.persist();this.scheduleNext()}
+ failActive(reason){const card=this.cards.find(c=>c.id===this.running);if(card){this.controller.learning?.record(card.descriptor,'blocked',reason);card.state='blocked';card.result=reason}this.running=null;this.finishBatch(`Queue stopped at #${card?.id||'?'}: ${reason}`)}
  scheduleNext(){if(!this.batch)return;this.persist();if(this.batch.index+1>=this.batch.ids.length){this.finishBatch('All queued commands processed.');return}if(this.batchTimer)clearTimeout(this.batchTimer);this.batchTimer=setTimeout(()=>{this.batchTimer=null;if(this.batch){this.batch.index++;this.launchBatchItem()}},this.batchDelayMs);this.batchTimer.unref?.()}
  finishBatch(message){if(this.batchPoll)clearInterval(this.batchPoll);this.batchPoll=null;if(this.batchTimer)clearTimeout(this.batchTimer);this.batchTimer=null;this.batch=null;this.running=null;this.lastBatchMessage=message;this.controller.report?.(message);this.controller.connection?.emit?.('plan-batch-update',{message});this.persist()}
  reconcile(){if(this.running===null||this.batch)return;const card=this.cards.find(c=>c.id===this.running);if(!this.controller.navigation?.job){if(card){card.state='finished-unverified';card.result=this.controller.navigation?.reason||'Inputs ended; live success is not verified.'}this.running=null}}
- interrupt(reason='Stopped by owner.') {if(this.batchTimer)clearTimeout(this.batchTimer);if(this.batchPoll)clearInterval(this.batchPoll);this.batchTimer=this.batchPoll=null;this.batch=null;if(this.running!==null){const card=this.cards.find(c=>c.id===this.running);if(card){card.state='interrupted';card.result=reason}}this.running=null;for(const c of this.cards)if(c.state==='waiting')c.result=reason;this.persist()}
+ interrupt(reason='Stopped by owner.') {if(this.batchTimer)clearTimeout(this.batchTimer);if(this.batchPoll)clearInterval(this.batchPoll);this.batchTimer=this.batchPoll=null;this.batch=null;if(this.running!==null){const card=this.cards.find(c=>c.id===this.running);if(card){this.controller.learning?.record(card.descriptor,'interrupted',reason);card.state='interrupted';card.result=reason}}this.running=null;for(const c of this.cards)if(c.state==='waiting')c.result=reason;this.persist()}
 }
 export function formOptions(world,query=''){return {players:[...world.players.values()].map(p=>p.name),hotbar:Array.from({length:9},(_,i)=>({slot:i+1,known:world.inventory.has(i),name:world.inventory.has(i)?(world.inventory.get(i)?.network_id?world.registry?.items?.[world.inventory.get(i).network_id]?.name||'unknown':'empty'):'unknown',count:world.inventory.get(i)?.count||0})),materials:searchCatalog(query),visible:world.scan().found.map(p=>{const assessment=miningAssessment(world,p,{explicit:true});return {...p,tool:assessment.tool||'unknown / unsuitable',durationMs:assessment.durationMs||null,eligible:assessment.ok,reason:assessment.reason||'Server must confirm removal'}}),heldSlot:world.selectedSlot===null?null:world.selectedSlot+1}}

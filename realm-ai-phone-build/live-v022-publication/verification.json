@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200003,
+  "issuedAt": 1793479567515,
+  "expiresAt": 1794084367515,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-022-merged-learning/Realm-AI-Live.apk",
+  "size": 110074899,
+  "sha256": "496d618768857e20b50a1c3e90359d9574d5a0a80505afd3ff344806083e97d2",
+  "notes": "Full merge of the separate app into Live: 5000-word glossary, supported synonyms, private correction memory, task-outcome learning, Learning panel, and token-expiry correction with private connection diagnostics. Same permanent Live signing key; install over Live v0.21 to preserve data. 205 Node and 28 Android tests pass; live Realm connection remains unverified.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested",
+  "tests": {
+    "node": {
+      "passed": 205,
+      "failed": 0
+    },
+    "android": {
+      "passed": 28,
+      "failed": 0
+    }
+  },
+  "bundledEnglishWords": 5000,
+  "neuralLanguageModel": false,
+  "loginFix": "OAuth expires_in seconds converted to milliseconds when reading the cached Live access token; no login cache reset",
+  "mergeAudit": "31 source files byte-checked in APK; native and Node dependencies identical to Live v0.21 and other app"
+}

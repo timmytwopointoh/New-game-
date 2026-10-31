@@ -1,0 +1,1 @@
+Publish the owner-requested full feature merge into Live v0.22, versionCode 200003. Reconstruct only public signed bytes, verify source parity and permanent certificate 77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22, publish signed metadata to the Live update channel. No private key access.

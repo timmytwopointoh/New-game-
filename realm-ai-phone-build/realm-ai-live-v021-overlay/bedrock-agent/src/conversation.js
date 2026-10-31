@@ -1,3 +1,5 @@
+import {answerWordQuestion} from './lexicon/lookup.js'
+
 const clean=s=>String(s||'').trim().replace(/[.!?]+$/,'').toLowerCase().replace(/\s+/g,' ')
 
 export function classifyConversation(raw){
@@ -13,13 +15,15 @@ export function classifyConversation(raw){
  if(/^(?:what are you doing|what's happening|whats happening|progress|how is it going)$/.test(s))return {kind:'movement'}
  if(/^(?:where are you|what is your position|what's your position|whats your position|are you in the realm|are you connected)$/.test(s))return {kind:'status'}
  if(/^(?:what do you have|what's in your inventory|whats in your inventory|check your inventory)$/.test(s))return {kind:'inventory'}
- let m=s.match(/^(?:what is|what's|whats|tell me about|explain) (.+)$/);if(m)return {kind:'about',query:m[1].replace(/^(?:a|an|the) /,'')}
+ let m=s.match(/^(?:what is|what's|whats|tell me about|explain|about) (.+)$/);if(m)return {kind:'about',query:m[1].replace(/^(?:a|an|the) /,'')}
+ m=s.match(/^(?:what does|what do) (.+?) mean$/);if(m)return {kind:'about',query:m[1].replace(/^(?:a|an|the) /,'')}
+ m=s.match(/^(?:define|definition of|meaning of) (.+)$/);if(m)return {kind:'about',query:m[1].replace(/^(?:a|an|the) /,'')}
  m=s.match(/^(?:how do i|how to) (?:make|craft) (.+)$/);if(m)return {kind:'recipe',query:m[1].replace(/^(?:a|an|the) /,'')}
  if(hasQuestionMark||/^(?:who|what|when|where|why|how|is|are|can|could|would|do|does|did|will)\b/.test(s))return {kind:'question'}
  return {kind:'chat'}
 }
 
-export function respondToConversation(raw){
+export function respondToConversation(raw,{vocabulary=null}={}){
  const intent=classifyConversation(raw)
  switch(intent.kind){
   case 'greeting':return "Hey! I’m here. Ask me about the Realm or Minecraft, or start an action with “command …”."
@@ -31,7 +35,15 @@ export function respondToConversation(raw){
   case 'movement':return 'movement status'
   case 'status':return 'survival status'
   case 'inventory':return 'inventory'
-  case 'about':return `about ${intent.query}`
+  case 'about':{
+   const learned=vocabulary?.meaning(intent.query)
+   if(learned?.kind==='material')return `about ${learned.target}`
+   if(learned?.kind==='action')return `You taught me that “${intent.query}” means ${learned.label||learned.target} in this Realm. To prepare it, start with “command”; Activate is still required.`
+   const answer=answerWordQuestion(intent.query)
+   if(answer.kind==='material')return `about ${answer.material}`
+   if(answer.kind==='definition')return answer.message
+   return `I don't have a reliable offline definition for “${answer.query}”. What context did you see it in? If you want an action, start with “command …”; I won't guess or start anything.`
+  }
   case 'recipe':return `recipe ${intent.query}`
   case 'question':return "I’m not sure what you mean yet. I can answer Realm status and Minecraft material or recipe questions. If you want me to do something, start with “command”."
   default:return "Got it. I’ll treat that as chat, not an action. Ask me a question, or start an action with “command …”."

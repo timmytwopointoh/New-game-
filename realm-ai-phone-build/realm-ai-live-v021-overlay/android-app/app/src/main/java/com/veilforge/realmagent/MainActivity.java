@@ -69,9 +69,29 @@ public class MainActivity extends Activity {
         LinearLayout account=new LinearLayout(this);body.addView(account,space(5));account.addView(button("Start bot",this::startBot),new LinearLayout.LayoutParams(0,d(46),1));Button signIn=button("Microsoft sign-in code",this::showAuth);signIn.setContentDescription("Show Microsoft sign-in code");account.addView(signIn,new LinearLayout.LayoutParams(0,d(46),1));
         LinearLayout modes=new LinearLayout(this);body.addView(modes,space(5));modes.addView(button("Survival",()->modeAction("survival")),new LinearLayout.LayoutParams(0,d(46),1));modes.addView(button("Creative",()->modeAction("creative")),new LinearLayout.LayoutParams(0,d(46),1));
         LinearLayout management=new LinearLayout(this);body.addView(management,space(5));management.addView(button("Saved plans",this::showPlans),new LinearLayout.LayoutParams(0,d(46),1));management.addView(button("Stop bot service",this::stopServiceNow),new LinearLayout.LayoutParams(0,d(46),1));
+        body.addView(button("Learning",this::showLearning),space(5));
+        body.addView(button("Connection diagnostics",this::showDiagnostics),space(5));
         body.addView(txt("Choose one file to share with another app. Android opens its file picker first, then its Share sheet. Only the file you choose is shared; Realm AI Live does not scan your phone or keep file access.",12,MUTED),space(10));
         Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(4));
         ScrollView scroller=new ScrollView(this);scroller.addView(body);AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Settings · account, connection, and mode").setView(scroller).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();dialog.setOnDismissListener(x->{for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();
+    }
+    void showLearning(){
+        if(!apiConnected||token.isEmpty()){showLearningStatus(lastStatus);return;}
+        io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showLearningStatus(status);});}catch(Exception e){ui.post(()->showLearningStatus(lastStatus));}});
+    }
+    void showLearningStatus(JSONObject status){
+        JSONObject survival=status==null?null:status.optJSONObject("survival");
+        JSONObject language=survival==null?null:survival.optJSONObject("language"),vocabulary=survival==null?null:survival.optJSONObject("vocabulary"),learning=survival==null?null:survival.optJSONObject("learning");
+        String detail="Offline glossary: "+(language==null?"5,000":language.optInt("bundledWords"))+" words. This app uses vocabulary and command rules; a neural language model is not installed.\n\n";
+        if(vocabulary==null)detail+="Start the bot to see current Realm learning.\n";
+        else{detail+="Saved word mappings: "+vocabulary.optInt("count")+" / 200 (private to this Realm).\n";for(String field:new String[]{"actions","materials"}){JSONObject entries=vocabulary.optJSONObject(field);if(entries!=null){Iterator<String> keys=entries.keys();int shown=0;while(keys.hasNext()&&shown++<6){String word=keys.next();detail+=word+" → "+entries.optString(word)+"\n";}}}if(!vocabulary.optString("error").isEmpty())detail+=vocabulary.optString("error")+"\n";}
+        if(learning!=null){detail+="\nServer-confirmed tasks: "+learning.optInt("confirmed")+". Blocked: "+learning.optInt("blocked")+". Interrupted: "+learning.optInt("interrupted")+".\n";if(!learning.optString("error").isEmpty())detail+=learning.optString("error")+"\n";}
+        detail+="\nIt remembers your confirmed word corrections and learns from task outcomes. Repeating a failed action shows a reminder to recheck the cause. It does not rewrite its code or learn instructions from ambient player chat.\n\nTry: “what does troll mean?” or “what have you learned?”\nTeach: command teach action dredge = dig\nReview: command vocabulary\nForget: command forget action dredge\n\nAll work still waits for Activate. Stop is immediate.";
+        new AlertDialog.Builder(this).setTitle("Language and learning").setMessage(detail).setPositiveButton("Close",null).show();
+    }
+    void showDiagnostics(){
+        if(!apiConnected||token.isEmpty()){bubble("Progress","Start the bot service first so its connection diagnostics can be read.",false);return;}
+        io.submit(()->{try{JSONObject report=request("GET","/diagnostics",null);report.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);report.put("applicationId",getPackageName());String text=report.toString(2);ui.post(()->new AlertDialog.Builder(this).setTitle("Connection diagnostics").setMessage(text).setPositiveButton("Copy diagnostics",(d,w)->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Realm AI Live diagnostics",text));Toast.makeText(this,"Diagnostics copied; paste them into the development chat",Toast.LENGTH_LONG).show();}).setNegativeButton("Close",null).show());}catch(Exception e){ui.post(()->bubble("Progress","The local service did not return connection diagnostics. Saved Microsoft login has not been changed.",false));}});
     }
     static final int REQUEST_PICK_SHARED_FILE=41021;
     void pickFileToShare(){Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);picker.setType("*/*");try{startActivityForResult(picker,REQUEST_PICK_SHARED_FILE);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open its file picker.",false);}}
@@ -168,6 +188,10 @@ public class MainActivity extends Activity {
         else if("packs-ready".equals(packStage))connection.setText("Realm packs ready • waiting to spawn");
         else if("negotiating-packs".equals(phase))connection.setText("Minecraft handshake • checking required packs");
         else if(r.optBoolean("joined"))connection.setText("Joined Realm • waiting to spawn");
+        else if("microsoft-device-code".equals(phase))connection.setText("Requesting Microsoft device sign-in code");
+        else if("microsoft-token-refresh".equals(phase)||"microsoft-session".equals(phase))connection.setText("Checking the saved Microsoft session");
+        else if(phase.startsWith("xbox-"))connection.setText("Checking Xbox access · "+phase);
+        else if("realm-discovery".equals(phase))connection.setText("Checking joined Realms for the signed-in bot account");
         else if("realm-selecting".equals(phase))connection.setText("Microsoft approved • searching joined Realms");
         else if("realm-join-retry".equals(phase))connection.setText("Minecraft Realms temporarily unavailable (503) • retrying with saved login");
         else if("realm-selected".equals(phase))connection.setText("Realm found • connecting to Minecraft");

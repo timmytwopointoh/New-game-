@@ -2,14 +2,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import {commandCatalog} from './command-plans.js'
+import {readPrivateJson,writePrivateJson} from './private-json.js'
 import {resolveMaterial,materialNames} from './catalog.js'
 
 const copy=x=>JSON.parse(JSON.stringify(x))
 const escapeRegex=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
 const actionTargets=new Set(commandCatalog.filter(d=>d.fields.length||['status','movement','look','view_off','inventory','help','plan_status','rejoin','ensure'].includes(d.id)).map(d=>d.id))
 const actionAliases={
- dig:['mine','break','excavate','chip'], walk:['move','go','head'], find:['locate','search'],
- look:['scan','survey'], follow:['track'], status:['status','check status'], inventory:['items','check inventory'],
+ dig:['mine','break','excavate','chip','dig up','mine block'], walk:['move','go','head','travel','navigate','move to','go to','travel to'], find:['locate','search','search for','look for','seek'],
+ look:['scan','survey','inspect','observe','view'], follow:['track','trail','accompany','go with'], status:['status','check status'], inventory:['items','check inventory'],
  build_wall:['construct wall'], build_floor:['construct floor']
 }
 const targetPrefix=id=>{
@@ -18,35 +19,75 @@ const targetPrefix=id=>{
 }
 const normalize=s=>String(s).toLowerCase().trim().replace(/[_-]+/g,' ').replace(/\s+/g,' ')
 
+const isRecord=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)
+const entriesFor=kind=>kind==='action'?'actions':kind==='material'?'materials':null
+const wordPattern=word=>word.split(' ').map(escapeRegex).join('[ _-]+')
 export class CommandVocabulary{
- constructor({directory=null,scope=null}={}){this.directory=directory;this.scope=null;this.file=null;this.actions={};this.materials={};this.readOnly=false;this.error='';this.setScope(scope)}
- setScope(scope){this.scope=scope||null;this.actions={};this.materials={};this.readOnly=false;this.error='';this.file=this.directory&&scope?path.join(this.directory,crypto.createHash('sha256').update(String(scope)).digest('hex')+'.json'):null;if(this.file&&fs.existsSync(this.file)){try{const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(!data||typeof data.actions!=='object'||typeof data.materials!=='object'||Object.keys(data.actions).length+Object.keys(data.materials).length>200)throw Error();this.actions=data.actions;this.materials=data.materials;for(const [word,id] of Object.entries(this.actions)){if(!this.validWord(word)||!actionTargets.has(id))throw Error()}for(const [word,name] of Object.entries(this.materials)){if(!this.validWord(word)||!resolveMaterial(name))throw Error()}}catch{this.error='Saved vocabulary could not be read; original file preserved.';this.readOnly=true}}}
+ constructor({directory=null,scope=null}={}){this.directory=directory;this.setScope(scope)}
+ setScope(scope){
+  this.scope=scope||null;this.actions=Object.create(null);this.materials=Object.create(null);this.readOnly=false;this.error=''
+  this.file=this.directory&&scope?path.join(this.directory,crypto.createHash('sha256').update(String(scope)).digest('hex')+'.json'):null
+  if(!this.file||!fs.existsSync(this.file))return
+  try{
+   const data=readPrivateJson(this.file)
+   if(!isRecord(data)||!isRecord(data.actions)||!isRecord(data.materials)||Object.keys(data.actions).length+Object.keys(data.materials).length>200)throw Error()
+   const actions=Object.create(null),materials=Object.create(null)
+   for(const [word,id] of Object.entries(data.actions)){if(!this.validWord(word)||word!==normalize(word)||!actionTargets.has(id)||this.conflicts('action',word,id))throw Error();actions[word]=id}
+   for(const [word,name] of Object.entries(data.materials)){if(!this.validWord(word)||word!==normalize(word)||typeof name!=='string'||resolveMaterial(name)!==name||this.conflicts('material',word,name))throw Error();materials[word]=name}
+   this.actions=actions;this.materials=materials
+  }catch{this.error='Saved vocabulary could not be read; original file preserved. No saved mappings were loaded.';this.readOnly=true}
+ }
  validWord(word){return typeof word==='string'&&word.trim().length>=2&&word.trim().length<=48&&!/[\r\n\x00-\x1f{}=]/.test(word)&&!['__proto__','constructor','prototype'].includes(word.trim().toLowerCase())}
- persist(){if(this.readOnly)throw Error(this.error);if(!this.file)return;fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});fs.writeFileSync(this.file+'.tmp',JSON.stringify({actions:this.actions,materials:this.materials}),{mode:0o600});fs.renameSync(this.file+'.tmp',this.file)}
+ conflicts(kind,word,target){
+  if(/^(?:stop|cancel|abort|command|commands|teach|forget|activate)(?:\s|$)/.test(word))return true
+  if(kind==='action'){
+   const canonical=commandCatalog.find(d=>[d.id,normalize(d.template),normalize(d.template.split(/[ {]/)[0])].includes(word))
+   const builtin=Object.entries(actionAliases).find(([,words])=>words.includes(word))?.[0]
+   return !!((canonical&&canonical.id!==target)||(builtin&&builtin!==target))
+  }
+  const material=resolveMaterial(word)
+  return !!(material&&material!==target)
+ }
+ persist(actions=this.actions,materials=this.materials){if(this.readOnly)throw Error(this.error);writePrivateJson(this.file,{actions,materials})}
  teach(kind,word,target){
   if(this.directory&&!this.scope)throw Error('Join and identify the Realm before saving Realm-specific vocabulary.')
   const key=normalize(word),value=normalize(target)
   if(!this.validWord(key))throw Error('Use a word or short phrase from 2 to 48 characters.')
+  const field=entriesFor(kind);if(!field)throw Error('Teach an action or material.')
   let learned
   if(kind==='action'){
-   const def=commandCatalog.find(d=>d.id===value||normalize(d.label)===value)
-   const aliasTarget=def?.id||Object.entries(actionAliases).find(([id,words])=>words.some(w=>normalize(w)===value))?.[0]
-   if(!aliasTarget||!actionTargets.has(aliasTarget))throw Error('Choose a supported action such as dig, walk, find, follow, look, status or inventory.')
-   learned=aliasTarget;this.actions[key]=aliasTarget
-  }else if(kind==='material'){
-   const material=resolveMaterial(value);if(!material)throw Error('Choose a material name from the Minecraft catalog.')
-   this.materials[key]=material
-  }else throw Error('Teach an action or material.')
-  this.persist();return {accepted:true,queued:false,message:`Learned ${JSON.stringify(key)} as ${kind} ${kind==='action'?learned:this.materials[key]}. It is saved for this Realm; actions still need the command prefix and Activate.`}
+   const def=commandCatalog.find(d=>d.id===String(target).trim().toLowerCase()||normalize(d.label)===value)
+   learned=def?.id||Object.entries(actionAliases).find(([,words])=>words.includes(value))?.[0]
+   if(!learned||!actionTargets.has(learned))throw Error('Choose a supported action such as dig, walk, find, follow, look, status or inventory.')
+  }else{learned=resolveMaterial(value);if(!learned)throw Error('Choose a material name from the Minecraft catalog.')}
+  if(this.conflicts(kind,key,learned))throw Error('That word already has a built-in meaning or is a control word. Choose a different nickname.')
+  if(!Object.hasOwn(this[field],key)&&Object.keys(this.actions).length+Object.keys(this.materials).length>=200)throw Error('Vocabulary holds 200 mappings. Forget an old mapping before adding another.')
+  const actions={...this.actions},materials={...this.materials};(kind==='action'?actions:materials)[key]=learned
+  this.persist(actions,materials);this.actions=actions;this.materials=materials
+  return {accepted:true,queued:false,message:`Learned ${JSON.stringify(key)} as ${kind} ${learned}. It is saved for this Realm; actions still need the command prefix and Activate.`}
  }
- list(){return {scopeKnown:!!this.scope,actions:copy(this.actions),materials:copy(this.materials),error:this.error}}
+ forget(kind,word){
+  const field=entriesFor(kind),key=normalize(word);if(!field||!Object.hasOwn(this[field],key))throw Error('That learned word is not saved in this Realm.')
+  const actions={...this.actions},materials={...this.materials};delete (kind==='action'?actions:materials)[key]
+  this.persist(actions,materials);this.actions=actions;this.materials=materials
+  return {accepted:true,queued:false,message:`Forgot the learned ${kind} word ${JSON.stringify(key)} for this Realm. Built-in vocabulary is unchanged.`}
+ }
+ list(){return {scopeKnown:!!this.scope,actions:copy(this.actions),materials:copy(this.materials),count:Object.keys(this.actions).length+Object.keys(this.materials).length,capacity:200,source:'owner-confirmed corrections',error:this.error}}
+ meaning(word){const key=normalize(word);if(Object.hasOwn(this.materials,key))return {kind:'material',target:this.materials[key]};if(Object.hasOwn(this.actions,key))return {kind:'action',target:this.actions[key],label:commandCatalog.find(d=>d.id===this.actions[key])?.label};return null}
  expand(raw){
-  let text=String(raw),changed=false
+  let text=String(raw).trim(),changed=false
   const learned=new Set(Object.keys(this.actions)),actionEntries=[...Object.entries(actionAliases).flatMap(([id,words])=>words.map(word=>[normalize(word),id])).filter(([word])=>!learned.has(word)),...Object.entries(this.actions)]
   actionEntries.sort((a,b)=>b[0].length-a[0].length)
-  for(const [word,id] of actionEntries){const re=new RegExp('^'+escapeRegex(word)+'(?=$|\\s|[,])','i');if(re.test(normalize(text))){const prefix=targetPrefix(id);if(prefix){text=text.replace(re,prefix);if(/\bto$/i.test(prefix))text=text.replace(/^(walk to)\s+to\b/i,'$1');changed=true;break}}}
-  const materialEntries=Object.entries(this.materials).sort((a,b)=>b[0].length-a[0].length)
-  for(const [word,name] of materialEntries){const re=new RegExp('\\b'+escapeRegex(word)+'\\b','i');if(re.test(text)){text=text.replace(re,name);changed=true}}
+  for(const [word,id] of actionEntries){const re=new RegExp('^'+wordPattern(word)+'(?=$|\\s|[,])','i');if(re.test(text)){const prefix=targetPrefix(id);if(prefix){text=text.replace(re,prefix);text=text.replace(/^(walk to)\s+to\b/i,'$1');changed=true;break}}}
+  text=text.replace(/^(find|search)\s+(?:for|out)\s+/i,'find ')
+  return this.expandMaterials(text,changed)
+ }
+ expandMaterials(raw,changed=false){
+  let text=String(raw)
+  for(const [word,name] of Object.entries(this.materials).sort((a,b)=>b[0].length-a[0].length)){
+   const re=new RegExp('(^|[^a-z0-9_])('+wordPattern(word)+')(?=$|[^a-z0-9_])','gi')
+   text=text.replace(re,(_,prefix)=>{changed=true;return prefix+name})
+  }
   return {text,changed}
  }
 }

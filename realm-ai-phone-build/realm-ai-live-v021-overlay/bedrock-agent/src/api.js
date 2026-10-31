@@ -1,6 +1,7 @@
 import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
 import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/command-vocabulary.js'
 import {respondToConversation} from './conversation.js'
+import {bundledEnglishWordCount} from './lexicon/lookup.js'
 import http from 'node:http'
 import crypto from 'node:crypto'
 import {parseCommand} from '../pack-template/scripts/commands.js'
@@ -33,8 +34,9 @@ export function createApi(config,connection,log=console.log){
  // This handler is intentionally shared by the Android HTTPS API and owner-only Realm chat.
  let pendingInterpretation=null
  const message=raw=>{
+   if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
    if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
-     planner.cancel();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
+     pendingInterpretation=null;planner.cancel();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
    }
    let output
    if(connection.survival?.commandPlans){
@@ -42,12 +44,19 @@ export function createApi(config,connection,log=console.log){
     const vocabulary=connection.survival.commandVocabulary
     try{
      const text=String(raw).trim();let m
+     if(/^command(?:\s|$)/i.test(text))pendingInterpretation=null
      if(pendingInterpretation&&Date.now()-pendingInterpretation.createdAt>60000)pendingInterpretation=null
      const yes=/^(?:yes|yes that's right|yes that is right|correct|that's right|that is right)$/i.test(text),no=/^(?:no|nope|not that|wrong|cancel)$/i.test(text)
      const isChoice=pendingInterpretation?.choices&&( /^[1-4]$/.test(text)||pendingInterpretation.choices.some(x=>x.toLowerCase().replace(/_/g,' ')===text.toLowerCase().trim().replace(/_/g,' ')))
      if(pendingInterpretation&&!yes&&!no&&!/^command\s/i.test(text)&&!isChoice&&!(pendingInterpretation.kind==='unknown-action'&&resolveActionTarget(text)))pendingInterpretation=null
      if((m=text.match(/^command\s+teach\s+(action|material)\s+(.+?)\s*=\s*(.+)$/i))){pendingInterpretation=null;const unquote=x=>x.trim().replace(/^["“](.*)["”]$/,'$1');output=vocabulary.teach(m[1].toLowerCase(),unquote(m[2]),unquote(m[3]))}
-     else if(/^command\s+vocabulary$/i.test(text)){const v=vocabulary.list();output={accepted:true,queued:false,message:`Learned action words: ${Object.keys(v.actions).join(', ')||'none'}. Learned material words: ${Object.keys(v.materials).join(', ')||'none'}. Teach one with “command teach action <word> = dig” or “command teach material <word> = stone”.`,vocabulary:v}}
+     else if((m=text.match(/^command\s+forget\s+(action|material)\s+(.+)$/i))){pendingInterpretation=null;output=vocabulary.forget(m[1].toLowerCase(),m[2].trim().replace(/^["“](.*)["”]$/,'$1'))}
+     else if(/^(?:command\s+)?(?:learning status|what have you learned|what do you remember|how do you learn|do you have a language model)[?!.]*$/i.test(text)){
+      const v=vocabulary.list(),learned=connection.survival.learning?.snapshot()
+      output={accepted:true,queued:false,message:`I use an offline ${bundledEnglishWordCount}-word glossary and supported-command rules, not a neural language model. I remember ${v.count} owner-confirmed word mappings for this Realm. ${learned?.confirmed||0} task successes were server-confirmed; ${learned?.blocked||0} attempts were blocked and ${learned?.interrupted||0} interrupted. I learn from your corrections and confirmed task outcomes; questions and jokes do not become actions. Use “command vocabulary” to review words or “command forget action <word>” to remove one.`+(v.error?' '+v.error:'')+(learned?.error?' '+learned.error:''),vocabulary:v,learning:learned,plans:plans.snapshot()}
+     }
+     else if(/^command\s+vocabulary$/i.test(text)){const v=vocabulary.list();output={accepted:true,queued:false,message:`Learned action words: ${Object.keys(v.actions).join(', ')||'none'}. Learned material words: ${Object.keys(v.materials).join(', ')||'none'}. Forget one with “command forget action <word>” or “command forget material <word>”. Teach one with “command teach action <word> = dig” or “command teach material <word> = stone”.`,vocabulary:v}}
+     else if(pendingInterpretation?.kind==='unknown-action'&&pendingInterpretation.scope!==vocabulary?.scope){pendingInterpretation=null;output={accepted:false,queued:false,message:'Realm changed. Nothing was learned or queued.',plans:plans.snapshot()}}
      else if(pendingInterpretation?.kind==='unknown-action'){
       const target=resolveActionTarget(text)
       if(target){const pending=pendingInterpretation;pendingInterpretation=null;try{vocabulary.teach('action',pending.word,target);const intent=parseCommandRequest(vocabulary.expand(pending.input).text);output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}catch(e){output={accepted:false,queued:false,showCatalog:true,message:e.message+' The correction was learned; nothing was activated.',plans:plans.snapshot()}}}
@@ -95,11 +104,11 @@ export function createApi(config,connection,log=console.log){
        }else output={accepted:false,queued:false,showCatalog:true,message:e.message+' Choose an option to open its required fields. Nothing was saved or queued.',plans:plans.snapshot()}
       }
      }else{
-      const candidate=text.replace(/[.!?]+$/,'').trim();let descriptor=null
+      const candidate=vocabulary.expandMaterials(text.replace(/[.!?]+$/,'').trim()).text;let descriptor=null
       try{descriptor=parseDescriptor(candidate)}catch{}
       const safeQuestion=descriptor&&['status','movement','look','inventory','help','plan_status','find','materials','about','recipe','route'].includes(descriptor.id)
       if(safeQuestion)output=connection.survival.handle(renderDescriptor(descriptor))
-      else{const reply=respondToConversation(text);let conversational=null;try{conversational=parseDescriptor(reply)}catch{}if(conversational&&['status','movement','inventory','about','recipe'].includes(conversational.id))output=connection.survival.handle(renderDescriptor(conversational));else output={accepted:true,queued:false,message:reply,plans:plans.snapshot()}}
+      else{const reply=respondToConversation(text,{vocabulary});let conversational=null;try{conversational=parseDescriptor(reply)}catch{}if(conversational&&['status','movement','inventory','about','recipe'].includes(conversational.id))output=connection.survival.handle(renderDescriptor(conversational));else output={accepted:true,queued:false,message:reply,plans:plans.snapshot()}}
      }
     }catch(e){output={accepted:false,queued:false,message:e.message,plans:plans.snapshot()}}
    }else output=planner.handle(raw)||(planner.snapshot().state==='running'?{accepted:true,queued:false,message:'A plan is running; cancel it first.'}:chatDispatch(raw,connection))
@@ -118,6 +127,7 @@ export function createApi(config,connection,log=console.log){
    if(!authorized(header.replace(/^Bearer\s+/i,''),token))return send(401,{error:'invalid token'})
    const pathname=new URL(req.url||'/','http://127.0.0.1').pathname
    if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,message('stop'))}
+   if(req.method==='GET'&&pathname==='/diagnostics')return send(200,connection.diagnostics?.()||{phase:'unavailable',savedAuthentication:'kept'})
    if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot()})
    if(req.method==='GET'&&pathname==='/catalog')return send(200,{catalog:commandCatalog,options:connection.survival?{...formOptions(connection.survival.world,new URL(req.url,'http://127.0.0.1').searchParams.get('q')||''),owners:config.ownerPlayerNames||[]}:null})
    if(req.method==='GET'&&pathname==='/plans')return send(200,{plans:connection.survival?.commandPlans.snapshot()})

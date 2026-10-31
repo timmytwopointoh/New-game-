@@ -1,4 +1,7 @@
 import {EventEmitter} from 'node:events'
+import {createRequire} from 'node:module'
+import {classifyConnectionFailure,instrumentAuthflow,authFailurePhase} from './connection-diagnostics.js'
+const {Authflow}=createRequire(import.meta.url)('prismarine-auth')
 import bedrock from 'bedrock-protocol'
 import {buildClientOptions} from './options.js'
 import {root} from '../tools/config.js'
@@ -20,7 +23,8 @@ export class Connection extends EventEmitter {
     this.survival=new SurvivalController(this,{plansDirectory:path.join(root,'private','command-plans'),scope:this.config.minecraft.realmId?String(this.config.minecraft.realmId):null});this.lastRejoinAt=0
     this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
   }
-  status(){return {survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
+  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,packStage:this.packStatus.stage,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
+  status(){return {diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
       packWaitSeconds:this.packRequestAt&&!this.spawned?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,
       packHeadersReceived:this.packHeadersReceived,packChunksReceived:this.packChunksReceived,authState:this.authState,packStatus:this.packStatus,lastCommand:this.lastCommand,recentMessages:this.recentMessages.slice(-8),authChallenge:this.authChallenge}}
   reconnect(){
@@ -38,6 +42,7 @@ export class Connection extends EventEmitter {
     }catch(e){this.lastError=String(e.message||e);this.authState='error';return {accepted:false,queued:false,message:'Rejoin failed: '+this.lastError}}
   }
   start(){
+    this.lastFailure=null
     const m=this.config.minecraft
     const options=buildClientOptions(m,root,data=>{
       const url=String(data?.verification_uri||'https://www.microsoft.com/link')
@@ -58,6 +63,7 @@ export class Connection extends EventEmitter {
         try{
           const selected=original(realms)
           this.survival.commandPlans.setScope(String(selected.id))
+          this.survival.learning.setScope(String(selected.id))
           this.survival.commandVocabulary.setScope(String(selected.id))
           this.authChallenge=null;this.lastPhase='realm-selected';this.authState='realm-selected'
           this.log('Realm selected; attempting game connection.')
@@ -75,6 +81,12 @@ export class Connection extends EventEmitter {
       this.lastPhase='realm-join-retry';this.authState='realm-join-retry';this.lastError=''
       this.log('Minecraft Realm join request returned HTTP 503; retry '+(attempt+1)+'/'+totalAttempts+' in '+Math.ceil(delayMs/1000)+'s')
     }
+    this.lastPhase=m.mode==='realm'?'realm-discovery':'minecraft-authentication';this.authState=this.lastPhase
+    this.clientIdentity={platform:options.deviceType,deviceOS:options.deviceOS,flow:options.flow,accessTokenExpiryUnits:'seconds'}
+    options.authflow=instrumentAuthflow(new Authflow(options.username,options.profilesFolder,options,options.onMsaCode),{
+      getPhase:()=>this.lastPhase,
+      setPhase:phase=>{this.lastPhase=phase;if(!this.lastError)this.authState=phase}
+    })
     const client=bedrock.createClient(options)
     this.client=client
     this.survival.attach(client)
@@ -154,6 +166,8 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       }
     })
     const failure=(kind,packet)=>{
+      this.lastPhase=authFailurePhase(packet)||this.lastPhase
+      this.lastFailure=classifyConnectionFailure(packet,this.lastPhase)
       const reason=safeDisconnectMessage(packet)
       if(reason&&!this.lastError)this.lastError=kind+': '+reason
       this.authChallenge=null;this.authState='error'
