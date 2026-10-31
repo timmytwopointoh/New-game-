@@ -137,6 +137,10 @@ export class CommandPlans{
   try{this.persist()}catch(e){this.cards=before;throw e}
   return this.snapshot()
  }
+ // Queue progress is advisory; server confirmations stay separate from requests.
+ notify(message){
+  try{this.controller.connection?.emit?.('realm-queue-progress',{message:String(message).slice(0,170),active:this.runActive,step:this.cursor+1,total:this.cards.length})}catch{}
+ }
  // Deprecated single-card activation must not bypass the ordered queue.
  select(){throw Error('Selection was removed. Use Run Queue to execute all saved commands in order.')}
  activate(){throw Error('Individual activation was removed. Use Run Queue.')}
@@ -157,16 +161,19 @@ export class CommandPlans{
   if(!this.controller.connection.spawned){this.interrupt('Disconnected; queue stopped without automatic resume.');return}
   const card=this.cards[this.cursor]
   this.running=card.id;card.state='running';card.result=''
+  this.notify('Step '+(this.cursor+1)+'/'+this.cards.length+': '+renderDescriptor(card.descriptor)+' — starting.')
   try{
    const d=validateDescriptor(card.descriptor);this.validateChoices(d)
    const response=this.controller.handle(renderDescriptor(d))
    card.result=String(response?.message||'No response from command.')
-   if(!response?.accepted){card.state='blocked';this.interrupt('Command rejected; remaining queue stopped.');return}
+   if(!response?.accepted){card.state='blocked';this.notify('Step '+(this.cursor+1)+' blocked: '+card.result.slice(0,105));this.interrupt('Command rejected; remaining queue stopped.');return}
    // Long-running navigation must finish before the 2-second inter-command delay.
    if(this.controller.navigation.job||this.controller.navigation.mining.job){this.schedulePoll();return}
-   card.state=['wall','floor','shelter','supply','route'].includes(d.id)?'preview-only':'completed'
+   card.state=['wall','floor','shelter','supply','route'].includes(d.id)?'preview-only':
+    ['hotbar','look_at','ensure','rejoin','dig','walk','clear','follow'].includes(d.id)?'sent-unverified':'completed'
+   this.notify('Step '+(this.cursor+1)+' '+card.state+'. '+card.result.slice(0,92))
    this.advance()
-  }catch(e){card.state='failed';card.result=String(e.message||e);this.interrupt('Command failed; remaining queue stopped.')}
+  }catch(e){card.state='failed';card.result=String(e.message||e);this.notify('Step '+(this.cursor+1)+' failed: '+card.result.slice(0,108));this.interrupt('Command failed; remaining queue stopped.')}
  }
  schedulePoll(){
   this.clearTimer()
@@ -180,9 +187,10 @@ export class CommandPlans{
   const card=this.cards.find(c=>c.id===this.running)
   const nav=this.controller.navigation
   if(card){
-   if(nav.state==='stopped'||nav.state==='cancelled'){card.state='interrupted';card.result=nav.reason||'Movement interrupted.';this.interrupt('Movement interrupted; remaining queue stopped.');return}
+   if(nav.state==='stopped'||nav.state==='cancelled'){card.state='interrupted';card.result=nav.reason||'Movement interrupted.';this.notify('Step '+(this.cursor+1)+' interrupted: '+card.result.slice(0,103));this.interrupt('Movement interrupted; remaining queue stopped.');return}
    card.state=nav.state==='confirmed'?'completed':'finished-unverified'
    if(nav.reason)card.result=nav.reason
+   this.notify('Step '+(this.cursor+1)+' '+card.state+'. '+card.result.slice(0,98))
   }
   this.advance()
  }
@@ -196,7 +204,7 @@ export class CommandPlans{
   this.timer=this.schedule(()=>{this.timer=null;if(token!==this.generation||!this.runActive)return;this.nextAt=null;this.dispatchNext()},2000)
   this.timer?.unref?.()
  }
- finish(){this.clearTimer();this.generation++;this.runActive=false;this.running=null;this.nextAt=null}
+ finish(){this.clearTimer();this.generation++;this.runActive=false;this.running=null;this.nextAt=null;this.notify('All '+this.cards.length+' queued commands processed. Server-confirmed results must still be checked in diagnostics.')}
  clearTimer(){if(this.timer!==null){this.unschedule(this.timer);this.timer=null}}
  interrupt(reason='Stopped by owner.'){
   this.clearTimer();this.generation++
