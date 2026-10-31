@@ -27,19 +27,28 @@ jobs:
           curl -fL --retry 2 'https://github.com/timmytwopointoh/New-game-/releases/download/veilforge-realm-ai-v013-adaptive-preview/VEILFORGE-Realm-AI-v0.13-Adaptive-Permanent.apk' -o public-base.apk
           python3 realm-ai-phone-build/materialize_v014_apk.py public-base.apk realm-ai-phone-build/v014-public-apk-recipe.json.xz.b64 VEILFORGE-Realm-AI-v0.14-Survival-Controls-Permanent.apk
           sha256sum -c realm-ai-phone-build/v014-publication/VEILFORGE-Realm-AI-v0.14-SHA256.txt
+      - name: Select the same Android verification tools used locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
       - name: Verify signature, update identity and alignment before publication
         shell: bash
         run: |
           set -euo pipefail
           APK='VEILFORGE-Realm-AI-v0.14-Survival-Controls-Permanent.apk'
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          SIGNER="$(find "$SDK/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -n1)"
-          test -n "$SIGNER"
+          SIGNER="$SDK/build-tools/35.0.0/apksigner"
+          test -x "$SIGNER"
           TOOLS="$(dirname "$SIGNER")"
           "$SIGNER" verify --verbose --print-certs "$APK" > certificate-report.txt
+          cat certificate-report.txt
           grep -qi 'Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995' certificate-report.txt
-          "$TOOLS/zipalign" -c -P 16 4 "$APK"
+          "$TOOLS/zipalign" -c -P 16 -v 4 "$APK" > alignment-report.txt
+          tail -n 1 alignment-report.txt
           "$TOOLS/aapt" dump badging "$APK" > package-report.txt
+          head -n 1 package-report.txt
           grep -q "package: name='com.veilforge.realmagent' versionCode='100004'" package-report.txt
           python3 - <<'PY'
           import zipfile
