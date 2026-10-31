@@ -31,6 +31,17 @@ jobs:
             echo 'STOP: account-specific text found in source' >&2
             exit 1
           fi
+      - name: Keep the Microsoft sign-in code visible and copyable in the app
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app'
+          python3 realm-ai-phone-build/patch_auth_ui.py "$ROOT/src/main/java/com/veilforge/realmagent/MainActivity.java"
+          sed -i "s/versionCode 9/versionCode 10/" "$ROOT/build.gradle"
+          sed -i "s/0.9.0-phone-prototype/0.9.1-signin-code/" "$ROOT/build.gradle"
+          grep -q 'MICROSOFT CODE:' "$ROOT/src/main/java/com/veilforge/realmagent/MainActivity.java"
+          grep -q 'Copy Microsoft sign-in code' "$ROOT/src/main/java/com/veilforge/realmagent/MainActivity.java"
+          grep -q 'versionCode 10' "$ROOT/build.gradle"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -124,21 +135,21 @@ jobs:
         run: |
           set -euo pipefail
           APK='.vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk'
-          cp "$APK" VEILFORGE-Realm-AI-v0.9-Standalone-debug.apk
-          sha256sum VEILFORGE-Realm-AI-v0.9-Standalone-debug.apk > VEILFORGE-Realm-AI-v0.9-SHA256.txt
-          TAG="veilforge-realm-ai-v09-standalone-preview"
+          cp "$APK" VEILFORGE-Realm-AI-v0.9.1-SignIn-debug.apk
+          sha256sum VEILFORGE-Realm-AI-v0.9.1-SignIn-debug.apk > VEILFORGE-Realm-AI-v0.9.1-SHA256.txt
+          TAG="veilforge-realm-ai-v091-signin-code-preview"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9-Standalone-debug.apk VEILFORGE-Realm-AI-v0.9-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" VEILFORGE-Realm-AI-v0.9.1-SignIn-debug.apk VEILFORGE-Realm-AI-v0.9.1-SHA256.txt --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9-Standalone-debug.apk VEILFORGE-Realm-AI-v0.9-SHA256.txt \
+            gh release create "$TAG" VEILFORGE-Realm-AI-v0.9.1-SignIn-debug.apk VEILFORGE-Realm-AI-v0.9.1-SHA256.txt \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "VEILFORGE Realm AI v0.9 - Standalone Android PREVIEW" \
+              --title "VEILFORGE Realm AI v0.9.1 - Visible Microsoft Code PREVIEW" \
               --notes "Debug-signed Android 16 ARM64 preview. Source archive SHA256 gated, Node Android runtime checksum/ELF alignment gated, APK signature and native payload verified. NO actual Android device install, Microsoft sign-in, Realm connection, or gameplay success is claimed. Use official Microsoft device-code login only. Never enter account credentials in GitHub." --prerelease
           fi
       - name: Upload validated debug APK for 2 days
         uses: actions/upload-artifact@v4
         with:
-          name: VEILFORGE-Realm-AI-v0.9-Standalone-APK
+          name: VEILFORGE-Realm-AI-v0.9.1-SignIn-APK
           path: .vf-phone-build/veilforge_realm_v09_apk_ready/android-app/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 2
           if-no-files-found: error
