@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200006,
+  "issuedAt": 1793485282238,
+  "expiresAt": 1794090082238,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-025-grounded-walking/Realm-AI-Live.apk",
+  "size": 110083206,
+  "sha256": "38bf84f1913198286a940a36909a6bf09def96bf3d69c120b7c0d041380c886e",
+  "notes": "Completes Bedrock loading after terrain arrives; retries flight-off requests with server confirmation; keeps gravity active through Stop and mode changes; verifies ground contact and handles movement locks. Nintendo Switch login and all merged features retained. Same permanent Live key. 221 Node and 35 Android tests passed; live phone landing and walking still require testing.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested",
+  "tests": {
+    "node": {
+      "passed": 221,
+      "failed": 0
+    },
+    "android": {
+      "passed": 35,
+      "failed": 0
+    }
+  },
+  "authenticationProfile": {
+    "platform": "Nintendo",
+    "authTitle": "00000000441cc96b",
+    "deviceOS": 12,
+    "flow": "live",
+    "cache": "private/auth/switch",
+    "androidRecoveryEnabled": false
+  },
+  "movementInput": "touch; normal flight-off request; no teleport",
+  "flightRecovery": {
+    "loadingAcknowledgement": "EndLoadingScreen=2 after known terrain",
+    "requestedAbility": "flying=false only",
+    "retryIntervalMs": 1000,
+    "maxAttemptsPerEpisode": 5,
+    "confirmation": "own server abilities",
+    "groundContact": "received collision shapes; never unknown terrain"
+  },
+  "bundledEnglishWords": 5000,
+  "neuralLanguageModel": false
+}

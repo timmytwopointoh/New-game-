@@ -7,13 +7,13 @@ const dangerous=/^(?:flowing_)?(?:lava|water)$|fire|campfire|cactus|magma|powder
 const airNames=new Set(['air','cave_air','void_air'])
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.serverAuthoritativeBreaking=null;this.serverPosition=null;this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.effects=new Map();this.entities=new Map();this.players=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set()}
+ reset(){this.serverAuthoritativeBreaking=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.effects=new Map();this.entities=new Map();this.players=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set()}
  initialize(packet,version='1.26.60'){
   this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.sections.clear();this.updates.clear();this.entities.clear();this.players.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.attributes={}
-  this.serverAuthoritativeBreaking=typeof packet.server_authoritative_block_breaking==='boolean'?packet.server_authoritative_block_breaking:null;this.blockRevision=0;this.blockRevisions.clear();this.serverPosition={...packet.player_position};this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
+  this.serverAuthoritativeBreaking=typeof packet.server_authoritative_block_breaking==='boolean'?packet.server_authoritative_block_breaking:null;this.blockRevision=0;this.blockRevisions.clear();this.serverPosition={...packet.player_position};this.serverGrounded=null;this.inputLocks={};this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
   this.gameMode=this.normalizeMode(packet.player_gamemode);this.gameModeSource=this.gameMode?'player-specific start_game':null
   // Bedrock GameMode 5 is the player's explicit "use the world default" value.
   // It is safe to resolve through world_gamemode because the start_game field
@@ -134,6 +134,7 @@ export class WorldView{
   return contact&&this.clearBody(position)
  }
  canJumpBetween(a,b){
+  if(this.inputLocks?.jump)return false
   if(Math.abs(a.x-b.x)+Math.abs(a.z-b.z)!==1||b.y-a.y!==1||!this.walkable(a)||!this.walkable(b))return false
   return [a,b].every(p=>this.airAt({...p,y:a.y+2})&&this.airAt({...p,y:a.y+3}))
  }
@@ -183,6 +184,7 @@ export class WorldView{
   on('update_abilities',p=>{if(this.uniqueId!==null&&String(p.entity_unique_id)===this.uniqueId)this.abilityState=abilityEvidence(p)})
   on('update_player_game_type',p=>{if(this.uniqueId!==null&&String(p.player_unique_id)===this.uniqueId){this.gameMode=this.normalizeMode(p.gamemode);this.gameModeSource='per-player server update'}})
   on('set_player_game_type',p=>{this.gameMode=this.normalizeMode(p.gamemode);this.gameModeSource='server set-player update'})
+  on('update_client_input_locks',p=>{this.inputLocks={...p.locks}})
   on('item_registry',p=>{if(this.registry)this.registry.handleStartGame({itemstates:p.itemstates,block_network_ids_are_hashes:this.hashMode})})
   on('level_chunk',p=>this.receiveChunk(p,client));on('subchunk',p=>this.receiveSections(p));on('update_block',p=>this.update(p));on('update_block_synced',p=>this.update(p));on('update_subchunk_blocks',p=>{for(const [layer,entries] of [[0,p.blocks],[1,p.extra]])for(const entry of (entries||[]).slice(0,4096))this.update({position:entry.position,block_runtime_id:entry.runtime_id,layer})})
   on('inventory_content',p=>{if(p.window_id==='inventory'||p.window_id===0){this.inventory.clear();p.input?.slice(0,256).forEach((v,i)=>this.inventory.set(i,v));this.inventoryKnown=true}})

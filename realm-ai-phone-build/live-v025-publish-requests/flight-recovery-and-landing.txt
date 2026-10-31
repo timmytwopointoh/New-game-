@@ -1,0 +1,1 @@
+Owner-authorized Live flight recovery update. Publish exact locally signed APK; do not compile or access private signing material. Tests: 221 Node and 35 Android passed. Preserve Switch login and permanent Live certificate.

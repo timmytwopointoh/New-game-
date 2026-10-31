@@ -13,18 +13,24 @@ export class Navigation{
  attach(client){
   this.detach();this.client=client;this.progress.reset();this.blocked.clear();this.decisions=[];this.recoveryAttempts=0
   const on=(e,f)=>{client.on(e,f);this.listeners.push([e,f])}
-  on('start_game',p=>{this.tick=BigInt(p.current_tick||0);this.yaw=Number(p.rotation?.z||0);this.pitch=0;this.spawned=false;this.lastPoseAt=Date.now()})
-  on('spawn',()=>{this.spawned=true;this.timer=setInterval(()=>this.step(),50);this.timer.unref?.()})
+  on('start_game',p=>{this.tick=BigInt(p.current_tick||0);this.yaw=Number(p.rotation?.z||0);this.pitch=0;this.spawned=false;this.lastPoseAt=Date.now();this.loading={state:'waiting-for-terrain',id:null,dimension:false}})
+  on('spawn',()=>{this.spawned=true;if(this.timer)clearInterval(this.timer);this.loading??={state:'waiting-for-terrain',id:null,dimension:false};this.timer=setInterval(()=>this.step(),50);this.timer.unref?.()})
   const correction=p=>this.observeServer(p,Date.now())
   on('move_player',p=>{if(String(p.runtime_id)===this.world.entityId)correction(p)})
-  on('correct_player_move_prediction',correction)
+  on('correct_player_move_prediction',p=>{if(p.prediction_type!=='vehicle'&&p.prediction_type!==1)correction(p)})
   on('move_entity',p=>{if(String(p.runtime_entity_id??p.runtime_id)===this.world.entityId)correction(p)})
-  on('change_dimension',()=>{this.stop('Dimension changed; work cancelled.');this.progress.reset();this.blocked.clear()})
+  on('change_dimension',p=>{this.loading={state:'waiting-for-terrain',id:p.loading_screen_id??null,dimension:true};this.stop('Dimension changed; work cancelled.');this.progress.reset();this.blocked.clear();this.lastServerTick=null;this.vy=0})
   on('close',()=>this.detach());on('disconnect',()=>this.stop('Disconnected. Rejoin the Realm before moving.'))
  }
  observeServer(p,now){
   if(!p.position||![p.position.x,p.position.y,p.position.z].every(Number.isFinite))return
-  if(p.delta&&Number.isFinite(p.delta.y))this.vy=p.delta.y;else this.vy=0
+  // Rewind corrections may arrive after newer feedback. Never rewind to an
+  // older tick, and never treat a vehicle correction as the player's body.
+  const tick=p.tick===undefined?null:BigInt(p.tick)
+  if(p.mode!=='teleport'&&tick!==null&&this.lastServerTick!==null&&this.lastServerTick!==undefined&&tick<this.lastServerTick)return
+  if(tick!==null)this.lastServerTick=tick
+  if(typeof p.on_ground==='boolean')this.world.serverGrounded=p.on_ground
+  if(p.on_ground===true)this.vy=0;else if(p.delta&&Number.isFinite(p.delta.y))this.vy=p.delta.y;else this.vy=0
   const before=this.world.position;this.world.position={...p.position};this.world.serverPosition={...p.position};this.lastPoseAt=now
   if(p.yaw!==undefined)this.yaw=p.yaw
   if(p.mode==='teleport'){this.pendingFlags.push('handled_teleport');this.stop('Server teleported the player; work cancelled.');this.progress.reset();return}
@@ -39,8 +45,25 @@ export class Navigation{
   return findPath(routeWorld,start,goal,{allowSteps,maxNodes})
  }
  assignRoute(plan){this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
+ movementBlock(){
+  if(this.world.inputLocks?.move)return 'The server has locked movement; waiting for its unlock update.'
+  if(this.world.abilityState?.effective.flying)return 'The server still reports active flight. Requesting flight off and waiting for confirmation before walking.'
+  if(!this.world.movementVerified)return 'This player’s server mode and grounded movement abilities are not verified; movement is paused.'
+  if(!this.world.terrainKnown())return 'Nearby terrain is unknown; requesting it before landing or walking.'
+  if(!this.world.clearBody(this.world.position))return 'Received terrain overlaps the server-reported player body; waiting for a clear authoritative position before walking.'
+  if(!this.world.grounded())return 'Still landing under gravity; wait for collision-based ground contact, then activate the command again.'
+  return null
+ }
+ finishLoading(){
+  if(this.loading?.state!=='waiting-for-terrain'||!this.world.terrainKnown())return
+  // set_local_player_as_initialized alone does not end Bedrock's loading
+  // abilities. Acknowledge only after the actual nearby terrain has arrived.
+  if(this.loading.dimension){const p=this.world.standPosition();this.client.queue('player_action',{runtime_entity_id:BigInt(this.world.entityId),action:'dimension_change_ack',position:p,result_position:p,face:0})}
+  this.client.queue('serverbound_loading_screen',{type:2,loading_screen_id:this.loading.id})
+  this.loading.state='complete'
+ }
  walk(goal,{allowMining=false}={}){
-  if(!this.world.movementVerified)return {accepted:false,queued:false,message:'This player’s server mode and grounded movement abilities are not verified; movement is paused.'}
+  const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
   if(allowMining&&!this.world.editModeVerified)return {accepted:false,queued:false,message:'Clear-path work requires this player’s verified Survival or grounded Creative mode; no movement or mining started.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   const start=this.world.standPosition()
@@ -56,7 +79,7 @@ export class Navigation{
   return {accepted:true,queued:!!this.route.length,message:this.route.length?`Solo route: ${this.route.length} steps. I will try another route if blocked${allowMining?', then consider one natural-looking, easy block if necessary':''}.`:'Already in that block according to the client position.'}
  }
  follow(name){
-  if(!this.world.movementVerified)return {accepted:false,queued:false,message:'This player’s server mode and grounded movement abilities are not verified; following is paused.'}
+  const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.job={kind:'follow',name,allowMining:false};this.state='following';this.lastFollowPlan=0
   this.updateFollow(Date.now(),true)
@@ -171,11 +194,13 @@ export class Navigation{
   if(!this.spawned||!this.client||!this.world.position)return
   if(now-this.lastInputAt>500&&this.lastInputAt&&(this.job||this.flight))this.stop('Phone paused; work stopped.')
   this.lastInputAt=now
+  try{this.finishLoading()}catch(e){this.stop('Loading acknowledgement failed: '+String(e.message||e).slice(0,100));this.detach();return}
   this.checkVerification?.()
   const health=this.world.attributes['minecraft:health']
   if(health===0){this.stop('Player died; work stopped.');return}
   if(this.job&&health!==undefined&&health<=6)this.stop('Health is low; work stopped.')
   if(this.job&&((['mine','build'].includes(this.job.kind)&&(this.job.gameMode!==this.world.gameMode||!this.world.editModeVerified))||(!['mine','build'].includes(this.job.kind)&&!this.world.movementVerified)))this.stop('Server mode or required movement abilities changed; work stopped.')
+  if(this.job&&this.world.inputLocks?.move)this.stop('The server locked movement; work stopped until it unlocks.')
   if(this.job&&!this.world.enabled)this.stop('View is off; work stopped.')
   if(this.job?.kind==='solo'&&now-this.startedAt>60000)this.stop('Travel time limit reached.')
   if(this.clearing&&!this.mining.job){
@@ -259,6 +284,6 @@ export class Navigation{
    if(now-this.lastRequestAt>5000){this.lastRequestAt=now;this.world.requestNearby(this.client)}
   }catch(e){this.stop('Input packet failed: '+String(e.message||e).slice(0,100));this.detach()}
  }
- snapshot(){return {state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,progress:this.progress.snapshot(),building:this.building.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions}}
- detach(){if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.mining.reset();this.building.reset();this.spawned=false;this.unknownSince=null;this.vy=0}
+ snapshot(){return {state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions}}
+ detach(){if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.mining.reset();this.building.reset();this.spawned=false;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null}
 }

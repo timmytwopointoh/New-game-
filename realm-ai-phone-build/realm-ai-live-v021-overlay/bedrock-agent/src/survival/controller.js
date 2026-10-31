@@ -59,7 +59,7 @@ export class SurvivalController{
   if(m)return this.navigation.mine({x:Number(m[1]),y:Number(m[2]),z:Number(m[3])})
   m=s.match(/^clear path to (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
   if(m)return this.navigation.walk({x:Number(m[1]),y:Number(m[2]),z:Number(m[3])},{allowMining:true})
-  if(s==='movement status'||s==='why are you stuck'){const n=this.navigation.snapshot();return answer(`${n.mode}: ${n.state}. ${n.reason} Server feedback: ${n.progress.feedback}.`,{navigation:n})}
+  if(s==='movement status'||s==='why are you stuck'){const n=this.navigation.snapshot(),f=n.physics,a=this.world.abilityState;return answer(`${n.mode}: ${n.state}. ${n.reason} Ground contact: ${f.grounded}; terrain known: ${f.terrainKnown}; server grounded: ${f.serverGrounded??'unreported'}; active flight: ${a?.known?!!a.effective.flying:'unverified'}; loading: ${f.loading}; flight recovery: ${this.verification.flightRecovery.state}. ${this.navigation.movementBlock()||'Ready to walk.'} Server feedback: ${n.progress.feedback}.`,{navigation:n,verification:this.verification.snapshot()})}
   m=s.match(/^(?:route|walk|go|move|head) to (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
   if(m){const goal={x:Number(m[1]),y:Number(m[2]),z:Number(m[3])};if(s.startsWith('route')){const p=this.navigation.routeTo(goal);return answer(p.ok?`Route found: ${p.path.length-1} level-ground steps. Say “walk to ${goal.x} ${goal.y} ${goal.z}” to move.`:p.reason,{route:p.ok?p.path:[]})}return this.navigation.walk(goal)}
   m=s.match(/^(?:find|locate|look for) (.+)$/)
