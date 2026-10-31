@@ -1,0 +1,707 @@
+REALM AI LIVE v0.26 — FULL SOURCE HANDOFF, BUILD HISTORY AND REMAINING WORK
+Snapshot date: 2026-10-31 UTC
+
+READ THIS FIRST
+==============
+This is a source/documentation export only. No app code was changed, no new APK
+was built, and no fixes were attempted for this handoff.
+
+LATEST OWNER REPORT: BLOCK PLACEMENT IS NOT READY YET. Treat placing blocks,
+wall/floor/shelter execution and dirt-assisted climbing as unfinished in the real
+Realm, even though placement code and simulated tests exist. Do not describe a
+passing unit test or an implemented packet transaction as proof of live building.
+
+The owner confirmed that the bot joins, listens, can change Survival/Creative,
+no longer floats, and can be touched/hit. The owner also reported that a zombie
+killed it and it did not respawn in the preceding build. v0.26 adds respawn code,
+but no successful v0.26 phone respawn test has been reported in this conversation.
+
+This file distinguishes:
+  PHONE-CONFIRMED: the owner actually observed it in the app/Realm.
+  IMPLEMENTED/TESTED: code exists and automated tests pass; live success unknown.
+  UNFINISHED/PLANNED: missing, unreliable, or awaiting live repair/verification.
+
+1. EXACT APP AND SOURCE IDENTITY
+===============================
+App: Realm AI Live / VEILFORGE Realm AI
+Android application ID: com.veilforge.realmagent.live
+Current versionCode: 200007
+Current versionName: 0.26-climb-recovery
+Repository: timmytwopointoh/New-game-
+Working branch: sandbox/realm-ai-v013-adaptive-recovery-20261031
+App/source commit: 6ebbd8cd38abeabb68233e62494364d8f81d9f2d
+Release tag: realm-ai-live-026-climb-recovery
+
+Canonical app source in that repository:
+  realm-ai-phone-build/realm-ai-live-v021-overlay/
+
+The v021 DIRECTORY NAME is historical. It contains the current v0.26 Live app.
+The top-level app is a separate legacy project. The old application ID
+com.veilforge.realmagent is a different installation. Do not accidentally build
+that app, replace Live with it, or edit unrelated games or main.
+
+Released source ZIP:
+https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-026-climb-recovery/Realm-AI-Live-v0.26-source.zip
+
+Published test APK:
+https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-026-climb-recovery/Realm-AI-Live.apk
+
+Source ZIP: 114 files; 655,653 bytes.
+Source SHA256:
+6304b4c89e401a7e25149e60f98f912e1715bf148cfaeed8df4d51196fe7ef6d
+APK: 110,095,837 bytes.
+APK SHA256:
+c03c155e98ba5f3ac3f6fcf9ca5f43314d7ac0ae9100d507c602f291278355fd
+
+The source ZIP is much smaller than the APK because it contains app source,
+tests, configuration examples, lockfile, glossary and build helpers. It excludes
+installed node_modules, native runtime binaries, APKs, caches, credentials and
+private signing material. It is source code, not an installable app or a complete
+offline copy of every third-party build dependency.
+
+2. WHAT HAS BEEN CONFIRMED ON THE PHONE
+======================================
+- Realm joining/spawning and listening to commands have worked.
+- The owner reports mode changes between Survival and Creative work.
+- The owner confirmed the v0.25 flight/loading fix: the bot is no longer floating
+  and can be touched/hit.
+- The bot can take normal hostile-mob damage: a zombie killed it.
+- Earlier phone screenshots showed terrain perception with snow, dirt, grass and
+  other blocks; decoded terrain sections and zero decode errors in those samples.
+- Command preparation/saved cards and preview responses appeared in screenshots.
+- Latest report says block placement is NOT ready. This remains an open issue.
+
+Not yet established by a successful phone report:
+- Reliable measured walking to a destination with server feedback.
+- Ordinary jump/drop routing in all relevant terrain.
+- Dirt staircase placement and climbing in the Realm.
+- Reliable mining/removal plus actual drop collection.
+- Reliable block/wall/floor/shelter placement.
+- Automatic respawn and safe post-respawn loading in v0.26.
+- Full update installation and bug-report export on the owner's physical phone.
+
+3. WHAT THE APP CURRENTLY CONTAINS
+=================================
+A. Phone-hosted Bedrock client and connection
+- The bot runs on the Android phone in the app's isolated agent process.
+- Uses a separate invited Microsoft/Xbox account to join a Minecraft Bedrock Realm.
+- Existing resource-pack negotiation/download fixes and verified cached packs.
+- Saved Microsoft sessions and manual rejoin without deleting login files.
+- Microsoft device-code display, Copy sign-in code and official clickable link.
+- Realm selection by configured identity/name/ID; does not blindly pick the first
+  Realm when the account belongs to several.
+- Local controller/API binds to loopback and requires an authentication token.
+  It is not a public remote-control server.
+- Transient Realm join retries are bounded; do not create login-refresh loops.
+
+B. Keep the Nintendo Switch login profile
+- authTitle: 00000000441cc96b (MinecraftNintendoSwitch)
+- deviceType: Nintendo
+- DeviceOS: 12
+- flow: live
+- Persistent Switch authentication folder: private/auth/switch
+- Old Android auth files were retained, not deleted.
+- Android-only Sisu title recovery is disabled for the Switch profile.
+- Xbox-named service stages are normal for Bedrock authentication, including
+  Switch; they do not prove an Xbox-console client identity.
+- A reproduced seconds-versus-milliseconds OAuth expiry bug is corrected by an
+  adapter without indiscriminately forcing Microsoft reauthentication.
+- Authentication identity and movement input are separate. Movement uses touch
+  input; the restored Switch title does not imply the bot teleports or needs
+  Xbox-console control emulation.
+
+C. Game mode and ability verification
+- Tracks this bot's own server-reported mode/abilities, not other players' modes.
+- World default is used only for the player's explicit inherit/fallback value.
+- Loading-screen protection, permission to fly and actual active flight are
+  treated separately.
+- Survival work requires suitable effective server abilities.
+- Creative is intentionally supported for owner-authorized testing. Normal
+  Creative damage immunity/instant-build permissions are not mistaken for a
+  reason to forbid grounded walking.
+- Active flight/noclip/editor-like movement prevents ordinary grounded jobs.
+- Mode buttons send normal Minecraft /gamemode survival @s or
+  /gamemode creative @s only when sufficient server permission is reported.
+- No automatic granting of operator privileges, enabling global cheats or
+  changing global Realm settings.
+- Requests wait for actual mode/ability confirmation. Duplicate requests and
+  denied/unconfirmed responses are handled without inventing success.
+
+D. Flight removal, gravity and ground contact
+- Sends Bedrock EndLoadingScreen after actual nearby terrain arrives, including
+  the matching loading-screen ID for dimension transitions.
+- Requests flying=false and sends normal stop-flying action/input.
+- At most five requests at one-second intervals per flight episode; waits for
+  this player's server abilities to confirm flight off.
+- Continuous gravity runs after spawning, while idle and after Stop/cancellation.
+- Received collision shapes determine clearance, landing and ground contact.
+- Handles thin snow and partial-height support/slabs in the physics/path checks.
+- Does not treat unknown terrain as air or a floor. Requests terrain; existing
+  five-second unverifiable-terrain handling disconnects while keeping login.
+- Reconciles authoritative position feedback, ignores vehicle corrections and
+  older-tick corrections, and tracks server movement/jump locks.
+- Predicted completion is identified separately from server-confirmed movement.
+
+E. Walking, following and climbing — implemented, still needs live testing
+- Bounded observed-terrain pathfinding; ordinary walk/follow do not dig.
+- Ordinary walking and following can plan one-block jumps/drops with clearance.
+- Jumping uses normal input and a physical trajectory, not a teleport command.
+- Follow tracks observed players or the configured owner, replans and reports
+  waiting/blocked rather than claiming a route exists when it does not.
+- Server-feedback stuck detection, detours, bounded recovery and low-health stop.
+- Travel requests are bounded to nearby coordinates, normally within 48 blocks.
+- v0.26 may plan a small supported dirt staircase when a normal route fails.
+  Local rise is bounded to four blocks; it is not unlimited pillaring/bridging.
+- Requires known dirt in the hotbar and safe observed support/headroom.
+- Each step must receive a server block update and, in Survival, inventory
+  consumption confirmation before the bot jumps onto it.
+- Creative still requires an actual known held dirt block; it does not invent
+  inventory. The held block is not consumed in Creative.
+- Stop cancels unfinished placement/jump intent; gravity continues and already
+  confirmed dirt stays in the world.
+- IMPORTANT: because live placement is unfinished, live dirt climbing cannot be
+  considered working simply because its simulated test passes.
+
+F. Mining — implemented but live reliability remains open
+- Explicit dig-one-block and bounded clear-path mining requests.
+- Uses actual selected hotbar item, reach, visibility, harvest suitability,
+  hardness, effects/enchantments where available, and protection checks.
+- Holds start/continue mining input across ticks; uses estimated time appropriate
+  to the held item. A suitable tool is faster; hand/ineffective-tool mining is slower.
+- Supports server-authoritative breaking in auth input and a legacy player-action
+  path where the server reports that mode.
+- Sends one completion transaction and continues holding while awaiting the
+  server block update; Stop sends abort/release.
+- A server update to air confirms removal; it does NOT prove item collection.
+- Stops on changed tool, reach/protection failures, target changes or timeout.
+- The current assessment has a bounded mining-time budget (default about five
+  seconds estimated work), plus a confirmation timeout. It is not unlimited
+  bare-hand mining of every hard block.
+- Explicit dig checks include safe standing position and restrictions on underfoot
+  or overhead mining. Recovery clearing is conservative and limited.
+- Ordinary walk/follow never decide to mine player structures to get through.
+- Earlier phone attempts failed to get server-confirmed breaks. No later evidence
+  establishes that all mining targets/tools now work on the live Realm.
+
+G. Building/placement — UNFINISHED ON THE PHONE
+- Source contains real item-use placement transactions for a block, wall, floor
+  and fixed shelter, separately from supply/build previews.
+- Intended to check actual hotbar supplies, suitable simple full solid materials,
+  known-air targets, a visible/reachable support face, safe approach and protection.
+- Waits for block updates and Survival inventory consumption. Creative should use
+  the held material without decrementing its count.
+- Explicit wall: width 1-6, height 1-3. Floor: dimensions 1-6 by 1-6.
+- Fixed shelter: 5 x 5, floor, three-block walls, roof, two-block doorway; 96 blocks.
+- Existing blocks are not replaced automatically. Partial/oriented/interactive,
+  falling and hazardous block placement is not generally supported.
+- Stop leaves already confirmed placements in place and cancels the remainder.
+- These are implemented paths/simulated tests, not a completed live building
+  feature. The owner's latest report takes precedence: placement is not ready.
+- Some older preview/help messages still say placement is not implemented at all,
+  although explicit placement paths exist. Wording needs reconciliation after
+  the underlying live behavior is established. Do not silently treat previews
+  as successful world edits.
+
+H. Inventory, terrain and catalog
+- Observed inventory counts, selected hotbar slot, known held-item information.
+- Hotbar selection is 1-9 and based on actual received inventory.
+- Chunk/subchunk decoding, block updates, nearby scans and visible-block lookup.
+- Find locates visible nearby matching blocks; it does not automatically gather.
+- Searchable block/material catalog, about/material information and recipe data.
+- Supply planning and wall/floor/shelter supply previews.
+- Preview quantities 1-256; preview dimensions up to 12, distinct from the smaller
+  executable placement limits above.
+- Recipes/supply planning do not perform crafting, smelting or automatic gathering.
+
+I. Plans, queue, Stop and conversation UI
+- Shared command catalog drives popup forms and validation.
+- Up to FIVE saved commands/plans, stored privately and scoped to the Realm.
+- Tapping/preparing a command saves it and selects it for the next activation.
+- Preparation alone does not start work; fields are checked again on activation.
+- Reusable completed cards, selection, deletion and Reuse controls are present.
+- The final UI uses selected-first activation of waiting queued work. This
+  superseded the earlier selected-only design; do not revert it accidentally.
+- One active job at a time, with roughly two seconds between completed queue items.
+- Duplicate activation/taps and delayed requests from before Stop are guarded.
+- Saved descriptors survive restarts without automatically resuming work.
+- STOP cancels work immediately through the urgent path; it does not turn off
+  gravity. Stop bot service is a separate control in Settings/power handling.
+- Main screen: power indicator/control, Updates, Settings, progress/connection
+  text, chat, STOP, central green Activate, Commands and prompt/send controls.
+- Account, mode, saved-plan management, learning and diagnostics remain in Settings.
+- The word 'command' opens command options. 'command <action>' prepares an action.
+  Questions/plain sentences are treated as conversation/read-only requests rather
+  than arbitrary execution. Stop remains immediate.
+- Ordinary chat, greetings, jokes/teasing and clarification are supported by rules.
+  This is not unrestricted language understanding.
+
+J. Language and memory
+- The merged Live source includes the other app's offline 5,000-word glossary,
+  attribution, definitions/context and Minecraft terms/action synonyms.
+- Learns owner-confirmed action/material word mappings privately per Realm, up to
+  200 mappings; review/forget controls are included.
+- Unknown/ambiguous action words can ask what was meant or offer a confirmation
+  before learning a supported mapping and preparing a command.
+- Distinguishes heights/dimensions and stacks/quantities in supported parsing;
+  unclear slab/build requests ask for clarification.
+- Remembers task outcomes as confirmed, blocked, interrupted/unverified and can
+  remind the user to recheck a previous failure. This is not proof of a repair.
+- There is NO bundled neural language model, autonomous model training, arbitrary
+  code rewriting or general-purpose internet search in this build.
+- It cannot reliably turn every unfamiliar sentence into a Minecraft action.
+  Word learning maps to implemented actions; it does not create new abilities.
+
+K. Death and respawn — new in v0.26, not phone-confirmed yet
+- Responds to this player's server health/death/respawn information.
+- Interrupts active work and queued execution on death.
+- Sends normal Respawn action, acknowledges server-ready position with client
+  ready state, then waits for positive server health.
+- Does not set health locally or use Creative/invulnerability to fake survival.
+- Bounded retries, a roughly 15-second confirmation timeout and Hardcore handling.
+- Previous jobs remain stopped after respawn and loading.
+- A parameterless Respawn command supports a manual retry when actually dead.
+- This does not add fighting, eating, armor use or smart zombie avoidance. The
+  bot can still be attacked and killed; low-health stopping is not self-defense.
+
+L. Bug reports, file access and signed updates
+- Settings -> Bug reports -> Export ZIP. Also reachable from Updates.
+- Export works without a running bot/API, using Android's document save picker.
+- Report includes recent sampled game state, in-game coordinates, terrain/mode/
+  flight/ground state, death/respawn, packet counters, grouped symptoms, safe
+  source-frame locations and Android/service/updater event codes.
+- Bounded private histories: up to 240 runtime events and 200 Android events;
+  grouped issues are diagnostic clues, not automatically proven root causes.
+- Raw packets, account names, chat, Microsoft codes/tokens/passwords, private
+  signing material and unrelated phone files are excluded.
+- Missing/malformed reports still permit an app-only export.
+- 'Share one file' opens Android's picker/share sheet for only the selected file.
+- Neither export nor sharing gives this chat live access to the phone filesystem.
+- No automatic upload, remote shell, hidden remote editor or live pairing exists.
+- Practical repair loop: reproduce -> export ZIP -> attach here -> investigate ->
+  make/test source fix -> publish signed update -> user installs/tests.
+- Updater checks a signed release notice, verifies package/version/hash/size and
+  the same signing certificate, then stages the APK privately over HTTPS.
+- Notifications/checks can run while the bot service runs; downloads leave the
+  bot running. Installation restarts/disconnects it and Android asks for approval.
+- Installation does not automatically restart old jobs. Saved sessions/plans are
+  retained by normal same-package/same-key higher-version updates.
+- Feed: https://raw.githubusercontent.com/timmytwopointoh/New-game-/realm-live-update-channel/release.json
+- Update checks/download/verification/install outcomes are logged in v0.26.
+- v0.26 feed/public download were verified after publication. End-to-end install
+  behavior on the owner's actual phone still needs confirmation.
+
+4. BUILD HISTORY / MAJOR CHANGES SO FAR
+======================================
+Earlier phone Realm work, v0.9-v0.13 and subsequent separate-app iterations:
+- Reconstructed the Realm client from archives/overlays rather than the unrelated
+  top-level legacy app.
+- Established phone-hosted authenticated Realm joining and resource-pack fixes.
+- Added terrain decoding/perception, inventory/catalog and local chat/controller.
+- Added bounded walking/follow, jumps/drops, server-feedback stuck handling,
+  detours, safe explicit mining and supply/build previews.
+- Reproduced snow collision failures from literal-air/full-cube assumptions.
+- Added shape/support-height collision and continuous idle/Stop gravity.
+- Added own-player mode/ability checks, command popup forms, five saved plans,
+  selected/queued activation, reusable cards and immediate Stop.
+- Added real held-tool mining input and placement transaction code, then language
+  parsing, glossary/context, confirmed corrections and task-outcome memory.
+- UI evolved into the current compact main controls with account/management in
+  Settings; Microsoft code/link controls were repaired through several iterations.
+
+Live v0.20 original source and updater baseline:
+- Live source was provided as an archive with its own application identity and
+  signed update machinery. It is distinct from the older separate Realm app.
+- Earlier file-sharing experiments did not create live remote phone access.
+
+Live v0.21:
+- Established the canonical Live overlay and retained updater/account controls.
+- After the original Live private key was unavailable, the owner explicitly
+  authorized ONE new permanent Live signing baseline. That baseline is still the
+  current key; no later key replacement was made for v0.22-v0.26.
+
+Live v0.22:
+- Merged missing separate-app language/glossary/context and implemented features
+  into Live, including the 5,000-word glossary and Realm-scoped memory.
+- Added clearer connection-stage diagnosis and corrected the reproduced OAuth
+  expiry-units bug without deleting saved sessions.
+- Did not install a neural model or implement arbitrary internet learning.
+
+Live v0.23:
+- Fixed local-API availability tracking that could falsely label a responding
+  controller unavailable.
+- Made sanitized connection diagnostics persist and remain viewable/copyable
+  offline, breaking the 'must connect before diagnostics' trap.
+- An Android-specific bounded title-token recovery existed in this version.
+
+Live v0.24:
+- Restored the owner's original Nintendo Switch auth title/device/DeviceOS/flow.
+- Separated persistent Switch auth from preserved Android cache files.
+- Disabled the Android-only recovery for Switch; retained touch movement.
+- Avoided inferring 'Xbox-console login' from Xbox service error stage names.
+
+Live v0.25:
+- Sent missing loading-screen completion acknowledgement after receiving terrain.
+- Replaced one-shot assumed-success flight stopping with bounded flying=false
+  requests plus normal input and own-server ability confirmation.
+- Kept gravity active through Stop and mode changes; separated real ground contact
+  from flight permission and a server on_ground flag.
+- Added clearer movement/flight/loading/lock diagnostics and handled stale/vehicle
+  position corrections. Owner confirmed no floating and normal touch/damage.
+
+Live v0.26 (current):
+- Extended one-block jump/drop routing to ordinary walks.
+- Added bounded server-confirmed dirt staircase planning/execution.
+- Added normal automatic respawn and manual Respawn action, with no job resume.
+- Added bounded sanitized runtime/app/update logs and offline exportable bug ZIP.
+- Added Bug reports access from Settings and Updates.
+- Published the same-key test APK and matching signed update notice/source ZIP.
+- Latest owner report still identifies placement as unfinished.
+
+5. REMAINING FIXES — PRIORITY ORDER, NOT WORK DONE IN THIS HANDOFF
+================================================================
+1) BLOCK PLACEMENT / BUILDING — known unfinished per owner.
+   Reproduce a single visible/reachable dirt placement in the test world using
+   the report ZIP. Trace actual hotbar/equipment acknowledgement, clicked support
+   face, position/reach, placement transaction and authoritative block/inventory
+   response. Distinguish server protection/permission from client packet errors.
+   Confirm both modes separately; only then test a wall, floor and full shelter.
+   Do not substitute a preview, predicted block or local inventory decrement for
+   a real placed block. Dirt climbing depends on this foundation.
+
+2) MINING — establish reliable live removal and actual collection.
+   Compare empty hand, ineffective held item and appropriate tool; verify held
+   continuation, timeout/release and both reported breaking modes where relevant.
+   Fix from actual server feedback. Confirm drops/inventory separately from air.
+   Review the conservative time/tool/underfoot/overhead limits against intended use.
+
+3) WALKING/JUMPING/CLIMBING — physical server-confirmed travel.
+   Test flat walks, snow/slabs, one-block rise/drop, ceilings, unknown terrain,
+   protected builds, corrections, jump locks and Stop midair.
+   Confirm the bot truly travels rather than only changing predicted coordinates.
+   After placement works, test dirt staircases with insufficient dirt, protection,
+   inventory delay, mode changes and interruption. No teleport shortcuts.
+
+4) RESPAWN — test the reported zombie-death scenario in v0.26.
+   Confirm death is detected for this bot, normal Respawn handshake completes,
+   health/position/terrain/mode recover and no old mining/build/follow queue resumes.
+   Check timeout, repeated death, disconnect and Hardcore behavior honestly.
+   Automatic respawn alone does not solve hostile-mob defense.
+
+5) QUEUE/UI COMMAND TRUTHFULNESS.
+   Exercise every popup/button on the physical phone: save vs execute, auto-
+   selection, choosing another card, Reuse, Delete, two-second advancement,
+   waiting for actual completion, Stop and restart persistence.
+   Reconcile stale preview/help messages with the implemented and actually working
+   abilities. Do not claim every button or action is live-verified because the
+   form renders or a serializer accepts it.
+   'Move forward 3 blocks' is still not a supported relative movement command.
+
+6) REPORT/UPDATE WORKFLOW.
+   Have owner export a report after a real failure, attach it here and confirm
+   it contains enough evidence without secrets. Test export with service stopped.
+   Verify same-key update detection/download/installation on the phone and retained
+   login/plans. There is still no live phone connection; do not imply that there is.
+
+7) BROADER SURVIVAL ABILITIES NOT IMPLEMENTED.
+   General combat, threat response, reliable fleeing, eating, armor/equipment
+   management, chest/storage workflows, automatic tool crafting/replacement,
+   full crafting/smelting and resource collection need separate implementation.
+
+8) REQUESTED AUTOMATED RESOURCE SEARCH / STRIP MINING — planned, not implemented.
+   Owner's requested pattern: mine roughly 30 blocks, turn, move two blocks over,
+   turn and return parallel to the first tunnel; repeat until the target is found.
+   Also collect useful higher-value ores encountered (coal/iron/diamonds etc.),
+   rather than treating ordinary filler blocks as bonus resources.
+   Still needs finite bounds, tunnel depth/height rules, ore/tool ranking,
+   liquid/falling-block safety, inventory/drop confirmation, return routes,
+   protection and cancellation. Wood gathering needs a tree-search/harvest
+   strategy, not a claim that strip mining automatically finds wood.
+
+9) LANGUAGE UNDERSTANDING / INTERNET WORD LOOKUP — partly planned.
+   Current supported-command rules, 5,000-word glossary and confirmed alias memory
+   are real; general contextual reasoning/new abilities are not implemented.
+   Requested future lookup should compare two or three independent references,
+   remember verified meanings and map only to supported actions. Avoid treating
+   web text or trolling as instructions. Ask when truly unsure about intent,
+   dimensions, stacks or slab meanings. Do not promise autonomous training or
+   general action translation before a real model/grounding design exists.
+
+6. TEST EVIDENCE AND LIMITS
+==========================
+Latest automated results: 235 Node tests; 40 Android tests; zero failures.
+Includes serializer/physics/terrain/mining/building/queue/persistence/auth/language
+regressions and Android phone-layout/button/diagnostic/export tests.
+Fourteen Node and five Android regressions were added for the latest v0.26 work.
+APK ZIP, runtime-source parity, unchanged native/dependency bytes, version/package,
+pinned certificate, alignment, signed notice and public reconstruction verified.
+Publication workflow succeeded; public APK returned HTTP 200 and update feed
+pointed to versionCode 200007 and the correct APK hash.
+
+These tests simulate the client/server and Android UI. They are not proof of live
+Realm acceptance, live placement, successful drop collection or physical-phone
+respawn. The owner's placement report remains open despite all test passes.
+
+7. SOURCE MAP AND SAFE CONTINUATION
+==================================
+Inside the source ZIP:
+  android-app/     Android Java UI, service, updater, manifest, native bridge,
+                   Gradle files and Android tests.
+  bedrock-agent/   Node source, package.json/package-lock.json, tools and tests.
+  release-tooling/ Signing/release-notice/channel helpers and public certificate
+                   fingerprint; no private key/password.
+  tools/           Native preparation and supporting build utilities.
+  tests/           Additional bundle/command checks.
+  UPDATE-NOTES-*   Live v0.21-v0.26 changes; older notes can contain stale status.
+
+Important current source files:
+  bedrock-agent/src/options.js              Preserve Switch identity/cache.
+  bedrock-agent/src/connection.js           Join/auth/session lifecycle.
+  bedrock-agent/src/connection-diagnostics.js Auth classification/expiry adapter.
+  bedrock-agent/src/diagnostic-store.js      Safe persisted connection report.
+  bedrock-agent/src/runtime-trace.js         Bounded structured runtime log.
+  bedrock-agent/src/mobile.js               Android Node entry point/log hooks.
+  bedrock-agent/src/api.js                  Authenticated loopback control API.
+  bedrock-agent/src/realm-packs.js           Pack handshake/cache logic.
+  bedrock-agent/src/realm-chat.js            Owner-authorized in-game control.
+  bedrock-agent/src/conversation.js          Chat categories/rules.
+  bedrock-agent/src/lexicon/                Offline glossary/context/attribution.
+  bedrock-agent/src/survival/world.js        Terrain, collision, inventory, own mode.
+  bedrock-agent/src/survival/verification.js Effective abilities/mode/flight off.
+  bedrock-agent/src/survival/navigation.js   Physics, movement, stuck recovery.
+  bedrock-agent/src/survival/pathfinder.js   Bounded observed routes.
+  bedrock-agent/src/survival/climbing.js     Dirt staircase preview/execution.
+  bedrock-agent/src/survival/respawn.js       Normal death/respawn handshake.
+  bedrock-agent/src/survival/mining.js       Held mining/confirmed removal.
+  bedrock-agent/src/survival/obstacles.js    Tool/reach/protection assessment.
+  bedrock-agent/src/survival/building.js     Placement transaction/confirmation.
+  bedrock-agent/src/survival/command-catalog.json Shared commands/forms.
+  bedrock-agent/src/survival/command-plans.js Saved cards/queue/persistence.
+  bedrock-agent/src/survival/command-vocabulary.js Confirmed word mappings.
+  bedrock-agent/src/survival/learning-memory.js Task-outcome memory.
+  android-app/app/src/main/java/com/veilforge/realmagent/MainActivity.java
+  android-app/app/src/main/java/com/veilforge/realmagent/BotService.java
+  android-app/app/src/main/java/com/veilforge/realmagent/AppUpdater.java
+  android-app/app/src/main/java/com/veilforge/realmagent/ReleaseManifest.java
+  android-app/app/src/main/java/com/veilforge/realmagent/SupportLog.java
+  android-app/app/src/main/java/com/veilforge/realmagent/SupportBundle.java
+  android-app/app/src/main/java/com/veilforge/realmagent/ConnectionDiagnostics.java
+
+Use repository AGENTS.md and the ecosystem instructions before future edits.
+The Realm app was reconstructed from archives/overlays under realm-ai-phone-build;
+the original v0.13 reconstruction workflow is historical guidance, not permission
+to overwrite the current canonical Live overlay with an older source tree.
+Legacy pack-template files do not mean the owner installed an add-on. The current
+Realm has no add-ons/behavior packs; ordinary Live control uses Bedrock packets.
+
+Important release helpers OUTSIDE the small canonical source ZIP, in the full
+repository at app/source commit 6ebbd8cd38abeabb68233e62494364d8f81d9f2d:
+  realm-ai-phone-build/patch_live_v026_apk.py
+  realm-ai-phone-build/materialize_live_v026_apk.py
+  realm-ai-phone-build/make_public_apk_recipe.py
+  realm-ai-phone-build/verify_live_merged_apk.py
+  realm-ai-phone-build/live-v026-public-recipe.json.xz.b64
+  realm-ai-phone-build/live-v026-publication/
+  .github/workflows/realm-ai-live-v026-publish.yml
+
+The exact released APK can be reconstructed from the verified public v0.25 APK
+and the v0.26 public recipe using materialize_live_v026_apk.py. That reproduces the
+already signed public bytes; it does not recompile source or expose the key.
+The base v0.25 APK SHA256 is:
+38bf84f1913198286a940a36909a6bf09def96bf3d69c120b7c0d041380c886e
+
+The recent local build compiled Java, used D8 for the changed app DEX, replaced
+runtime source assets/version metadata in the verified previous APK, and retained
+native libraries/installed dependencies byte-for-byte. This preserves existing
+Bedrock/resource-pack compatibility patches. Do not assume a fresh npm install
+alone exactly reproduces patched dependency bytes in the published APK.
+
+Toolchain used: JDK 17, Gradle 8.9, Android SDK/platform 35, build-tools 35.0.0;
+ARM64 native runtime. minSdk 28; targetSdk 35. APK app version is 200007 even though
+some Node package metadata and old build-instruction headings retain older names.
+The source includes native-fetch/build helpers; read them and the pinned runtime
+provenance before rebuilding. Some historical build notes refer to old workflows
+or disabled pack features and are not current product capability statements.
+
+Node tests: from bedrock-agent, node --test tests/*.test.js
+Android tests: from android-app, gradle :app:testDebugUnitTest
+Dependencies/native assets must be prepared first; source ZIP deliberately omits
+them. Existing local workspace test logs are live-v026-node-tests.log and
+live-v026-android-tests.log. A future changed build must run appropriate tests
+again and verify the APK actually contains the current source and native runtime.
+
+8. PERMANENT SIGNING / AUTHENTICATION SAFEGUARDS
+==============================================
+Current Live alias: realm-live-update
+Current Live public certificate SHA256:
+77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22
+
+Reuse the existing permanent Live key and owner's private backup. Never generate
+another key as a routine fix. Private signing material/passwords/auth caches are
+not in this source export and must never be committed or publicly uploaded.
+Historical keys/certificates for the separate app or original lost Live baseline
+are not interchangeable with the current Live signing key.
+
+The next Android update must have versionCode HIGHER THAN 200007, the same package
+and the same certificate. Preserve private config/auth, saved plans and learning.
+Do not require uninstalling as a routine update and do not force Microsoft login
+refreshes as a substitute for diagnosing a specific connection problem.
+
+9. COMPLETE CURRENT COMMAND CATALOG
+===================================
+The following templates come directly from the v0.26 shared catalog. Their
+presence means the UI/parser supports preparing them. It does not mean every
+world-editing action is proven to work on the live Realm.
+
+Action text is normally entered as 'command <template>' to prepare a saved plan,
+then Activate runs waiting work. Questions/read-only requests are handled as such.
+Stop is immediate and service power/update/account controls are separate UI actions.
+
+01. Place one block
+    Template: place {material} at {x} {y} {z}
+    Inputs: material (block); x (integer, -30000000 to 30000000); y (integer, -64 to 315); z (integer, -30000000 to 30000000)
+    Catalog note: Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements.
+    LIVE STATUS: UNFINISHED / owner reports placement is not ready.
+
+02. Build wall (place blocks)
+    Template: build wall {width} by {height} with {material} at {x} {y} {z}
+    Inputs: material (block); width (integer, 1 to 6); height (integer, 1 to 3); x (integer, -30000000 to 30000000); y (integer, -64 to 315); z (integer, -30000000 to 30000000)
+    Catalog note: Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements.
+    LIVE STATUS: UNFINISHED / owner reports placement is not ready.
+
+03. Build floor (place blocks)
+    Template: build floor {width} by {height} with {material} at {x} {y} {z}
+    Inputs: material (block); width (integer, 1 to 6); height (integer, 1 to 6); x (integer, -30000000 to 30000000); y (integer, -64 to 315); z (integer, -30000000 to 30000000)
+    Catalog note: Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements.
+    LIVE STATUS: UNFINISHED / owner reports placement is not ready.
+
+04. Build shelter (96 blocks)
+    Template: build shelter with {material} at {x} {y} {z}
+    Inputs: material (block); x (integer, -30000000 to 30000000); y (integer, -64 to 315); z (integer, -30000000 to 30000000)
+    Catalog note: Requires 96 matching blocks in hotbar stacks. Clear 5×5 footprint: floor at origin Y, 3-block walls, roof and 2-block doorway at the front (-Z), centered on +X. Needs safe observed access and server-confirmed approach movement. Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements.
+    LIVE STATUS: UNFINISHED / owner reports placement is not ready.
+
+05. Follow player
+    Template: follow {player}
+    Inputs: player (player)
+
+06. Route preview
+    Template: route to {x} {y} {z}
+    Inputs: x (integer, -30000000 to 30000000); y (integer, -64 to 320); z (integer, -30000000 to 30000000)
+    Catalog note: Y is the feet-level route cell, not eye height. Unknown terrain is never accepted.
+
+07. Walk
+    Template: walk to {x} {y} {z}
+    Inputs: x (integer, -30000000 to 30000000); y (integer, -64 to 320); z (integer, -30000000 to 30000000)
+    Catalog note: Y is the feet-level route cell, not eye height. Unknown terrain is never accepted.
+
+08. Clear path
+    Template: clear path to {x} {y} {z}
+    Inputs: x (integer, -30000000 to 30000000); y (integer, -64 to 320); z (integer, -30000000 to 30000000)
+    Catalog note: Y is the feet-level route cell, not eye height. Unknown terrain is never accepted.
+
+09. Dig one block
+    Template: dig {x} {y} {z}
+    Inputs: x (integer, -30000000 to 30000000); y (integer, -64 to 320); z (integer, -30000000 to 30000000)
+    Catalog note: Select an observed visible block. Survival checks the held tool; both modes check reach and protection again on activation.
+
+10. Select hotbar slot
+    Template: select slot {slot}
+    Inputs: slot (slot, 1 to 9)
+
+11. Find visible material
+    Template: find {material}
+    Inputs: material (material)
+
+12. Search materials
+    Template: materials {material}
+    Inputs: material (material)
+
+13. About material
+    Template: about {material}
+    Inputs: material (material)
+
+14. Recipe preview
+    Template: recipe {material}
+    Inputs: material (material)
+    PREVIEW/REFERENCE ONLY: does not execute crafting/gathering/building.
+
+15. Supply preview
+    Template: plan get {count} {material}
+    Inputs: material (material); count (integer, 1 to 256)
+    Catalog note: Preview only. Crafting and gathering are not executable.
+    PREVIEW/REFERENCE ONLY: does not execute crafting/gathering/building.
+
+16. Wall supply preview
+    Template: plan build wall {width} by {height} with {material}
+    Inputs: material (block); width (integer, 1 to 12); height (integer, 1 to 12)
+    Catalog note: Preview only. No placement or crafting.
+    PREVIEW/REFERENCE ONLY: does not execute crafting/gathering/building.
+
+17. Floor supply preview
+    Template: plan build floor {width} by {height} with {material}
+    Inputs: material (block); width (integer, 1 to 12); height (integer, 1 to 12)
+    Catalog note: Preview only. No placement or crafting.
+    PREVIEW/REFERENCE ONLY: does not execute crafting/gathering/building.
+
+18. Shelter supply preview
+    Template: plan build shelter with {material}
+    Inputs: material (block)
+    Catalog note: Fixed 5 × 5 shelter, 3-block walls, floor, roof and 2-block doorway. Preview only.
+    PREVIEW/REFERENCE ONLY: does not execute crafting/gathering/building.
+
+19. Survival / connection status
+    Template: survival status
+    Inputs: none
+
+20. Movement status
+    Template: movement status
+    Inputs: none
+
+21. Look around / enable view
+    Template: look around
+    Inputs: none
+
+22. Disable view
+    Template: view off
+    Inputs: none
+
+23. Inventory
+    Template: inventory
+    Inputs: none
+
+24. Supported commands
+    Template: help survival
+    Inputs: none
+
+25. Supply-preview status
+    Template: plan status
+    Inputs: none
+
+26. Rejoin Realm with saved login
+    Template: rejoin realm
+    Inputs: none
+
+27. Ensure Survival
+    Template: ensure survival
+    Inputs: none
+
+28. Respawn after death
+    Template: respawn
+    Inputs: none
+    Catalog note: Automatic after server-confirmed death. This retries the normal Respawn input only when dead; it never restores health locally or resumes work.
+
+Additional supported interaction examples:
+- command (opens command options)
+- command walk to 3 64 2 (prepares; Activate is still required)
+- movement status / survival status / inventory (read-only information)
+- command teach action dredge = dig (learn a confirmed supported alias)
+- command vocabulary (review saved mappings)
+- command forget action dredge (remove one mapping)
+- what have you learned? (read-only learning explanation)
+- stop (immediate cancellation)
+
+No claim is made that unsupported generic 'mine', 'build anything', relative
+'move forward 3 blocks', free-form strip mining or general chat can execute
+abilities that are absent from the implementation.
+
+END OF HANDOFF — SOURCE FROZEN; NO APP CHANGES MADE FOR THIS EXPORT.
