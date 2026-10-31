@@ -50,6 +50,12 @@ jobs:
           python3 "$BASE/tools/apply-pack-support.py" "$BASE"
           sed -i 's/versionCode 11/versionCode 12/;s/0.9.2-realm-diagnostics/0.9.3-pack-support/' "$APP/build.gradle"
           python3 realm-ai-phone-build/patch_disconnect_v094.py "$BASE"
+          python3 realm-ai-phone-build/patch_pack_response_v095.py "$BASE"
+          python3 realm-ai-phone-build/patch_cdn_v096.py "$BASE"
+          cp realm-ai-phone-build/v096-cdn-tests.test.js "$BASE/bedrock-agent/tests/cdn-packs.test.js"
+          (cd "$BASE/bedrock-agent" && node --test tests/cdn-packs.test.js tests/resource-packs.test.js)
+          node --check "$BASE/bedrock-agent/src/cdn-download.js"
+          grep -q 'asset_bundle_version' "$APP/src/main/java/com/veilforge/realmagent/BotService.java"
           (cd "$BASE/bedrock-agent" && node --test tests/resource-packs.test.js)
           node --check "$BASE/bedrock-agent/src/connection.js"
           # Throwaway mock key for Gradle configuration ONLY. NEVER uploaded or published as an APK.
