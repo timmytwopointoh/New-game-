@@ -120,14 +120,13 @@ public final class MainActivity extends Activity {
             }
             new AlertDialog.Builder(this)
               .setTitle("Command queue · "+count+"/5"+(running?" · RUNNING":""))
-              .setMessage(count==0?"Add commands from Commands. They execute in list order, with a two-second gap after each one finishes.":"Commands run from first to last. Tap a command to move it up/down or delete it.")
               .setItems(names,(dlg,index)->{
                   JSONObject card=cards.optJSONObject(index);
                   if(card==null)return;
                   int id=card.optInt("id");
                   String[] choices={"Move up","Move down","Delete","Close"};
                   new AlertDialog.Builder(this).setTitle("Step "+(index+1)+": "+card.optString("label"))
-                      .setMessage(card.optString("command")+"\\n"+card.optString("note")+"\\n"+card.optString("result"))
+                      .setMessage(card.optString("command")+"\n"+card.optString("note")+"\n"+card.optString("result"))
                       .setItems(choices,(actionDialog,choice)->{
                           try{
                               if(choice==0)planAction("move",new JSONObject().put("id",id).put("direction",-1));
