@@ -4,7 +4,7 @@ from pathlib import Path
 import base64,json,subprocess,sys,urllib.parse
 repo='timmytwopointoh/New-game-';branch='realm-live-update-channel'
 def api(path,method='GET',data=None,optional=False):
- cmd=['gh','api','repos/'+repo+'/'+path,'--method',method]
+ cmd=['gh','api',('repos/'+repo+'/'+path).rstrip('/'),'--method',method]
  if data is not None:cmd+=['--input','-']
  r=subprocess.run(cmd,input=json.dumps(data) if data is not None else None,capture_output=True,text=True)
  if r.returncode:

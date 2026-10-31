@@ -90,3 +90,11 @@ unit/UI tests passed (4 phone layout, 11 button actions, 7 release-policy and
 zip alignment, ZIP integrity, and exact packaged Node-source/native-library
 comparison to the pinned baseline. OpenSSL independently verified the release
 notice signature using the new public certificate. No real device test ran.
+
+## First release delivery
+
+The direct release-storage upload was rejected (401). The explicit owner-requested
+one-time delivery job reconstructs the already compiled and signed APK from a
+public-byte recipe and the pinned v019 APK. The recipe contains no private key.
+Both input and output SHA256, signature, package and alignment are checked again
+before publishing. The general source/release compiler remains manual-only.
