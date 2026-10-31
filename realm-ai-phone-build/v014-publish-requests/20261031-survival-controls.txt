@@ -1,0 +1,4 @@
+Owner-requested one-time test APK publication.
+Source: bf62b84a2a2daeda543b924bab4e897bd3cfd36c
+APK SHA256: 9c786c9347609a4773c425c7a1c17ccf66fd6241696dd9fe8a9895a12085bbe4
+Only reconstruct public signed bytes; do not build, generate keys, or read signing secrets.

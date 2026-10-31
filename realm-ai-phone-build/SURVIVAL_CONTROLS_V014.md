@@ -37,3 +37,7 @@ gradle -p android-app :app:assembleDebug :app:testDebugUnitTest --no-daemon --ma
 The build intentionally produces an **unsigned** intermediate. Sign using the existing private backup and `sign_permanent_apk.py`, verify the pinned certificate, ZIP integrity, 16 KB alignment, application ID, versionCode and bundled runtime/source, then publish only the signed APK and public checksums/reports. No private signing files belong in Git or public reconstruction recipes. No automatic hosted build is introduced.
 
 Node tests simulate protocol/physics/plans and exercise real 1.26.60 serializers. Android layout tests use Robolectric at 360×640 and keyboard-reduced height, exercise every parameterized catalog form and invalid-input handling. These checks do not prove live Realm walking, jumping, mining, PvP behavior or physical-device installation.
+
+## Requested publication
+
+The integration rejected direct asset uploads with HTTP 401. The explicit one-time request under `v014-publish-requests/` triggers a publication-only workflow. It reconstructs the locally verified signed APK from the public v0.13 release and `v014-public-apk-recipe.json.xz.b64`, checks exact SHA256, pinned certificate, app/version and alignment, then publishes the prerelease. The workflow performs no Android build and reads no private signing material. Runtime source remains commit `bf62b84a2a2daeda543b924bab4e897bd3cfd36c`; later publication metadata does not change it.

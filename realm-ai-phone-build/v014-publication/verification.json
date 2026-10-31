@@ -1,0 +1,16 @@
+{
+  "source_commit": "bf62b84a2a2daeda543b924bab4e897bd3cfd36c",
+  "application_id": "com.veilforge.realmagent",
+  "version_code": 100004,
+  "certificate_sha256": "B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995",
+  "apk_sha256": "9c786c9347609a4773c425c7a1c17ccf66fd6241696dd9fe8a9895a12085bbe4",
+  "apk_bytes": 109741348,
+  "node_tests_passed": 156,
+  "android_phone_layout_tests_passed": 3,
+  "resource_pack_wire_fixtures": "passed",
+  "same_key_signature": "verified",
+  "zip_integrity": "passed",
+  "zip_alignment_16kb": "passed",
+  "embedded_source_matches_commit": true,
+  "live_realm_behavior": "UNVERIFIED - needs device testing"
+}

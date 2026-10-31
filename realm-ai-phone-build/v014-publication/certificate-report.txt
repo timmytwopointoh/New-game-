@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): false
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=VEILFORGE Realm AI Update, O=VEILFORGE
+Signer #1 certificate SHA-256 digest: b5d275706b574eea53d6497a3a65542542b5db0e0e57f4e307e8ed17cf24f995
+Signer #1 certificate SHA-1 digest: 6bce8ba300eebb95e664c7549074cd7f33248878
+Signer #1 certificate MD5 digest: 148e733c96f02da26b7537c39c0cf512
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 3072
+Signer #1 public key SHA-256 digest: 7ce6b6c61e2d825e854d8e1c63e6663dbe8e7bcd49c55b535825405d41e11fd5
+Signer #1 public key SHA-1 digest: aa02179667be1d1aa186cc5f315846acbad6a05b
+Signer #1 public key MD5 digest: 8dc7d75e18bd025518a878d0c8e00c32
