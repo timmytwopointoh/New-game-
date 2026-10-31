@@ -31,7 +31,7 @@
         "max": 30000000
       }
     ],
-    "note": "Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+    "note": "Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
   },
   {
     "id": "build_wall",
@@ -79,7 +79,7 @@
         "max": 30000000
       }
     ],
-    "note": "Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+    "note": "Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
   },
   {
     "id": "build_floor",
@@ -127,7 +127,7 @@
         "max": 30000000
       }
     ],
-    "note": "Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+    "note": "Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
   },
   {
     "id": "build_shelter",
@@ -161,7 +161,7 @@
         "max": 30000000
       }
     ],
-    "note": "Requires 96 matching blocks in hotbar stacks. Clear 5\u00d75 footprint: floor at origin Y, 3-block walls, roof and 2-block doorway at the front (-Z), centered on +X. Needs safe observed access and server-confirmed approach movement. Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+    "note": "Requires 96 matching blocks in hotbar stacks. Clear 5\u00d75 footprint: floor at origin Y, 3-block walls, roof and 2-block doorway at the front (-Z), centered on +X. Needs safe observed access and server-confirmed approach movement. Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
   },
   {
     "id": "follow",
@@ -290,7 +290,7 @@
         "max": 30000000
       }
     ],
-    "note": "Select an observed visible block. Actual held tool, reach and protection are checked again on activation."
+    "note": "Select an observed visible block. Survival checks the held tool; both modes check reach and protection again on activation."
   },
   {
     "id": "hotbar",

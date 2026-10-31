@@ -46,24 +46,24 @@ export class CommandPlans{
  setScope(scope){
   this.interrupt('Realm changed; no automatic resume.');this.scope=scope||null;this.cards=[];this.selected=null;this.readOnly=false;this.loadError=''
   this.file=this.directory&&scope?path.join(this.directory,crypto.createHash('sha256').update(scope).digest('hex')+'.json'):null
-  if(this.file&&fs.existsSync(this.file)){try{const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(!Array.isArray(data.cards)||data.cards.length>5)throw Error();this.cards=data.cards.map((c,i)=>({id:i+1,descriptor:validateDescriptor(c.descriptor),state:'waiting',result:''}));this.sequence=this.cards.length}catch{this.loadError='Saved plans could not be read; original file preserved.';this.readOnly=true}}
+  if(this.file&&fs.existsSync(this.file)){try{const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(!Array.isArray(data.cards)||data.cards.length>5)throw Error();this.cards=data.cards.map((c,i)=>({id:i+1,descriptor:validateDescriptor(c.descriptor),state:'waiting',result:'',activationLocked:false}));this.sequence=this.cards.length;const selected=Number.isSafeInteger(data.selected)?data.selected:null;this.selected=this.cards.some(c=>c.id===selected)?selected:null}catch{this.loadError='Saved plans could not be read; original file preserved.';this.readOnly=true}}
  }
- persist(){if(this.readOnly)throw Error(this.loadError);if(!this.file)return;fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});fs.writeFileSync(this.file+'.tmp',JSON.stringify({cards:this.cards.map(c=>({descriptor:c.descriptor}))}),{mode:0o600});fs.renameSync(this.file+'.tmp',this.file)}
+ persist(){if(this.readOnly)throw Error(this.loadError);if(!this.file)return;fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});fs.writeFileSync(this.file+'.tmp',JSON.stringify({cards:this.cards.map(c=>({descriptor:c.descriptor})),selected:this.selected}),{mode:0o600});fs.renameSync(this.file+'.tmp',this.file)}
  snapshot(){this.reconcile();return {scopeKnown:!!this.scope,cards:this.cards.map(c=>({...copy(c),command:renderDescriptor(c.descriptor),label:commandCatalog.find(d=>d.id===c.descriptor.id)?.label,note:commandCatalog.find(d=>d.id===c.descriptor.id)?.note})),selected:this.selected,running:this.running,error:this.loadError||'',capacity:5}}
  prepare(descriptor){
   if(this.directory&&!this.scope)throw Error('Join and identify the Realm before saving a Realm-scoped plan.')
   if(this.cards.length>=5)throw Error('Five plans are saved. Delete a card before preparing another.')
-  const d=validateDescriptor(descriptor);this.validateChoices(d);const card={id:++this.sequence,descriptor:d,state:'waiting',result:''};this.cards.push(card);this.selected=null
-  try{this.persist()}catch(e){this.cards.pop();throw e}
-  return {accepted:true,queued:false,message:'Saved plan #'+card.id+': '+renderDescriptor(d)+'. Select it, then Activate Plan. Nothing executed.',plans:this.snapshot()}
+  const d=validateDescriptor(descriptor);this.validateChoices(d);const previous=this.selected,card={id:++this.sequence,descriptor:d,state:'waiting',result:'',activationLocked:false};this.cards.push(card);this.selected=card.id
+  try{this.persist()}catch(e){this.cards.pop();this.selected=previous;this.sequence--;throw e}
+  return {accepted:true,queued:false,message:'Saved and selected plan #'+card.id+': '+renderDescriptor(d)+'. Activate starts only this plan. Nothing executed yet.',plans:this.snapshot()}
  }
  validateChoices(d){
   const w=this.controller.world
   if(d.id==='follow'&&d.values.player!=='me'&&![...w.players.values()].some(p=>p.name.toLowerCase()===d.values.player.toLowerCase())&&!this.controller.connection.config?.ownerPlayerNames?.some(p=>p.toLowerCase()===d.values.player.toLowerCase()))throw Error('Choose an observed player or configured owner.')
   if(d.id==='hotbar'&&!w.inventory.has(d.values.slot-1))throw Error('That hotbar slot has not been received from the server.')
  }
- select(id){this.reconcile();if(this.running)throw Error('Stop the running plan before changing selection.');if(!this.cards.some(c=>c.id===id))throw Error('Choose a saved card.');this.selected=id;this.cards.find(c=>c.id===id).activationLocked=false;return this.snapshot()}
- delete(id){if(this.running===id)throw Error('Stop this plan before deleting it.');const before=this.cards;this.cards=this.cards.filter(c=>c.id!==id);try{this.persist()}catch(e){this.cards=before;throw e}if(this.selected===id)this.selected=null;return this.snapshot()}
+ select(id){this.reconcile();if(this.running)throw Error('Stop the running plan before changing selection.');if(!this.cards.some(c=>c.id===id))throw Error('Choose a saved card.');const previous=this.selected,card=this.cards.find(c=>c.id===id),locked=card.activationLocked;this.selected=id;card.activationLocked=false;try{this.persist()}catch(e){this.selected=previous;card.activationLocked=locked;throw e}return this.snapshot()}
+ delete(id){if(this.running===id)throw Error('Stop this plan before deleting it.');const before=this.cards,selected=this.selected;this.cards=this.cards.filter(c=>c.id!==id);if(this.selected===id)this.selected=null;try{this.persist()}catch(e){this.cards=before;this.selected=selected;throw e}return this.snapshot()}
  activate(id){
   this.reconcile();if(this.running!==null)throw Error('One plan is already running.');if(id!==this.selected)throw Error('Activate only the selected plan.')
   const card=this.cards.find(c=>c.id===id);if(!card)throw Error('Select a plan first.')

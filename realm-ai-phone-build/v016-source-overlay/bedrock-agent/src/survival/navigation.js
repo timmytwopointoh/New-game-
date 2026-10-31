@@ -41,7 +41,7 @@ export class Navigation{
  assignRoute(plan){this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
  walk(goal,{allowMining=false}={}){
   if(!this.world.movementVerified)return {accepted:false,queued:false,message:'This player’s server mode and grounded movement abilities are not verified; movement is paused.'}
-  if(allowMining&&!this.world.survivalVerified)return {accepted:false,queued:false,message:'Clear-path mining requires verified Survival mode; no mining or movement started.'}
+  if(allowMining&&!this.world.editModeVerified)return {accepted:false,queued:false,message:'Clear-path work requires this player’s verified Survival or grounded Creative mode; no movement or mining started.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   const start=this.world.standPosition()
   if(!start||![goal?.x,goal?.y,goal?.z].every(Number.isSafeInteger)||goal.y!==start.y||Math.abs(goal.x-start.x)+Math.abs(goal.z-start.z)>48)return {accepted:false,queued:false,message:'Choose whole coordinates on the current level within 48 blocks.'}
@@ -84,16 +84,16 @@ export class Navigation{
   this.route=null;const terrainKnown=this.world.terrainKnown({x:target.x,y:target.y,z:target.z});this.state=terrainKnown?'blocked':'waiting-for-terrain';this.reason=terrainKnown?'Observed obstacles prevent a verified route; waiting for player movement.':'Terrain near the player is unknown; requesting terrain before planning a route.';if(!terrainKnown)try{this.world.requestNearby(this.client)}catch{}
  }
  mine(position,options={}){
-  if(!this.world.survivalVerified)return {accepted:false,queued:false,message:'Survival mode is not verified by the server; movement/mining refused.'}
+  if(!this.world.editModeVerified)return {accepted:false,queued:false,message:'This player’s Survival or grounded Creative mode and abilities are not verified; mining is paused.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn first.'}
-  this.stop('',false);this.progress.reset();const result=this.mining.begin(position,{...options,explicit:true});if(result.accepted){this.job={kind:'mine',allowMining:true};this.state='mining'}return result
+  this.stop('',false);this.progress.reset();const result=this.mining.begin(position,{...options,explicit:true});if(result.accepted){this.job={kind:'mine',allowMining:true,gameMode:this.world.gameMode};this.state='mining'}return result
  }
  build(descriptor){
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn first.'}
-  if(!this.world.survivalVerified)return {accepted:false,queued:false,message:'Actual block placement requires this player’s verified Survival mode and abilities.'}
+  if(!this.world.editModeVerified)return {accepted:false,queued:false,message:'Actual block placement requires this player’s verified Survival or grounded Creative mode and abilities.'}
   if(this.job)return {accepted:false,queued:false,message:'Stop the active job before building.'}
   const result=this.building.begin(descriptor)
-  if(result.accepted){this.progress.reset();this.job={kind:'build',allowMining:false};this.state='building'}
+  if(result.accepted){this.progress.reset();this.job={kind:'build',allowMining:false,gameMode:this.world.gameMode};this.state='building'}
   return result
  }
  lookAt(target){const eye=this.world.position,dx=target.x-eye.x,dy=target.y-eye.y,dz=target.z-eye.z;this.yaw=Math.atan2(-dx,dz)*180/Math.PI;this.pitch=-Math.atan2(dy,Math.hypot(dx,dz))*180/Math.PI}
@@ -175,7 +175,7 @@ export class Navigation{
   const health=this.world.attributes['minecraft:health']
   if(health===0){this.stop('Player died; work stopped.');return}
   if(this.job&&health!==undefined&&health<=6)this.stop('Health is low; work stopped.')
-  if(this.job&&(['mine','build'].includes(this.job.kind)?!this.world.survivalVerified:!this.world.movementVerified))this.stop('Server mode or required movement abilities changed; work stopped.')
+  if(this.job&&((['mine','build'].includes(this.job.kind)&&(this.job.gameMode!==this.world.gameMode||!this.world.editModeVerified))||(!['mine','build'].includes(this.job.kind)&&!this.world.movementVerified)))this.stop('Server mode or required movement abilities changed; work stopped.')
   if(this.job&&!this.world.enabled)this.stop('View is off; work stopped.')
   if(this.job?.kind==='solo'&&now-this.startedAt>60000)this.stop('Travel time limit reached.')
   if(this.clearing&&!this.mining.job){

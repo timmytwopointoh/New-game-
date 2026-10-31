@@ -17,7 +17,8 @@ export function placementEvidence(world,pos,block=world.block(pos)){
 export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxMs=5000}={}){
  if(world.abilityState?.effective.mine===false)return {ok:false,reason:'The server has disabled this player’s mining permission.'}
  if(world.serverAuthoritativeBreaking===null)return {ok:false,reason:'Waiting for the server block-breaking mode before mining.'}
- if(!world.survivalVerified)return {ok:false,reason:'Server Survival mode is not verified.'}
+ const creative=world.gameMode==='creative'&&world.creativeEditsVerified
+ if(!world.survivalVerified&&!creative)return {ok:false,reason:'Server Survival or grounded Creative mode and abilities are not verified.'}
  const block=world.block(pos),evidence=placementEvidence(world,pos,block)
  if(!block||!world.position)return {ok:false,reason:'Block or position is unknown.',evidence}
  if(evidence.classification==='protected')return {ok:false,reason:evidence.reason,evidence}
@@ -39,15 +40,15 @@ export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxM
  const held=world.inventory.get(world.selectedSlot),tool=held.network_id?world.registry?.items?.[held.network_id]:null
  if(held.network_id&&!tool)return {ok:false,reason:'Held item is not recognized.',evidence}
  const toolId=tool?.id||null
- if(!block.canHarvest(toolId))return {ok:false,reason:'Held tool is unsuitable for harvesting this block.',evidence}
+ if(!creative&&!block.canHarvest(toolId))return {ok:false,reason:'Held tool is unsuitable for harvesting this block.',evidence}
  let enchantments=[]
  try{const tag=held.extra?.nbt,values=tag?.type?nbt.simplify(tag):tag;if(Array.isArray(values?.ench))enchantments=values.ench.filter(e=>Number.isInteger(e.id)&&Number.isInteger(e.lvl)).map(e=>({id:e.id,lvl:e.lvl}))}catch{}
  const effects=Object.fromEntries([...(world.effects||new Map())].filter(([,e])=>e.expires>Date.now()).map(([id,e])=>[id,{amplifier:e.amplifier}]))
- const estimated=block.digTime(toolId,false,false,false,enchantments,effects)
- const handTime=block.digTime(null,false,false,false,[],effects)
- const toolEffective=!!toolId&&estimated<handTime
+ const estimated=creative?0:block.digTime(toolId,false,false,false,enchantments,effects)
+ const handTime=creative?0:block.digTime(null,false,false,false,[],effects)
+ const toolEffective=creative||!!toolId&&estimated<handTime
  if(!Number.isFinite(estimated)||estimated>maxMs)return {ok:false,reason:`Too difficult with the current tool (limit ${maxMs/1000}s).`,evidence}
- return {ok:true,block,held,tool:tool?.name||'empty hand',durationMs:Math.max(250,Math.ceil(estimated/50)*50+250),estimatedMs:estimated,handMs:handTime,toolEffective,evidence}
+ return {ok:true,block,held,tool:tool?.name||'empty hand',durationMs:creative?250:Math.max(250,Math.ceil(estimated/50)*50+250),estimatedMs:estimated,handMs:handTime,toolEffective,evidence}
 }
 export function recoveryDecision({mode,canJump=false,hasDetour=false,mine=null,allowMining=false,attempts=0}){
  if(attempts>=3)return {action:'pause',reason:'Recovery attempt limit reached.'}

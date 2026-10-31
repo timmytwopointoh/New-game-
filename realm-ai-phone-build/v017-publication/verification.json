@@ -1,0 +1,10 @@
+{
+  "package": "com.veilforge.realmagent",
+  "versionCode": 100011,
+  "versionName": "0.17-queue-creative-actions",
+  "signerCertificateSha256": "8e902e783e7b4bd45ffe2f99b45c53b0e15d4b8e36092532cc6e969a956815c5",
+  "apkSha256": "8c79153068e9c758944939dbca1747c648c597b0a24a941aa36fe27b688ea466",
+  "sourceOverlaySha256": "75c7c810744bc2ebad203032d742d08b66feb6f494876a8dba29b6e296f606bc",
+  "nodeTests": 174,
+  "androidUnitTests": "passed"
+}

@@ -82,10 +82,12 @@ export class WorldView{
  isDefaultMode(value){return value===5||value==='5'||(typeof value==='string'&&value.toLowerCase()==='fallback')}
  normalizeMode(value){if(typeof value==='string')value=value.toLowerCase();return value===0||value==='survival'? 'survival':value===1||value==='creative'?'creative':value===2||value==='adventure'?'adventure':value===6||value==='spectator'?'spectator':null}
  get survivalVerified(){return this.gameMode==='survival'&&!!this.abilityState?.known&&!this.abilityState.loading&&!this.abilityState.active.length}
- // Explicit Creative requests may use ordinary grounded walking only. Flight,
- // noclip, editor and privileged-builder abilities must be inactive; mining and
- // construction remain Survival-only.
+ // Grounded Creative actions are valid when the server identifies this player
+ // as Creative and has sent effective abilities. Free flight, noclip and editor
+ // privileges remain excluded from ordinary navigation and edits.
  get creativeMovementVerified(){const a=this.abilityState;if(this.gameMode!=='creative'||!a?.known||a.loading)return false;return !['flying','no_clip','world_builder','privileged_builder'].some(k=>a.effective[k]||a.active.includes(k))}
+ get creativeEditsVerified(){const a=this.abilityState;if(this.gameMode!=='creative'||!a?.known||a.loading)return false;return !['flying','no_clip','world_builder','privileged_builder'].some(k=>a.effective[k]||a.active.includes(k))}
+ get editModeVerified(){return this.survivalVerified||this.creativeEditsVerified}
  get movementVerified(){return this.survivalVerified||this.creativeMovementVerified}
  // Collision uses received block shapes in both layers. Unknown cells remain solid.
  clearBody(position){
@@ -198,5 +200,5 @@ export class WorldView{
   on('change_dimension',p=>{this.dimension=dimensionNumber(p.dimension);this.position=p.position;this.serverPosition={...p.position};this.blockRevisions.clear();this.blockRevision=0;this.sections.clear();this.updates.clear();this.pending.clear();this.entities.clear();this.players.clear()})
  }
  detach(){for(const [c,e,f] of this.listeners)c.off(e,f);this.listeners=[]}
- snapshot(){return {blockBreakingMode:this.serverAuthoritativeBreaking===null?'unknown':this.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',abilities:this.abilityState,gameMode:this.gameMode,gameModeSource:this.gameModeSource,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventory:this.items(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
+ snapshot(){return {blockBreakingMode:this.serverAuthoritativeBreaking===null?'unknown':this.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',abilities:this.abilityState,editModeVerified:this.editModeVerified,creativeEditsVerified:this.creativeEditsVerified,gameMode:this.gameMode,gameModeSource:this.gameModeSource,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventory:this.items(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
 }

@@ -15,7 +15,7 @@ export class SurvivalVerification{
  reset(){this.desiredMode=this.desiredMode||'survival';this.requested=false;this.pending=false;this.pendingMode=null;this.reason='Waiting for this player’s server mode and abilities.';this.listeners=[];this.client=null;this.flightStopped=false}
  attach(client){this.detach();this.reset();this.client=client;const on=(e,f)=>{client.on(e,f);this.listeners.push([e,f])}
   on('spawn',()=>this.check())
-  for(const e of ['set_player_game_type','update_player_game_type','update_abilities'])on(e,()=>{const job=this.navigation.job;if(job&&(['mine','build'].includes(job.kind)?!this.world.survivalVerified:!this.world.movementVerified))this.navigation.stop('Server mode or required abilities changed; work stopped.');this.check()})
+  for(const e of ['set_player_game_type','update_player_game_type','update_abilities'])on(e,()=>{const job=this.navigation.job;if(job&&((['mine','build'].includes(job.kind)&&(job.gameMode!==this.world.gameMode||!this.world.editModeVerified))||(!['mine','build'].includes(job.kind)&&!this.world.movementVerified)))this.navigation.stop('Server mode or required abilities changed; work stopped.');this.check()})
   on('command_output',p=>{if(this.pending&&p.origin?.uuid===this.requestId&&p.success_count===0){this.pending=false;this.requested=true;this.reason=`Server denied the requested ${this.pendingMode} mode. No Realm settings or permissions were changed.`;this.report(this.reason)}})
  }
  requestMode(mode,now=Date.now()){
@@ -37,7 +37,7 @@ export class SurvivalVerification{
   if(w.gameMode===this.desiredMode){
    this.pending=false;this.requested=false;this.pendingMode=null
    if(this.desiredMode==='survival'&&w.survivalVerified){this.reason='This player’s mode and effective abilities verify Survival.';return this.snapshot()}
-   if(this.desiredMode==='creative'&&w.creativeMovementVerified){this.reason='This player’s Creative mode and grounded movement abilities are verified. Mining and building remain paused.';return this.snapshot()}
+   if(this.desiredMode==='creative'&&w.creativeMovementVerified){this.reason='This player’s Creative mode and grounded abilities are verified. Supported movement, block breaking and placement can run with server-confirmed world updates.';return this.snapshot()}
    if(this.desiredMode==='survival'){this.reason='Survival mode is reported, but this player still has an active ability that prevents Survival work.';return this.snapshot()}
    this.reason='Creative mode is reported, but flight, noclip or privileged movement is still active; grounded movement remains paused.';return this.snapshot()
   }

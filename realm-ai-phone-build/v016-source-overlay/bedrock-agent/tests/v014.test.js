@@ -48,9 +48,9 @@ test('Stop immediately emits neutral input and aborts mining with no later movem
 test('five Realm-scoped cards persist; selected-only activation, duplicate protection and no restart resume',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vf-plans-'));try{
   const {w,n}=fixture(),connection={config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection,{plansDirectory:dir,scope:'realm-A'});s.world=w;s.navigation=n;let calls=0;s.handle=raw=>{calls++;return {accepted:true,queued:false,message:raw}}
-  const p=s.commandPlans;for(let i=0;i<5;i++)p.prepare({id:'status',values:{}});assert.equal(calls,0);assert.throws(()=>p.prepare({id:'status',values:{}}),/Five/);assert.throws(()=>p.activate(1),/selected/)
+  const p=s.commandPlans;for(let i=0;i<5;i++){p.prepare({id:'status',values:{}});assert.equal(p.selected,i+1)}assert.equal(calls,0);assert.throws(()=>p.prepare({id:'status',values:{}}),/Five/);assert.throws(()=>p.activate(1),/selected/)
   p.select(4);const r=p.activate(4);assert(r.accepted);assert.equal(calls,1);assert.throws(()=>p.activate(4),/already activated/);p.select(4);p.activate(4);assert.equal(calls,2)
-  const restored=new CommandPlans(s,{directory:dir,scope:'realm-A'});assert.equal(restored.cards.length,5);assert.equal(restored.selected,null);assert.equal(restored.running,null);assert(restored.cards.every(c=>c.state==='waiting'))
+  const restored=new CommandPlans(s,{directory:dir,scope:'realm-A'});assert.equal(restored.cards.length,5);assert.equal(restored.selected,4);assert.equal(restored.running,null);assert(restored.cards.every(c=>c.state==='waiting'))
   const other=new CommandPlans(s,{directory:dir,scope:'realm-B'});assert.equal(other.cards.length,0);restored.delete(1);assert.equal(restored.cards.length,4);assert(!JSON.stringify(JSON.parse(fs.readFileSync(restored.file))).includes('token'));n.detach()
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 })
@@ -91,7 +91,7 @@ test('manual chat and authenticated plan endpoints prepare only; selected plan a
  const c=new EventEmitter();Object.assign(c,{config:{ownerPlayerNames:['Owner']},events:[],nextEventId:0,spawned:true,status(){return {survival:this.survival.snapshot()}},send(){throw Error('No legacy bridge')}});c.survival=new SurvivalController(c);const calls=[];c.survival.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
  const server=createApi({localAPI:{token:'test-token'}},c,()=>{});await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port
  const post=async(endpoint,body)=>{const r=await fetch(url+endpoint,{method:'POST',headers:{Authorization:'Bearer test-token'},body:JSON.stringify(body)});return r.json()}
- try{await post('/message',{message:'inventory'});await post('/plans/prepare',{descriptor:{id:'look',values:{}}});assert.deepEqual(calls,[]);assert(!(await post('/plans/activate',{id:2})).accepted);await post('/plans/select',{id:1});assert((await post('/plans/activate',{id:1})).accepted);assert.deepEqual(calls,['inventory']);assert(!(await post('/plans/activate',{id:1})).accepted);const auth=await fetch(url+'/plans');assert.equal(auth.status,401)}finally{await new Promise(r=>server.close(r))}
+ try{await post('/message',{message:'inventory'});await post('/plans/prepare',{descriptor:{id:'look',values:{}}});assert.deepEqual(calls,[]);assert.equal(c.survival.commandPlans.selected,2);assert(!(await post('/plans/activate',{id:1})).accepted);await post('/plans/select',{id:1});assert((await post('/plans/activate',{id:1})).accepted);assert.deepEqual(calls,['inventory']);assert(!(await post('/plans/activate',{id:1})).accepted);const auth=await fetch(url+'/plans');assert.equal(auth.status,401)}finally{await new Promise(r=>server.close(r))}
 })
 
 test('running plan locks other cards; interruption preserves reusable descriptors',()=>{

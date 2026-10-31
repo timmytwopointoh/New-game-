@@ -1,0 +1,1 @@
+This request publishes the locally built v0.17 test APK after reconstructing its public signed APK bytes and verifying its package, version, alignment, embedded runtime, checksum, and existing permanent signer certificate. Private signing material is not present here or in the release assets.
