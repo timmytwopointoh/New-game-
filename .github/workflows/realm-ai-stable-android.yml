@@ -63,6 +63,8 @@ jobs:
           base64 --decode realm-ai-phone-build/v093-pack-overlay.tar.xz.b64 > "$RUNNER_TEMP/v093-pack-overlay.tar.xz"
           echo 'ea9771fe3a29fbf38f196b4affd8606f276ce91cce84be86d5a5823db45b9d98  '"$RUNNER_TEMP/v093-pack-overlay.tar.xz" | sha256sum -c -
           tar -xJf "$RUNNER_TEMP/v093-pack-overlay.tar.xz" -C "$BASE" --no-same-owner
+          # Normalize Java token spacing exactly as in the successful v0.9.3 APK build.
+          sed -i 's/lastError", ""/lastError",""/' "$BASE/tools/apply-pack-support.py"
           python3 "$BASE/tools/apply-pack-support.py" "$BASE"
           (cd "$BASE/bedrock-agent" && node --test tests/resource-packs.test.js)
           node --check "$BASE/bedrock-agent/src/connection.js"
