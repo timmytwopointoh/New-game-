@@ -1,18 +1,20 @@
 import {findPath} from './pathfinder.js'
 import {ProgressTracker,miningAssessment,recoveryDecision} from './obstacles.js'
 import {Mining} from './mining.js'
+import {cameraForward,aimAtBlock,describeControl} from './control-input.js'
 const key=p=>`${p.x},${p.y},${p.z}`
 const flatDistance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z)
 export class Navigation{
  constructor(world,report=()=>{}){
   this.world=world;this.report=report;this.client=null;this.timer=null;this.route=null;this.state='idle';this.reason='';this.tick=0n;this.lastInputAt=0;this.lastPoseAt=0;this.listeners=[];this.lastRequestAt=0
+  this.packetsSent=0;this.lastPacketAt=null;this.serverPoseSamples=0;this.lastServerPoseAt=null;this.lastServerPosition=null;this.lastInputError=null
   this.vy=0;this.progress=new ProgressTracker();this.mining=new Mining(world,report);this.job=null;this.flight=null;this.blocked=new Map();this.recoveryAttempts=0;this.decisions=[];this.pendingFlags=[]
  }
  note(action,reason){this.decisions.push({action,reason});this.decisions=this.decisions.slice(-6);this.reason=reason;this.report(reason)}
  attach(client){
-  this.detach();this.client=client;this.progress.reset();this.blocked.clear();this.decisions=[];this.recoveryAttempts=0
+  this.detach();this.client=client;this.progress.reset();this.blocked.clear();this.decisions=[];this.recoveryAttempts=0;this.packetsSent=0;this.lastPacketAt=null;this.serverPoseSamples=0;this.lastServerPoseAt=null;this.lastServerPosition=null;this.lastInputError=null
   const on=(e,f)=>{client.on(e,f);this.listeners.push([e,f])}
-  on('start_game',p=>{this.tick=BigInt(p.current_tick||0);this.yaw=Number(p.rotation?.z||0);this.pitch=0;this.spawned=false;this.lastPoseAt=Date.now()})
+  on('start_game',p=>{this.tick=BigInt(p.current_tick||0);this.yaw=Number(p.rotation?.z||0);this.pitch=Number(p.rotation?.x||0);this.spawned=false;this.lastPoseAt=Date.now()})
   on('spawn',()=>{this.spawned=true;this.timer=setInterval(()=>this.step(),50);this.timer.unref?.()})
   const correction=p=>this.observeServer(p,Date.now())
   on('move_player',p=>{if(String(p.runtime_id)===this.world.entityId)correction(p)})
@@ -23,13 +25,25 @@ export class Navigation{
  observeServer(p,now){
   if(!p.position||![p.position.x,p.position.y,p.position.z].every(Number.isFinite))return
   if(p.delta&&Number.isFinite(p.delta.y))this.vy=p.delta.y;else this.vy=0
-  const before=this.world.position;this.world.position={...p.position};this.lastPoseAt=now
+  const before=this.world.position;this.world.position={...p.position};this.lastPoseAt=now;this.serverPoseSamples++;this.lastServerPoseAt=now;this.lastServerPosition={...p.position}
   if(p.yaw!==undefined)this.yaw=p.yaw
   if(p.mode==='teleport'){this.pendingFlags.push('handled_teleport');this.stop('Server teleported the player; work cancelled.');this.progress.reset();return}
   if(before&&Math.hypot(before.x-p.position.x,before.y-p.position.y,before.z-p.position.z)>4){this.stop('Large server correction; work paused instead of jumping or digging.');this.progress.reset();return}
   this.progress.observe(p.position,now)
   if(this.progress.feedback==='progressing'&&this.lastRecoveryPosition&&flatDistance(p.position,this.lastRecoveryPosition)>=1){this.recoveryAttempts=0;this.lastRecoveryPosition=null}
   if(this.job&&!this.flight&&this.progress.stalled(now))this.recover('Server feedback shows no forward progress.',now)
+ }
+ controlStatus(now=Date.now()){return describeControl(this,now)}
+ aimAt(block){
+  if(!this.spawned||!this.client||!this.world.position)return {accepted:false,queued:false,message:'Join and spawn before aiming.'}
+  if(this.job||this.flight||this.mining.job)return {accepted:false,queued:false,message:'Stop the current movement/mining job before aiming.'}
+  let aim
+  try{aim=aimAtBlock(this.world.position,block)}catch(e){return {accepted:false,queued:false,message:e.message}}
+  this.yaw=aim.yaw;this.pitch=aim.pitch
+  const before=this.packetsSent
+  this.step(Date.now())
+  if(this.packetsSent===before)return {accepted:false,queued:false,message:'No control input sent. '+(this.lastInputError||this.reason||'Check connection status.')}
+  return {accepted:true,queued:false,message:'Sent first-person-aligned look input towards '+block.x+','+block.y+','+block.z+'. Camera is headless; server acknowledgement of orientation is not guaranteed.',control:this.controlStatus()}
  }
  routeTo(goal,start=this.world.standPosition(),{allowSteps=false,maxNodes=4096}={}){
   const now=Date.now(),w=this.world
@@ -227,10 +241,11 @@ export class Navigation{
   if(this.job?.kind==='mine'&&!this.mining.job){this.state=this.mining.result;this.reason=this.mining.reason;this.job=null}
   if(this.job?.kind==='solo'&&this.arrivedAt&&now-this.arrivedAt>10000){this.job=null;this.report('Route inputs finished. No further movement queued.')}
   try{
-   this.client.queue('player_auth_input',{pitch:this.pitch||0,yaw:this.yaw||0,position:{...this.world.position},move_vector:move,head_yaw:this.yaw||0,input_data:[...new Set([...(move.z?['up']:[]),'received_server_data',...flags,...this.pendingFlags.splice(0)])],input_mode:'mouse',play_mode:'normal',interaction_model:'crosshair',interact_rotation:{x:this.pitch||0,z:this.yaw||0},tick:++this.tick,delta,transaction:mining.transaction,item_stack_request:null,block_action:mining.actions.length?mining.actions:null,vehicle_rotation:null,predicted_vehicle:null,analogue_move_vector:move,camera_orientation:{x:-Math.sin((this.yaw||0)*Math.PI/180),y:0,z:Math.cos((this.yaw||0)*Math.PI/180)},raw_move_vector:move})
+   this.client.queue('player_auth_input',{pitch:this.pitch||0,yaw:this.yaw||0,position:{...this.world.position},move_vector:move,head_yaw:this.yaw||0,input_data:[...new Set([...(move.z?['up']:[]),'received_server_data',...flags,...this.pendingFlags.splice(0)])],input_mode:'mouse',play_mode:'normal',interaction_model:'crosshair',interact_rotation:{x:this.pitch||0,z:this.yaw||0},tick:++this.tick,delta,transaction:mining.transaction,item_stack_request:null,block_action:mining.actions.length?mining.actions:null,vehicle_rotation:null,predicted_vehicle:null,analogue_move_vector:move,camera_orientation:cameraForward(this.yaw||0,this.pitch||0),raw_move_vector:move})
+   this.packetsSent++;this.lastPacketAt=now;this.lastInputError=null
    if(now-this.lastRequestAt>5000){this.lastRequestAt=now;this.world.requestNearby(this.client)}
-  }catch(e){this.stop('Input packet failed: '+String(e.message||e).slice(0,100));this.detach()}
+  }catch(e){this.lastInputError=String(e.message||e).slice(0,140);this.stop('Input packet failed: '+this.lastInputError);this.detach()}
  }
- snapshot(){return {state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,progress:this.progress.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions}}
+ snapshot(){return {state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,progress:this.progress.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,control:this.controlStatus()}}
  detach(){if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.mining.reset();this.spawned=false;this.unknownSince=null;this.vy=0}
 }
