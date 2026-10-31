@@ -1,4 +1,6 @@
 // Minecraft Bedrock player identity and gamemode evidence. No custom mob is spawned.
+// Prismarine's GameMode enum decodes value 5 as "fallback": inherit world_gamemode.
+// Never infer Survival if the server omits a world mode or reports non-Survival.
 const own = (obj,key) => Object.prototype.hasOwnProperty.call(obj||{},key)
 export function readGameMode(value) {
  if (value===null||value===undefined)return null
@@ -11,7 +13,7 @@ export function readGameMode(value) {
  return null
 }
 export function defaultGameMode(value) {
- return value===5 || value==='5' || (typeof value==='string'&&['default','world_default','worlddefault'].includes(value.trim().toLowerCase().replace(/[\s-]+/g,'_')))
+ return value===5 || value==='5' || (typeof value==='string'&&['default','fallback','world_default','worlddefault','world_fallback'].includes(value.trim().toLowerCase().replace(/[\s-]+/g,'_')))
 }
 function shown(value) {
  if (value===null||value===undefined)return 'not sent'
