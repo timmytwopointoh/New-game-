@@ -39,7 +39,9 @@ export function createApi(config,connection,log=console.log){
    }
    if(command==='hello')return {accepted:true,queued:false,message:'Hello! I am your Realm AI player. Use Commands, or say a safe instruction.'}
    const plans=connection.survival?.commandPlans
-   if(!plans)return {accepted:false,queued:false,message:'Plan service is not ready.'}
+   // Keep the original standalone planner / optional world-bridge behavior available
+   // for older clients that have not attached the authenticated survival controller.
+   if(!plans)return planner.handle(raw)||(planner.snapshot().state==='running'?{accepted:true,queued:false,message:'A plan is running; cancel it first.'}:chatDispatch(raw,connection))
    try{
     if(/^(?:run queue|start plan|start queue|run all plans)$/i.test(command))return plans.startAll()
     if(/^(?:saved plans|show queue|queue status)$/i.test(command))return {accepted:true,queued:false,message:'Saved command queue (first to last).',plans:plans.snapshot()}
