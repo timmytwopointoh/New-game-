@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {EventEmitter} from 'node:events'
 import {WorldView} from '../src/survival/world.js'
 import {SurvivalController} from '../src/survival/controller.js'
+import {parseDescriptor,renderDescriptor,commandCatalog} from '../src/survival/command-plans.js'
 
 function setup(){
  const client=new EventEmitter(),sent=[]
@@ -61,4 +62,12 @@ test('damage status reports evidence without silently granting cheats or claimin
  assert.match(controller.handle('combat status').message,/invulnerability: disabled/)
  assert.match(controller.handle('combat status').message,/PvP permissions and spawn protection must be checked/)
  world.detach()
+})
+
+test('new read-only diagnostic actions are available to mobile command cards',()=>{
+ const combat=parseDescriptor('combat status'),inventory=parseDescriptor('inventory status')
+ assert.equal(combat.id,'combat_status');assert.equal(inventory.id,'inventory_status')
+ assert.equal(renderDescriptor(combat),'combat status')
+ assert.equal(renderDescriptor(inventory),'inventory status')
+ assert(commandCatalog.find(c=>c.id==='combat_status')?.fields.length===0)
 })
