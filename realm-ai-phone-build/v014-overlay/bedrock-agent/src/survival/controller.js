@@ -23,6 +23,10 @@ export class SurvivalController{
    const report=this.world.scan(),p=this.world.standPosition()
    return answer(`View at ${p?`${p.x},${p.y},${p.z}`:'unknown position'}: ${report.counts.length?report.counts.map(([n,c])=>`${n} ×${c}`).join(', '):'waiting for nearby terrain data'}. ${this.world.sections.size} terrain sections; ${this.world.decodeErrors} decode errors.${this.world.lastError?' '+this.world.lastError:''}`,{survival:this.snapshot()})
   }
+  if(/^(?:player identity|player status|character status|am i a real player|entity status)$/.test(s)){
+   const e=this.world.playerEvidence(this.connection),mode=e.modeEvidence||{}
+   return answer('Bedrock player actor: '+(e.playerActorIdentified?'server-provided player identity received':'not fully initialized')+'. Gamertag '+(e.gamertag||'not yet reported')+'. StartGame '+(e.startGameReceived?'yes':'no')+', spawn '+(e.spawned?'yes':'no')+', own runtime/unique IDs '+(e.ownRuntimeIdReceived?'yes':'no')+'/'+(e.ownUniqueIdReceived?'yes':'no')+'. Own mode '+e.ownMode+' (source '+(mode.source||'unknown')+', playerRaw '+(mode.playerRaw||'not sent')+', worldRaw '+(mode.worldRaw||'not sent')+'). Own base abilities '+(e.abilitiesReceived?'received':'not yet received')+', health '+(e.healthReceived?'received':'not yet received')+', hunger '+(e.hungerReceived?'received':'not yet received')+', inventory '+(e.inventorySnapshotReceived?'received':'not yet received')+'. '+(e.whyPaused||'Ordinary Survival verified')+'. This is an authenticated Bedrock PLAYER client; no custom mob spawn is required.',{player:e})
+  }
   if(/^(?:control status|camera status|view status|input status)$/.test(s)){
    const c=this.navigation.controlStatus()
    const info=c.connected&&c.spawned?'connected and spawned':'not spawned / disconnected'
@@ -42,7 +46,7 @@ export class SurvivalController{
    const x=this.world.snapshot(),combat=damageDiagnosis(x.gameMode,x.abilities)
    return answer(combat+' Survival verified: '+x.survivalVerified+'. '+this.verification.snapshot().reason+' Realm '+(this.connection.spawned?'joined':'disconnected/not spawned')+'. Position '+(x.position?Object.values(x.position).join(','):'unknown')+'. Health '+(x.health??'unknown')+', hunger '+(x.hunger??'unknown')+'. Navigation '+this.navigation.state+'. View sections '+x.sections+'.',{survival:this.snapshot()})
   }
-  if(/^(?:help|commands|what can you do|help survival|help movement|show jobs)$/.test(s))return answer('No add-on needed: “look around”, “inventory”, “find oak log”, “route to X Y Z”, “walk to X Y Z”, “stop”, “rejoin realm”, “materials stone”, “recipe stone pickaxe”, “plan get 8 torches”. Follow mode can jump one-block steps with headroom. “control status”, “look at X Y Z”, “movement status”, “follow me”, “clear path to X Y Z”, “select slot 1”, “dig X Y Z”. Clear-path mining is limited to easy natural-looking blocks; containers/build-looking blocks are protected. Crafting/building remain previews.')
+  if(/^(?:help|commands|what can you do|help survival|help movement|show jobs)$/.test(s))return answer('No add-on needed: “look around”, “inventory”, “find oak log”, “route to X Y Z”, “walk to X Y Z”, “stop”, “rejoin realm”, “materials stone”, “recipe stone pickaxe”, “plan get 8 torches”. Follow mode can jump one-block steps with headroom. “player identity”, “control status”, “look at X Y Z”, “movement status”, “follow me”, “clear path to X Y Z”, “select slot 1”, “dig X Y Z”. Clear-path mining is limited to easy natural-looking blocks; containers/build-looking blocks are protected. Crafting/building remain previews.')
   m=s.match(/^follow(?: (.+))?$/)
   if(m){
    let name=m[1]
