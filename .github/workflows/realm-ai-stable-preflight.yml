@@ -64,6 +64,14 @@ jobs:
           grep -q "signingConfig signingConfigs.stableUpdate" "$APP/build.gradle"
           grep -q "applicationId 'com.veilforge.realmagent'" "$APP/build.gradle"
           # Verify Android Gradle DSL and release task configuration; this is NOT an APK build.
-          gradle -p "$BASE/android-app" :app:tasks --no-daemon --max-workers=2 >/tmp/veilforge-preflight-gradle.txt
-          grep -q 'assembleRelease' /tmp/veilforge-preflight-gradle.txt
+          if ! gradle -p "$BASE/android-app" :app:tasks --all --no-daemon --max-workers=2 >/tmp/veilforge-preflight-gradle.txt 2>&1; then
+            echo 'Gradle configuration check FAILED. Last 100 lines:' >&2
+            tail -n 100 /tmp/veilforge-preflight-gradle.txt >&2
+            exit 1
+          fi
+          if ! grep -q 'assembleRelease' /tmp/veilforge-preflight-gradle.txt; then
+            echo 'Missing expected release task. Gradle task summary:' >&2
+            tail -n 80 /tmp/veilforge-preflight-gradle.txt >&2
+            exit 1
+          fi
           echo 'PASS: all v0.9.4 patches and stable-signing Gradle DSL validated; NO private production key was used.'
