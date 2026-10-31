@@ -66,6 +66,10 @@ export function createApi(config,connection,log=console.log){
    if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot()})
    if(req.method==='GET'&&pathname==='/catalog')return send(200,{catalog:commandCatalog,options:connection.survival?{...formOptions(connection.survival.world,new URL(req.url,'http://127.0.0.1').searchParams.get('q')||''),owners:config.ownerPlayerNames||[]}:null})
    if(req.method==='GET'&&pathname==='/plans')return send(200,{plans:connection.survival?.commandPlans.snapshot()})
+   if(req.method==='GET'&&pathname==='/plans/saved-queues'){
+     try{return send(200,{queues:connection.survival?.commandPlans.otherSavedQueues()||[]})}
+     catch(e){return send(200,{queues:[],error:String(e.message||e)})}
+   }
    if(req.method==='GET'&&pathname==='/planner')return send(200,{planner:planner.snapshot()})
    if(req.method==='GET'&&pathname==='/updates'){
      const n=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('after')||0)
@@ -84,7 +88,9 @@ export function createApi(config,connection,log=console.log){
          let result
          if(pathname==='/plans/prepare')result=p.prepare(data.descriptor)
          else if(pathname==='/plans/move')result={accepted:true,message:'Command moved.',plans:p.move(data.id,data.direction)}
-         else if(pathname==='/plans/delete')result={accepted:true,message:'Plan deleted.',plans:p.delete(data.id)}
+         else if(pathname==='/plans/delete')result={accepted:true,message:'Command deleted.',plans:p.delete(data.id)}
+         else if(pathname==='/plans/clear')result=p.clearAll()
+         else if(pathname==='/plans/delete-saved-queue')result=p.deleteSavedQueue(data.id)
          else if(pathname==='/plans/run-all'||pathname==='/plans/activate')result=p.startAll()
          else return send(404,{error:'Unknown plan action'})
          return send(200,result)
