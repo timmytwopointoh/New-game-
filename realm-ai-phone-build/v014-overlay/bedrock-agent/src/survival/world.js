@@ -10,13 +10,13 @@ const dangerous=/^(?:flowing_)?(?:lava|water)$|fire|campfire|cactus|magma|powder
 const airNames=new Set(['air','cave_air','void_air'])
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.actor=new PlayerActorSession();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.modeEvidence=null;this.startGameReceived=false;this.worldModeRaw=null;this.registry=null;this.Block=null;this.sections=new Map();this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.inventoryPackets=0;this.inventoryHistory=[];this.lastInventoryAt=null;this.pendingSlot=null;this.pendingSlotAt=0;this.lastSelectionStatus='No server-confirmed hotbar selection yet.';this.attributes={};this.entities=new Map();this.players=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set()}
+ reset(){this.actor=new PlayerActorSession();this.abilityState=null;this.abilityPackets=0;this.ownAbilityPackets=0;this.abilityLayerTypes=[];this.uniqueId=null;this.gameMode=null;this.modeEvidence=null;this.startGameReceived=false;this.worldModeRaw=null;this.registry=null;this.Block=null;this.sections=new Map();this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.inventoryPackets=0;this.inventoryHistory=[];this.lastInventoryAt=null;this.pendingSlot=null;this.pendingSlotAt=0;this.lastSelectionStatus='No server-confirmed hotbar selection yet.';this.attributes={};this.entities=new Map();this.players=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set()}
  initialize(packet,version='1.26.60'){
   this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.sections.clear();this.updates.clear();this.entities.clear();this.players.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryPackets=0;this.inventoryHistory=[];this.lastInventoryAt=null;this.pendingSlot=null;this.pendingSlotAt=0;this.lastSelectionStatus='Waiting for player inventory and equipment packets.';this.attributes={}
-  this.abilityState=null;this.actor.start(packet);this.uniqueId=this.actor.uniqueId
+  this.abilityState=null;this.abilityPackets=0;this.ownAbilityPackets=0;this.abilityLayerTypes=[];this.actor.start(packet);this.uniqueId=this.actor.uniqueId
    this.worldModeRaw=packet.world_gamemode??packet.world_game_mode??null
    this.modeEvidence=gameModeFromStart(packet);this.gameMode=this.modeEvidence.mode
    this.startGameReceived=true
@@ -207,7 +207,14 @@ export class WorldView{
  attach(client){
   const on=(event,fn)=>{const safe=p=>{try{fn(p)}catch(e){this.decodeErrors++;this.lastError=String(e.message||e).slice(0,140)}};client.on(event,safe);this.listeners.push([client,event,safe])}
   on('start_game',p=>this.initialize(p,client.version||client.options?.version||'1.26.60'))
-  on('update_abilities',p=>{if(this.actor.checkUnique(p.entity_unique_id,'update_abilities'))this.abilityState=abilityEvidence(p)})
+  on('update_abilities',p=>{
+    this.abilityPackets++
+    if(this.actor.checkUnique(p.entity_unique_id,'update_abilities')){
+      this.ownAbilityPackets++
+      this.abilityLayerTypes=(p.abilities||[]).map(x=>String(x.type)).slice(0,8)
+      this.abilityState=abilityEvidence(p)
+    }
+   })
   on('update_player_game_type',p=>{if(this.actor.checkUnique(p.player_unique_id,'update_player_game_type'))this.updateOwnGameMode(p,'own update_player_game_type')})
   on('set_player_game_type',p=>this.updateOwnGameMode(p,'set_player_game_type received'))
   on('item_registry',p=>{if(this.registry)this.registry.handleStartGame({itemstates:p.itemstates,block_network_ids_are_hashes:this.hashMode})})
@@ -226,5 +233,5 @@ export class WorldView{
   on('change_dimension',p=>{this.dimension=dimensionNumber(p.dimension);this.position=p.position;this.sections.clear();this.updates.clear();this.pending.clear();this.entities.clear();this.players.clear()})
  }
  detach(){for(const [c,e,f] of this.listeners)c.off(e,f);this.listeners=[]}
- snapshot(){return {walkingAllowed:this.walkingAllowed,walkingBlockReason:this.walkingBlockReason,actorSession:this.actor.snapshot(),playerEvidence:this.playerEvidence(),modeEvidence:this.modeEvidence,abilities:this.abilityState,gameMode:this.gameMode,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventory:this.items(),inventoryEvidence:this.inventoryEvidence(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
+ snapshot(){return {walkingAllowed:this.walkingAllowed,walkingBlockReason:this.walkingBlockReason,abilityPackets:this.abilityPackets,ownAbilityPackets:this.ownAbilityPackets,abilityLayerTypes:this.abilityLayerTypes,actorSession:this.actor.snapshot(),playerEvidence:this.playerEvidence(),modeEvidence:this.modeEvidence,abilities:this.abilityState,gameMode:this.gameMode,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventory:this.items(),inventoryEvidence:this.inventoryEvidence(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
 }
