@@ -109,6 +109,14 @@ jobs:
           node --check "$BASE/bedrock-agent/src/connection.js"
           grep -q "packWaitSeconds:" "$BASE/bedrock-agent/src/connection.js"
           grep -q "Requested Realm packs" "$APP/src/main/java/com/veilforge/realmagent/MainActivity.java"
+      - name: Retry transient Realm join 503 with cached Microsoft session
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          python3 realm-ai-phone-build/patch_join_503_status_v098.py "$BASE"
+          node --check "$BASE/bedrock-agent/src/connection.js"
+          grep -q 'onRealmJoinRetry' "$BASE/bedrock-agent/src/connection.js"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -160,6 +168,15 @@ jobs:
           rm -rf node_modules/prismarine-nbt/sample
           test ! -e node_modules/prismarine-nbt/sample/bigtest.nbt
           test ! -e node_modules/prismarine-nbt/sample/bigtest.nbt.gz
+      - name: Bounded HTTP 503 retries for the Realms join-address request only
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='.vf-phone-build/veilforge_realm_v09_apk_ready'
+          node --test realm-ai-phone-build/realm-join-503-retry.test.cjs
+          python3 realm-ai-phone-build/patch_bedrock_realm_join_v098.py "$BASE"
+          node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/client/auth.js"
+          node --check "$BASE/bedrock-agent/node_modules/bedrock-protocol/src/client/realmJoin503Retry.js"
       - name: Verify official 1.26.60 packet response bytes on permanently signed builds
         shell: bash
         run: |
