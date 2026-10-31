@@ -39,6 +39,15 @@ export function parseDescriptor(raw){
  }
  throw Error('Unsupported command. Use Commands to prepare a supported plan; “move forward 3 blocks” is not supported.')
 }
+const legacyDiagnosticIds=new Set(['status','movement','control_status','player_identity','inventory_status','combat_status'])
+// Preserved v0.14.4 cards refer to individual diagnostics removed in v0.14.5.
+// Upgrade their IDs only; never run a restored card or guess an unknown command.
+export function migrateSavedDescriptor(card){
+ const raw=card?.descriptor??card
+ if(!raw||typeof raw!=='object')throw Error('Invalid saved command descriptor')
+ const id=legacyDiagnosticIds.has(raw.id)?'diagnostics':raw.id
+ return validateDescriptor({id,values:id==='diagnostics'?{}:raw.values})
+}
 // A run owns the complete saved card list: one job at a time, never auto-restarted.
 // The next card starts 2 seconds AFTER the prior card completes or its read-only result.
 export class CommandPlans{
@@ -48,17 +57,43 @@ export class CommandPlans{
   this.schedule=schedule;this.unschedule=unschedule;this.clock=clock;this.generation=0;this.setScope(scope)
  }
  setScope(scope){
-  this.interrupt('Realm changed; no automatic resume.');this.scope=scope||null;this.cards=[];this.readOnly=false;this.loadError=''
+  this.interrupt('Realm changed; no automatic resume.');this.scope=scope||null;this.cards=[];this.readOnly=false;this.loadError='';this.migrationNote=''
   this.file=this.directory&&scope?path.join(this.directory,crypto.createHash('sha256').update(scope).digest('hex')+'.json'):null
-  if(this.file&&fs.existsSync(this.file)){
+  if(!this.file||!fs.existsSync(this.file))return
+  let raw,parsed
+  try{raw=fs.readFileSync(this.file,'utf8');parsed=JSON.parse(raw)}
+  catch(e){this.archiveUnreadable(e);return}
+  if(!Array.isArray(parsed?.cards)||parsed.cards.length>5){this.archiveUnreadable(Error('Unsupported saved queue format'));return}
+  const migrated=[];let changed=false,unrecognized=0
+  for(const record of parsed.cards){
    try{
-    const data=JSON.parse(fs.readFileSync(this.file,'utf8'))
-    if(!Array.isArray(data.cards)||data.cards.length>5)throw Error()
-    this.cards=data.cards.map((c,i)=>({id:i+1,descriptor:validateDescriptor(c.descriptor),state:'waiting',result:''}))
-    this.sequence=this.cards.length
-   }catch{this.loadError='Saved plans could not be read; original file preserved.';this.readOnly=true}
+    const descriptor=migrateSavedDescriptor(record)
+    migrated.push({id:migrated.length+1,descriptor,state:'waiting',result:''})
+    if(JSON.stringify(record?.descriptor)!==JSON.stringify(descriptor))changed=true
+   }catch{unrecognized++;changed=true}
   }
+  // Keep every usable command in the original order and retain an exact backup
+  // before writing a canonical queue. An unsupported command is never executed.
+  if(changed){
+   try{
+    const backup=this.file+'.pre-v0146.bak'
+    if(!fs.existsSync(backup))fs.copyFileSync(this.file,backup,fs.constants.COPYFILE_EXCL)
+    const migratedJson=JSON.stringify({cards:migrated.map(c=>({descriptor:c.descriptor}))})
+    fs.writeFileSync(this.file+'.tmp',migratedJson,{mode:0o600})
+    fs.renameSync(this.file+'.tmp',this.file)
+    this.migrationNote='Recovered '+migrated.length+' saved commands.'+(unrecognized?' '+unrecognized+' unsupported entries retained in backup and excluded.':'')+' Original queue backed up.'
+   }catch(e){this.readOnly=true;this.loadError='Saved commands could not be safely migrated; original file kept. '+String(e.message||e).slice(0,70)}
+  }
+  this.cards=migrated;this.sequence=migrated.length
  }
+ archiveUnreadable(error){
+  // A malformed file must not permanently lock the phone. Move the exact bytes
+  // to a unique recovery file, only then permit a new empty queue.
+  const archive=this.file+'.pre-v0146-unreadable-'+this.clock()+'.json'
+  try{fs.renameSync(this.file,archive);this.migrationNote='Older queue unreadable; original file preserved in recovery archive. New queue available.'}
+  catch(e){this.readOnly=true;this.loadError='Queue file could not be archived, so editing is disabled to protect it: '+String(e.message||e).slice(0,70)}
+ }
+
  persist(){
   if(this.readOnly)throw Error(this.loadError)
   if(!this.file)return
@@ -69,7 +104,7 @@ export class CommandPlans{
  snapshot(){
   this.reconcile()
   return {scopeKnown:!!this.scope,cards:this.cards.map(c=>({...copy(c),command:renderDescriptor(c.descriptor),label:commandCatalog.find(d=>d.id===c.descriptor.id)?.label,note:commandCatalog.find(d=>d.id===c.descriptor.id)?.note})),
-   running:this.running,runActive:this.runActive,nextAt:this.nextAt,cursor:this.cursor,total:this.cards.length,delayMs:2000,error:this.loadError||'',capacity:5}
+   running:this.running,runActive:this.runActive,nextAt:this.nextAt,cursor:this.cursor,total:this.cards.length,delayMs:2000,error:this.loadError||'',migration:this.migrationNote||'',capacity:5}
  }
  prepare(descriptor){
   if(this.runActive)throw Error('Stop the current queue before editing saved commands.')
