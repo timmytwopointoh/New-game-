@@ -14,7 +14,7 @@ export class WorldView{
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.sections.clear();this.updates.clear();this.entities.clear();this.players.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryPackets=0;this.inventoryHistory=[];this.lastInventoryAt=null;this.pendingSlot=null;this.pendingSlotAt=0;this.lastSelectionStatus='Waiting for player inventory and equipment packets.';this.attributes={}
-  this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id);this.gameMode=this.normalizeMode(packet.player_gamemode);this.position={...packet.player_position};this.entityId=String(packet.runtime_entity_id);this.dimension=dimensionNumber(packet.dimension)
+  this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id);this.gameMode=this.normalizeMode(packet.player_gamemode===5||packet.player_gamemode==='default'?packet.world_gamemode:packet.player_gamemode);this.position={...packet.player_position};this.entityId=String(packet.runtime_entity_id);this.dimension=dimensionNumber(packet.dimension)
  }
  runtime(id){return this.registry?.blocksByRuntimeId?.[id|0]||this.registry?.blocksByRuntimeId?.[id>>>0]}
  save(x,z,section){
