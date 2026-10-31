@@ -14,6 +14,14 @@ export class RealmChat{
   connection.on('player-chat',this.onMessage)
   this.onUpdate=u=>{if(this.active&&this.observingPlan&&connection.spawned)connection.say('Plan: '+u.message.slice(0,150))}
   controller.planner?.on?.('planner-update',this.onUpdate)
+  this.onQueueProgress=u=>{
+   if(!this.active||!this.observingPlan||!connection.spawned)return
+   // Only relay short, bounded queue statuses for a queue begun by owner chat.
+   // Labels distinguish 'sent-unverified' from any server-confirmed success.
+   connection.say('Queue: '+String(u.message||'').slice(0,160))
+   if(!u.active)this.observingPlan=false
+  }
+  connection.on('realm-queue-progress',this.onQueueProgress)
  }
  extract(raw){
   if(PREFIX.test(raw))return raw.replace(PREFIX,'').trim()
@@ -52,5 +60,5 @@ export class RealmChat{
   this.observingPlan=!!(result.plans?.runActive||result.planner?.state==='running')
   this.connection.say(String(result.message||'No response').slice(0,180))
  }
- stop(){this.active=false;this.connection.off('player-chat',this.onMessage);this.controller.planner?.off?.('planner-update',this.onUpdate)}
+ stop(){this.active=false;this.connection.off('player-chat',this.onMessage);this.controller.planner?.off?.('planner-update',this.onUpdate);this.connection.off('realm-queue-progress',this.onQueueProgress)}
 }
