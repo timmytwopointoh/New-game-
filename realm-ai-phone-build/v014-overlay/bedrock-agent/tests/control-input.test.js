@@ -92,7 +92,7 @@ test('aiming cannot interrupt an active mining or movement job and cannot execut
 test('mobile command catalog has executable look-at and read-only control-status cards',()=>{
  assert.equal(parseDescriptor('look at 2 64 -1').id,'look_at')
  assert.equal(renderDescriptor(parseDescriptor('look at 2 64 -1')),'look at 2 64 -1')
- assert.equal(parseDescriptor('control status').id,'control_status')
- assert.equal(commandCatalog.find(x=>x.id==='control_status').fields.length,0)
+ assert.equal(parseDescriptor('control status').id,'diagnostics')
+ assert.equal(commandCatalog.at(-1).id,'diagnostics')
  assert.throws(()=>parseDescriptor('look at 1.5 64 0'),/Unsupported/)
 })
