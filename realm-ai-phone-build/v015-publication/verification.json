@@ -1,0 +1,19 @@
+{
+  "source_commit": "local reconstructed v014 base plus v015 mining/building candidate (source overlay not yet committed)",
+  "application_id": "com.veilforge.realmagent",
+  "version_code": 100005,
+  "certificate_sha256": "B5D275706B574EEA53D6497A3A65542542B5DB0E0E57F4E307E8ED17CF24F995",
+  "apk_sha256": "eb2746a9f18cf619035266124f487b8e9b4dc8853c8d0b66a95bbbc235f6e946",
+  "apk_bytes": 109688192,
+  "node_tests_passed": 169,
+  "android_phone_layout_tests_passed": 4,
+  "same_key_signature": "verified locally",
+  "zip_integrity": "passed",
+  "zip_alignment_16kb": "passed",
+  "live_realm_behavior": "UNVERIFIED - needs device testing",
+  "limitations": [
+    "Creative mode controls and redesigned compact screen are not included",
+    "free-form move-forward command remains unsupported",
+    "strip-mining automation is not included"
+  ]
+}
