@@ -1,0 +1,17 @@
+{
+  "source_commit": "locally reconstructed v0.15.1 build tree plus v0.16 source overlay",
+  "application_id": "com.veilforge.realmagent",
+  "version_code": 100009,
+  "version_name": "0.16-creative-mode-compact-ui",
+  "certificate_sha256": "8E902E783E7B4BD45FFE2F99B45C53B0E15D4B8E36092532CC6E969A956815C5",
+  "apk_sha256": "8fe136843779e13e44ac4caa3957934222b49cf5ba56702047f16ec0f2e7eaa0",
+  "apk_bytes": 109700480,
+  "node_tests_passed": 174,
+  "android_phone_layout_tests_passed": 4,
+  "permanent_key": "owner-supplied 2026 key, locally verified",
+  "zip_integrity": "passed locally",
+  "zip_alignment_16kb": "passed locally",
+  "live_realm_behavior": "UNVERIFIED - requires owner device and Realm test",
+  "mode_policy": "Only explicit self-targeted Survival/Creative requests when server-reported command permission allows; await own server confirmation; no global settings or permission changes.",
+  "creative_movement": "Grounded movement only; mining/building stay Survival-only; no teleport/flight/noclip."
+}

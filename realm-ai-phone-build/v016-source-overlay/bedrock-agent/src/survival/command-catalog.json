@@ -1,0 +1,512 @@
+[
+  {
+    "id": "place",
+    "label": "Place one block",
+    "template": "place {material} at {x} {y} {z}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Block material in hotbar",
+        "type": "block"
+      },
+      {
+        "id": "x",
+        "label": "Origin X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Origin Y (first block, not eye height)",
+        "type": "integer",
+        "min": -64,
+        "max": 315
+      },
+      {
+        "id": "z",
+        "label": "Origin Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+  },
+  {
+    "id": "build_wall",
+    "label": "Build wall (place blocks)",
+    "template": "build wall {width} by {height} with {material} at {x} {y} {z}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Block material in hotbar",
+        "type": "block"
+      },
+      {
+        "id": "width",
+        "label": "Width (+X)",
+        "type": "integer",
+        "min": 1,
+        "max": 6
+      },
+      {
+        "id": "height",
+        "label": "Height",
+        "type": "integer",
+        "min": 1,
+        "max": 3
+      },
+      {
+        "id": "x",
+        "label": "Origin X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Origin Y (first block, not eye height)",
+        "type": "integer",
+        "min": -64,
+        "max": 315
+      },
+      {
+        "id": "z",
+        "label": "Origin Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+  },
+  {
+    "id": "build_floor",
+    "label": "Build floor (place blocks)",
+    "template": "build floor {width} by {height} with {material} at {x} {y} {z}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Block material in hotbar",
+        "type": "block"
+      },
+      {
+        "id": "width",
+        "label": "Width (+X)",
+        "type": "integer",
+        "min": 1,
+        "max": 6
+      },
+      {
+        "id": "height",
+        "label": "Length (+Z)",
+        "type": "integer",
+        "min": 1,
+        "max": 6
+      },
+      {
+        "id": "x",
+        "label": "Origin X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Origin Y (first block, not eye height)",
+        "type": "integer",
+        "min": -64,
+        "max": 315
+      },
+      {
+        "id": "z",
+        "label": "Origin Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+  },
+  {
+    "id": "build_shelter",
+    "label": "Build shelter (96 blocks)",
+    "template": "build shelter with {material} at {x} {y} {z}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Block material in hotbar",
+        "type": "block"
+      },
+      {
+        "id": "x",
+        "label": "Origin X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Origin Y (first block, not eye height)",
+        "type": "integer",
+        "min": -64,
+        "max": 315
+      },
+      {
+        "id": "z",
+        "label": "Origin Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Requires 96 matching blocks in hotbar stacks. Clear 5\u00d75 footprint: floor at origin Y, 3-block walls, roof and 2-block doorway at the front (-Z), centered on +X. Needs safe observed access and server-confirmed approach movement. Places actual blocks and consumes matching hotbar supplies. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+  },
+  {
+    "id": "follow",
+    "label": "Follow player",
+    "template": "follow {player}",
+    "fields": [
+      {
+        "id": "player",
+        "label": "Observed player / configured owner",
+        "type": "player"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "id": "route",
+    "label": "Route preview",
+    "template": "route to {x} {y} {z}",
+    "fields": [
+      {
+        "id": "x",
+        "label": "X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Feet-level Y",
+        "type": "integer",
+        "min": -64,
+        "max": 320
+      },
+      {
+        "id": "z",
+        "label": "Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Y is the feet-level route cell, not eye height. Unknown terrain is never accepted."
+  },
+  {
+    "id": "walk",
+    "label": "Walk",
+    "template": "walk to {x} {y} {z}",
+    "fields": [
+      {
+        "id": "x",
+        "label": "X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Feet-level Y",
+        "type": "integer",
+        "min": -64,
+        "max": 320
+      },
+      {
+        "id": "z",
+        "label": "Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Y is the feet-level route cell, not eye height. Unknown terrain is never accepted."
+  },
+  {
+    "id": "clear",
+    "label": "Clear path",
+    "template": "clear path to {x} {y} {z}",
+    "fields": [
+      {
+        "id": "x",
+        "label": "X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Feet-level Y",
+        "type": "integer",
+        "min": -64,
+        "max": 320
+      },
+      {
+        "id": "z",
+        "label": "Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Y is the feet-level route cell, not eye height. Unknown terrain is never accepted."
+  },
+  {
+    "id": "dig",
+    "label": "Dig one block",
+    "template": "dig {x} {y} {z}",
+    "fields": [
+      {
+        "id": "x",
+        "label": "X",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      },
+      {
+        "id": "y",
+        "label": "Feet-level Y",
+        "type": "integer",
+        "min": -64,
+        "max": 320
+      },
+      {
+        "id": "z",
+        "label": "Z",
+        "type": "integer",
+        "min": -30000000,
+        "max": 30000000
+      }
+    ],
+    "note": "Select an observed visible block. Actual held tool, reach and protection are checked again on activation."
+  },
+  {
+    "id": "hotbar",
+    "label": "Select hotbar slot",
+    "template": "select slot {slot}",
+    "fields": [
+      {
+        "id": "slot",
+        "label": "Known hotbar slot",
+        "type": "slot",
+        "min": 1,
+        "max": 9
+      }
+    ],
+    "note": ""
+  },
+  {
+    "id": "find",
+    "label": "Find visible material",
+    "template": "find {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Material / search query",
+        "type": "material"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "id": "materials",
+    "label": "Search materials",
+    "template": "materials {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Material / search query",
+        "type": "material"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "id": "about",
+    "label": "About material",
+    "template": "about {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Material / search query",
+        "type": "material"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "id": "recipe",
+    "label": "Recipe preview",
+    "template": "recipe {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Material / search query",
+        "type": "material"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "id": "supply",
+    "label": "Supply preview",
+    "template": "plan get {count} {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Material",
+        "type": "material"
+      },
+      {
+        "id": "count",
+        "label": "Quantity",
+        "type": "integer",
+        "min": 1,
+        "max": 256
+      }
+    ],
+    "note": "Preview only. Crafting and gathering are not executable."
+  },
+  {
+    "id": "wall",
+    "label": "Wall supply preview",
+    "template": "plan build wall {width} by {height} with {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Block material",
+        "type": "block"
+      },
+      {
+        "id": "width",
+        "label": "Width",
+        "type": "integer",
+        "min": 1,
+        "max": 12
+      },
+      {
+        "id": "height",
+        "label": "Height / length",
+        "type": "integer",
+        "min": 1,
+        "max": 12
+      }
+    ],
+    "note": "Preview only. No placement or crafting."
+  },
+  {
+    "id": "floor",
+    "label": "Floor supply preview",
+    "template": "plan build floor {width} by {height} with {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Block material",
+        "type": "block"
+      },
+      {
+        "id": "width",
+        "label": "Width",
+        "type": "integer",
+        "min": 1,
+        "max": 12
+      },
+      {
+        "id": "height",
+        "label": "Height / length",
+        "type": "integer",
+        "min": 1,
+        "max": 12
+      }
+    ],
+    "note": "Preview only. No placement or crafting."
+  },
+  {
+    "id": "shelter",
+    "label": "Shelter supply preview",
+    "template": "plan build shelter with {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Block material",
+        "type": "block"
+      }
+    ],
+    "note": "Fixed 5 \u00d7 5 shelter, 3-block walls, floor, roof and 2-block doorway. Preview only."
+  },
+  {
+    "id": "status",
+    "label": "Survival / connection status",
+    "template": "survival status",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "movement",
+    "label": "Movement status",
+    "template": "movement status",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "look",
+    "label": "Look around / enable view",
+    "template": "look around",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "view_off",
+    "label": "Disable view",
+    "template": "view off",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "inventory",
+    "label": "Inventory",
+    "template": "inventory",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "help",
+    "label": "Supported commands",
+    "template": "help survival",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "plan_status",
+    "label": "Supply-preview status",
+    "template": "plan status",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "rejoin",
+    "label": "Rejoin Realm with saved login",
+    "template": "rejoin realm",
+    "fields": [],
+    "note": ""
+  },
+  {
+    "id": "ensure",
+    "label": "Ensure Survival",
+    "template": "ensure survival",
+    "fields": [],
+    "note": ""
+  }
+]

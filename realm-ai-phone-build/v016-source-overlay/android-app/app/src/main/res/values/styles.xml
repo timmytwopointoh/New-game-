@@ -1,0 +1,11 @@
+<resources>
+    <style name="VeilforgeTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#100C1D</item>
+        <item name="android:navigationBarColor">#100C1D</item>
+        <item name="android:colorAccent">#AA85F0</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

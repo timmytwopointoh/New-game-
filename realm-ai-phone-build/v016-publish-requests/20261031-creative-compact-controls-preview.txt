@@ -1,0 +1,1 @@
+Publish-only request: reconstruct the locally signed v0.16.0 candidate from public v0.15.1 APK bytes and the public reconstruction recipe; verify SHA-256, 2026 permanent certificate, versionCode 100009, APK integrity/alignment and embedded Realm agent files; attach the exact APK and source overlay to a prerelease. Do not build Android or access signing secrets.
