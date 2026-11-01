@@ -38,7 +38,7 @@ test('follow prefers jump; solo prefers detour; follow mines only when authorize
 test('jump route is available only with observed headroom, support and follow-step option',()=>{
  const {w,set}=fixture();set(1,64,0,'stone');const start={x:0,y:64,z:0},goal={x:1,y:65,z:0}
  assert(w.canJumpBetween(start,goal));assert.equal(findPath(w,start,goal).ok,false);assert(findPath(w,start,goal,{allowSteps:true}).ok)
- set(0,67,0,'stone');assert.equal(w.canJumpBetween(start,goal),false)
+ set(0,66,0,'stone');assert.equal(w.canJumpBetween(start,goal),false)
 })
 test('following uses actual add-player identity and clears it on remove',()=>{
  const {w}=fixture(),c=new EventEmitter();w.attach(c)

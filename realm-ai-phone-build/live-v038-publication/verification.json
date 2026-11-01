@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200019,
+  "issuedAt": 1793510637212,
+  "expiresAt": 1794115437212,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-038-follow-clearance/Realm-AI-Live.apk",
+  "size": 110236847,
+  "sha256": "c95d6ee5f934fec6d6ffb77ba7c7d78ca2ae043c04ffc9b31b2b9fd5cccde02d",
+  "notes": "Follow clearance fixes: align before narrow corners, assess actual body/support footprint, allow valid one-block jumps under three-block ceilings, clip known ceiling head contact, and report specific blocker coordinates. No live Realm acceptance claimed.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

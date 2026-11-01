@@ -71,7 +71,7 @@ test('Creative staircase uses actual held dirt, waits for server blocks and does
  }finally{f.close()}
 })
 test('low ceilings prevent jump input instead of forcing the player through blocks',()=>{
- const f=fixture();try{f.set({x:1,y:64,z:0},'stone');for(let x=-1;x<=2;x++)for(let z=-1;z<=1;z++)f.set({x,y:67,z},'stone');assert(!f.n.walk({x:1,y:65,z:0}).accepted);f.n.step();assert(!f.sent.some(([name,p])=>name==='player_auth_input'&&p.input_data.includes('start_jumping')))}finally{f.close()}
+ const f=fixture();try{f.set({x:1,y:64,z:0},'stone');for(let x=-1;x<=2;x++)for(let z=-1;z<=1;z++)f.set({x,y:66,z},'stone');assert(!f.n.walk({x:1,y:65,z:0}).accepted);f.n.step();assert(!f.sent.some(([name,p])=>name==='player_auth_input'&&p.input_data.includes('start_jumping')))}finally{f.close()}
 })
 test('death sends normal Respawn action, acknowledges own server-ready position, waits for real health and never resumes work',()=>{
  const f=fixture(),interrupts=[],r=new RespawnRecovery(f.w,f.n,m=>interrupts.push(m));try{

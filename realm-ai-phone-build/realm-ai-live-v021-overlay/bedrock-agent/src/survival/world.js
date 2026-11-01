@@ -94,17 +94,30 @@ export class WorldView{
  get editModeVerified(){return this.survivalVerified||this.creativeEditsVerified}
  get movementVerified(){return this.survivalVerified||this.creativeMovementVerified}
  // Collision uses received block shapes in both layers. Unknown cells remain solid.
- clearBody(position,{allowWater=false,allowLava=false,allowPowder=false,allowPortal=false}={}){
+ bodyIssue(position,{allowWater=false,allowLava=false,allowPowder=false,allowPortal=false}={}){
   const feet=position.y-1.62,eps=.00001
   for(let x=Math.floor(position.x-.3+eps);x<=Math.floor(position.x+.3-eps);x++)
    for(let z=Math.floor(position.z-.3+eps);z<=Math.floor(position.z+.3-eps);z++)
     for(let y=Math.floor(feet+eps);y<=Math.floor(feet+1.8-eps);y++)for(const layer of [0,1]){
      const b=this.block({x,y,z},layer)
-     if(!b||dangerous.test(b.name)&&!(allowWater&&/^(?:flowing_)?water$/.test(b.name))&&!(allowLava&&/^(?:flowing_)?lava$/.test(b.name))&&!(allowPowder&&b.name==='powder_snow')&&!(allowPortal&&/^(?:portal|nether_portal|end_portal)$/.test(b.name)))return false
-     if(!Array.isArray(b.shapes))return false
-     for(const q of b.shapes)if(position.x+.3>x+q[0]+eps&&position.x-.3<x+q[3]-eps&&feet+1.8>y+q[1]+eps&&feet<y+q[4]-eps&&position.z+.3>z+q[2]+eps&&position.z-.3<z+q[5]-eps)return false
+     if(!b)return {kind:'unknown',position:{x,y,z},layer,name:null}
+     if(dangerous.test(b.name)&&!(allowWater&&/^(?:flowing_)?water$/.test(b.name))&&!(allowLava&&/^(?:flowing_)?lava$/.test(b.name))&&!(allowPowder&&b.name==='powder_snow')&&!(allowPortal&&/^(?:portal|nether_portal|end_portal)$/.test(b.name)))return {kind:'hazard',position:{x,y,z},layer,name:b.name}
+     if(!Array.isArray(b.shapes))return {kind:'unknown-shape',position:{x,y,z},layer,name:b.name}
+     for(const q of b.shapes)if(position.x+.3>x+q[0]+eps&&position.x-.3<x+q[3]-eps&&feet+1.8>y+q[1]+eps&&feet<y+q[4]-eps&&position.z+.3>z+q[2]+eps&&position.z-.3<z+q[5]-eps)return {kind:'solid',position:{x,y,z},layer,name:b.name}
     }
-  return true
+  return null
+ }
+ clearBody(position,options){return !this.bodyIssue(position,options)}
+ standingIssue(position,{maxStepDown=.6}={}){
+  const collision=this.bodyIssue(position);if(collision)return collision
+  const feet=position.y-1.62,seen=new Set();let contact=false
+  for(const dx of [-.299,.299])for(const dz of [-.299,.299]){
+   const x=Math.floor(position.x+dx),z=Math.floor(position.z+dz),id=`${x},${z}`;if(seen.has(id))continue;seen.add(id)
+   const y=Math.floor(feet-.00001)
+   for(const layer of [0,1]){const b=this.block({x,y,z},layer);if(!b)return {kind:'unknown-support',position:{x,y,z},layer,name:null};if(dangerous.test(b.name))return {kind:'hazard',position:{x,y,z},layer,name:b.name}}
+   for(const standY of [Math.floor(feet+.001)+1,Math.floor(feet+.001),Math.floor(feet+.001)-1]){const h=this.supportHeight({x,y:standY,z});if(h!==null&&h<=feet+.002&&feet-h<=maxStepDown+.002)contact=true}
+  }
+  return contact?null:{kind:'unsupported',position:{x:Math.floor(position.x),y:Math.floor(feet),z:Math.floor(position.z)},layer:0,name:null}
  }
  supportHeight(p){
   const ground=this.block({...p,y:p.y-1}),fluid=this.block({...p,y:p.y-1},1),body=this.block(p),overlay=this.block(p,1)
@@ -140,7 +153,9 @@ export class WorldView{
  canJumpBetween(a,b){
   if(this.inputLocks?.jump)return false
   if(Math.abs(a.x-b.x)+Math.abs(a.z-b.z)!==1||b.y-a.y!==1||!this.walkable(a)||!this.walkable(b))return false
-  return [a,b].every(p=>this.airAt({...p,y:a.y+2})&&this.airAt({...p,y:a.y+3}))
+  const from=this.supportHeight(a),to=this.supportHeight(b);if(from===null||to===null||to-from<=0||to-from>1.25)return false
+  for(let h=from;h<to;h+=.05)if(!this.clearBody({x:a.x+.5,y:h+1.62,z:a.z+.5}))return false
+  return this.clearBody({x:a.x+.5,y:to+1.62,z:a.z+.5})
  }
  canDropBetween(a,b,{maxDrop=1}={}){
   const limit=Math.min(5,Math.max(1,maxDrop)),from=this.supportHeight(a),to=this.supportHeight(b)

@@ -1,9 +1,7 @@
-# Realm AI Live v0.37 — survival workflows test build
+# Realm AI Live v0.38 — Follow clearance
 
-Current package `com.veilforge.realmagent.live`, versionCode **200018**. This historical v021 directory is the canonical Live source; the top-level legacy app is different.
+Current package `com.veilforge.realmagent.live`, versionCode **200019**. The historical v021 directory remains the canonical Live source.
 
-Read [build status, implemented behavior, testing and unfinished work](UPDATE-NOTES-v0.37.md) before continuing. This snapshot is experimental and needs live Realm testing. The source ZIP includes a plain-text copy, the original owner handoff, source/tests and public reconstruction helpers.
+Read [Follow fix and test instructions](UPDATE-NOTES-v0.38.md), then [v0.37 workflows and remaining work](UPDATE-NOTES-v0.37.md). Source ZIP includes current and previous build notes, a manifest and public APK reconstruction helpers. Preserve the permanent Live key, Switch login and saved sessions. The unrelated top-level app is different.
 
-Run Node tests with `node --test tests/*.test.js` in bedrock-agent. Use JDK17, Gradle8.9 and SDK35 for Android. The test APK was compiled locally and published as already-signed public bytes; private keys never enter GitHub Actions. Preserve the existing Live key, Switch authentication, saved sessions and Stop/gravity behavior.
-
-Earlier releases and their notes remain as history. Current validation: **357 Node / 47 Android tests**, source/runtime parity, package/version, permanent certificate and alignment. No phone/Realm acceptance is claimed.
+Validation: **360 Node / 47 Android tests**, source/runtime parity, exact permanent certificate, package/version and alignment. New behavior still needs owner phone/Realm testing. Node tests: `node --test tests/*.test.js` in bedrock-agent. Android uses JDK17, Gradle8.9 and SDK35. See previous build notes for the frozen native-runtime packaging procedure.

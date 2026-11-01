@@ -51,7 +51,7 @@ export class Navigation{
   const routeWorld={walkable:p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
   const plan=findPath(routeWorld,start,goal,{allowSteps,maxNodes,maxDrop});return plan.ok||!allowDirt||!start?plan:dirtStaircase(w,start,goal,{maxDrop,excluded:p=>this.blocked.get(key(p))>now})||(allowBridge?dirtBridge(w,start,goal,{excluded:p=>this.blocked.get(key(p))>now,maxDrop}):null)||plan
  }
- assignRoute(plan){this.climbing.prepare(plan.stairs);this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
+ assignRoute(plan){this.routeAlignment=null;const start=plan.path[0],next=plan.path[1],p=this.world.position;if(start&&next&&p){const axis=next.x!==start.x?'z':'x',value=start[axis]+.5;if(Math.abs(p[axis]-value)>.025)this.routeAlignment={axis,value}}this.climbing.prepare(plan.stairs);this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
  movementBlock(){
   if(this.world.attributes['minecraft:health']===0||this.isRespawning?.())return 'Waiting for server-confirmed respawn; previous work stays stopped.'
   if(this.world.inputLocks?.move)return 'The server has locked movement; waiting for its unlock update.'
@@ -116,7 +116,7 @@ export class Navigation{
   }
   if(candidates.length){const goal=candidates[0],dirt=new Building(this.world).inventory('dirt').reduce((n,[,i])=>n+i.count,0),rise=goal.y-start.y;if(rise>=2&&rise<=4&&dirt>=rise){this.pillar=new Pillaring(this,rise);this.route=null;return}const adjacent={x:start.x+Math.sign(goal.x-start.x)*(Math.abs(goal.x-start.x)>=Math.abs(goal.z-start.z)?1:0),y:start.y-1,z:start.z+Math.sign(goal.z-start.z)*(Math.abs(goal.x-start.x)<Math.abs(goal.z-start.z)?1:0)},gap=this.world.airAt(adjacent);if((rise>=2&&rise<=4&&dirt<rise||gap&&dirt<2)&&this.onNeedDirt?.(this.job.name,Math.max(2,rise)))return}
   if(candidates.length&&this.recoveryAttempts<3&&this.recover('No open route to the followed player.',now))return
-  this.route=null;const terrainKnown=this.world.terrainKnown({x:target.x,y:target.y,z:target.z});this.state=terrainKnown?'blocked':'waiting-for-terrain';this.reason=terrainKnown?'No safe jump, dirt route or permitted mining route is available; waiting for terrain or player movement.':'Terrain near the player is unknown; requesting terrain before planning a route.';if(!terrainKnown)try{this.world.requestNearby(this.client)}catch{}
+  this.route=null;const detail=this.lastClearanceBlock;const terrainKnown=this.world.terrainKnown({x:target.x,y:target.y,z:target.z});this.state=terrainKnown?'blocked':'waiting-for-terrain';this.reason=terrainKnown?'No safe jump, dirt route or permitted mining route is available; waiting for terrain or player movement.':'Terrain near the player is unknown; requesting terrain before planning a route.';if(detail)this.reason+=' '+detail;if(!terrainKnown)try{this.world.requestNearby(this.client)}catch{}
  }
  mine(position,options={}){
   if(this.world.attributes['minecraft:health']===0||this.isRespawning?.())return {accepted:false,queued:false,message:'Respawn must be confirmed before mining.'}
@@ -202,6 +202,7 @@ export class Navigation{
   this.report(this.defense.reason)
  }
  queueUse(transaction,aim){if(this.pendingUse||this.mining.job||this.building.job||this.climbing.current)return false;this.pendingUse=transaction;if(aim)this.lookAt(aim);return true}
+ clearanceMessage(issue,context='Player clearance'){const at=issue.position,description=issue.kind.startsWith('unknown')?'missing terrain/collision data':issue.kind==='unsupported'?'no safe floor':issue.kind==='hazard'?'hazardous '+issue.name:'solid '+issue.name;this.lastClearanceBlock=`${context}: ${description} at ${at.x},${at.y},${at.z}.`;return this.lastClearanceBlock}
  lookAt(target){const eye=this.world.position,dx=target.x-eye.x,dy=target.y-eye.y,dz=target.z-eye.z;this.yaw=Math.atan2(-dx,dz)*180/Math.PI;this.pitch=-Math.atan2(dy,Math.hypot(dx,dz))*180/Math.PI}
  obstacleAhead(){
   const a=this.world.standPosition(),goal=this.route?.[0]||this.job?.goal
@@ -223,9 +224,9 @@ export class Navigation{
   const detour=canJump?{ok:false}:this.routeTo(goal,a,{allowSteps:true,allowDirt:true})
   const mine=this.job.allowMining?miningAssessment(this.world,obstacle):null
   const decision=recoveryDecision({mode:this.job.kind,canJump,hasDetour:detour.ok,mine,allowMining:this.job.allowMining,attempts:this.recoveryAttempts})
-  this.recoveryAttempts++;this.lastRecoveryPosition={...this.world.position};this.progress.reset();this.note(decision.action,reason+' '+decision.reason)
+  this.recoveryAttempts++;this.lastRecoveryPosition={...this.world.position};this.progress.reset();const front=this.world.block(obstacle),detail=decision.action==='pause'&&mine?.reason?` Front block ${front?.name||'unknown'} at ${key(obstacle)}: ${mine.reason}`:'';this.note(decision.action,reason+' '+decision.reason+detail)
   if(decision.action==='jump'){
-   this.route=[landing];this.afterJumpGoal=goal;this.beginFlight(landing,'jump',now);return true
+   this.routeAlignment=null;this.route=[landing];this.afterJumpGoal=goal;this.beginFlight(landing,'jump',now);return true
   }
   if(decision.action==='detour'){this.assignRoute(detour);return true}
   if(decision.action==='mine'){
@@ -257,7 +258,10 @@ export class Navigation{
   if(!clearTravel(next)){
    const vertical={...p,y:desired.y},horizontal={...p,x:desired.x,z:desired.z}
    if(clearTravel(vertical))next=vertical
-   else if(f.kind==='drop'&&clearTravel(horizontal)){next=horizontal;f.vy=0}
+   else if(f.vy>0&&this.world.bodyIssue(vertical)?.kind==='solid'&&this.world.bodyIssue(vertical).position.y>=Math.floor(p.y+.18)){
+    let low=0,high=1;for(let i=0;i<22;i++){const mid=(low+high)/2;if(clearTravel({...p,y:p.y+(vertical.y-p.y)*mid}))low=mid;else high=mid}
+    const capped={...p,y:p.y+(vertical.y-p.y)*low},across={...desired,y:capped.y};next=clearTravel(across)?across:capped;f.vy=0
+   }else if(f.kind==='drop'&&clearTravel(horizontal)){next=horizontal;f.vy=0}
    else{this.flight=null;this.stop('Jump clearance changed; stopped.');return zero}
   }
   const flags=f.first&&['jump','pillar'].includes(f.kind)?['start_jumping','jump_down','jumping']:['jump','pillar'].includes(f.kind)?['jumping']:[];f.first=false
@@ -267,7 +271,7 @@ export class Navigation{
  stop(reason='Stopped moving and mining.',notify=true){
   const active=!!this.job||this.route!==null||!!this.flight||!!this.mining.job
   if(this.flight)this.vy=this.flight.vy
-  this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.flight=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
+  this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.flight=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
   if(this.edgeSneaking){this.pendingFlags.push('stop_sneaking');this.edgeSneaking=false}
   this.pickup.stop();this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason);this.survey=null
   // Send neutral input now, including abort_break, rather than waiting for the next timer tick.
@@ -333,7 +337,11 @@ export class Navigation{
   }else if(this.flight){({delta,move,flags}=this.flightStep(now))}
   else if(this.route?.length&&!construction.waiting&&!this.mining.job&&this.world.grounded()){
    const target=this.route[0],a=this.world.standPosition(),p=this.world.position
-   if(target.y!==a.y){
+   if(this.routeAlignment&&Math.abs(p[this.routeAlignment.axis]-this.routeAlignment.value)>.025){
+    const {axis,value}=this.routeAlignment,next={...p,[axis]:p[axis]+Math.sign(value-p[axis])*Math.min(.1,Math.abs(value-p[axis]))},issue=this.world.standingIssue(next)
+    if(issue)this.recover(this.clearanceMessage(issue,'Route alignment'),now)
+    else{this.lastClearanceBlock=null;delta={x:next.x-p.x,y:0,z:next.z-p.z};this.world.position=next;move={x:0,z:1};this.state='walking'}
+   }else if(target.y!==a.y){this.routeAlignment=null
     if(!this.beginFlight(target,target.y>a.y?'jump':'drop',now))this.recover('Step height or headroom is blocked.',now)
     else({delta,move,flags}=this.flightStep(now))
    }else if(!this.world.walkable(target))this.recover('Obstacle appeared on the route.',now)
@@ -344,9 +352,9 @@ export class Navigation{
      const speed=Math.min(.1,d),next={x:p.x+dx/d*speed,y:p.y,z:p.z+dz/d*speed}
      const height=this.world.supportHeight(target)
      if(!this.world.clearBody(next)&&height!==null&&height+1.62>p.y&&height+1.62-p.y<=1&&this.world.clearBody({...p,y:height+1.62}))next.y=height+1.62
-     const clear=this.world.clearBody(next)&&[-.3,.3].every(x=>[-.3,.3].every(z=>this.world.walkable({x:Math.floor(next.x+x),y:a.y,z:Math.floor(next.z+z)})))
-     if(!clear)this.recover('Player clearance is blocked or unknown.',now)
-     else{delta={x:next.x-p.x,y:next.y-p.y,z:next.z-p.z};this.world.position=next;move={x:0,z:1};this.state='walking'}
+     const issue=this.world.standingIssue(next)
+     if(issue)this.recover(this.clearanceMessage(issue),now)
+     else{this.lastClearanceBlock=null;delta={x:next.x-p.x,y:next.y-p.y,z:next.z-p.z};this.world.position=next;move={x:0,z:1};this.state='walking'}
     }
    }
   }
@@ -409,5 +417,5 @@ export class Navigation{
   try{this.onResourceTick?.(now)}catch(e){this.reportRuntimeError?.(e);this.stop('Internal resource task error.');this.onResourceError?.(e)}
  }
  snapshot(){return {pillar:this.pillar?{confirmed:this.pillar.done,total:this.pillar.rise,phase:this.pillar.phase}:null,environmentRecovery:this.hazards.snapshot(),state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
- detach(){this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
+ detach(){this.routeAlignment=null;this.lastClearanceBlock=null;this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
 }
