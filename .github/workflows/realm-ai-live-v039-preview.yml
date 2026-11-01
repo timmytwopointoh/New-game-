@@ -26,7 +26,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then echo 'Android command-line tools missing'; exit 1; fi
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
           ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
           grep -q 'versionCode 200020' "$ROOT/android-app/app/build.gradle"
           grep -q "applicationId 'com.veilforge.realmagent.live'" "$ROOT/android-app/app/build.gradle"
