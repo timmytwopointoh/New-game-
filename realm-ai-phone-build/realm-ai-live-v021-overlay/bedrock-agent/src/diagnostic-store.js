@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import {readPrivateJson,writePrivateJson} from './survival/private-json.js'
 import {classifyConnectionFailure} from './connection-diagnostics.js'
 
-const phases=new Set('starting realm-discovery minecraft-authentication microsoft-device-code microsoft-token-refresh microsoft-session xbox-authentication xbox-user-token xbox-device-token xbox-title-token xbox-security-token xbox-sisu-authentication sign-in-required realm-selecting realm-selected realm-join-retry authenticated transport-connected bedrock-login-accepted minecraft-login-ok world-started spawned error disconnected connecting closed not-started unavailable unknown not-reached negotiating-packs pack-request downloading-packs pack-cached packs-ready pack-error'.split(' '))
+const phases=new Set('starting realm-discovery minecraft-authentication microsoft-device-code microsoft-token-refresh microsoft-session xbox-authentication xbox-user-token xbox-device-token xbox-title-token xbox-security-token xbox-sisu-authentication sign-in-required realm-selecting realm-selected realm-join-retry authenticated transport-connected bedrock-login-accepted minecraft-login-ok world-started spawned error disconnected connecting closed not-started unavailable unknown not-reached negotiating-packs pack-request pack-storage pack-retry downloading-packs pack-cached packs-ready pack-error'.split(' '))
 const phase=value=>phases.has(value)?value:'unknown'
 const number=value=>Number.isSafeInteger(value)&&value>=0?value:0
 function failure(value){
@@ -17,6 +17,8 @@ export function sanitizeDiagnosticReport(input={}){
   const report={schema:1,phase:phase(input.phase),authState:phase(input.authState),recordedAt:number(input.recordedAt),savedAuthentication:'kept'}
   for(const name of ['connected','joined','spawned','deviceCodePending','titleTokenRecoveryAttempted'])report[name]=input[name]===true
   report.packStage=phase(input.packStage)
+  report.packReason=['none','storage-low','storage-unknown','pack-size-limit','cdn-access-denied','cdn-missing','cdn-unavailable','network-interrupted','pack-integrity','pack-transfer-failed'].includes(input.packReason)?input.packReason:'none'
+  report.packFreeMB=number(input.packFreeMB);report.packNeededMB=number(input.packNeededMB);report.packRetryable=input.packRetryable===true
   for(const name of ['packHeaders','packChunks'])report[name]=number(input[name])
   report.failure=failure(input.failure);report.lastFailure=failure(input.lastFailure)
   report.processState=['running','stopped','crashed'].includes(input.processState)?input.processState:'unknown'
