@@ -1,0 +1,84 @@
+name: Rebuild Realm AI v0.39.1 - exact original source, no app edits
+on:
+  push:
+    branches:
+      - release/realm-ai-v0391-original-source-rebuild-20261101
+    paths:
+      - '.github/workflows/realm-ai-v0391-original-code-rebuild.yml'
+permissions:
+  contents: write
+jobs:
+  build-unmodified:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Assert EXACT original app identity, and preserve all source files
+        run: |
+          set -euo pipefail
+          ROOT='realm-ai-phone-build/realm-ai-live-v021-overlay'
+          grep -q "applicationId 'com.veilforge.realmagent.live'" "$ROOT/android-app/app/build.gradle"
+          grep -q 'versionCode 200020' "$ROOT/android-app/app/build.gradle"
+          grep -q "versionName '0.39.1-jump-recovery'" "$ROOT/android-app/app/build.gradle"
+          git diff --exit-code -- "$ROOT"
+          echo "Confirmed untouched Live application ID and original source."
+      - name: Test exact JavaScript source and install pinned dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          npm ci --omit=dev --no-fund --no-audit
+          node --test tests/*.test.js
+      - name: Restore checksum-verified native runtime (no code patching)
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay
+        run: |
+          set -euo pipefail
+          python3 tools/fetch_native_runtime.py
+          test -s android-app/app/src/main/jniLibs/arm64-v8a/libnode.so
+          test -s android-app/app/src/main/jniLibs/arm64-v8a/libveilforge_bridge.so
+      - name: Compile unchanged Android app and run Android tests
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
+          test -s app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Sign unchanged APK with throwaway TEST key - original key unavailable
+        run: |
+          set -euo pipefail
+          export REBUILD_TEST_PASSWORD="$(openssl rand -hex 24)"
+          KEY="$RUNNER_TEMP/realm-ai-v0391-test-only.p12"
+          keytool -genkeypair -noprompt -alias test -keyalg RSA -keysize 3072 -validity 90 -storetype PKCS12 -keystore "$KEY" -storepass "$REBUILD_TEST_PASSWORD" -keypass "$REBUILD_TEST_PASSWORD" -dname 'CN=Realm AI 0.39.1 Untouched Source Test,OU=Uninstall Required,O=VEILFORGE,C=US'
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$BT/apksigner" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+          INPUT='realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk'
+          "$BT/zipalign" -P 16 -f 4 "$INPUT" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$KEY" --ks-type PKCS12 --ks-key-alias test --ks-pass env:REBUILD_TEST_PASSWORD --key-pass env:REBUILD_TEST_PASSWORD --out Realm-AI-v0.39.1-ORIGINAL-CODE-TEST-ONLY.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --print-certs --verbose Realm-AI-v0.39.1-ORIGINAL-CODE-TEST-ONLY.apk > certificate-report.txt
+          "$BT/zipalign" -c -P 16 4 Realm-AI-v0.39.1-ORIGINAL-CODE-TEST-ONLY.apk
+          "$BT/aapt" dump badging Realm-AI-v0.39.1-ORIGINAL-CODE-TEST-ONLY.apk > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200020'" package-report.txt
+          if grep -qi '77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' certificate-report.txt; then
+            echo 'ERROR: Test key unexpected matches permanent production signer' >&2; exit 1
+          fi
+          sha256sum Realm-AI-v0.39.1-ORIGINAL-CODE-TEST-ONLY.apk > SHA256SUMS.txt
+          rm -f "$KEY"
+      - name: Verify no tracked app or bot files changed during the rebuild
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- realm-ai-phone-build/realm-ai-live-v021-overlay
+          echo 'PASS: no app, manifest, Java, Node or bot-source edits.'
+      - name: Publish exact-code rebuild - never claim install-over compatibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create realm-ai-v0391-untouched-code-test Realm-AI-v0.39.1-ORIGINAL-CODE-TEST-ONLY.apk SHA256SUMS.txt package-report.txt certificate-report.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Realm AI v0.39.1 Original Code Rebuild - TEST ONLY' --notes 'This APK was rebuilt from exactly the last source snapshot BEFORE separate test-app packaging. It has the ORIGINAL com.veilforge.realmagent.live application ID, original Microsoft authentication code, and no source or package-identity modifications. It uses a throwaway test signing key because the original permanent v0.38 signing key is unavailable. Android CANNOT update the installed v0.38 using this APK; installing would require uninstalling the existing package, which deletes local app data and sign-in cache. DO NOT uninstall your working v0.38 to test casually. This APK also cannot install alongside v0.38. Original release v0.38 remains available at https://github.com/timmytwopointoh/New-game-/releases/tag/realm-ai-live-038-follow-clearance.'
