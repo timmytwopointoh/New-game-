@@ -53,9 +53,9 @@ export function dirtStaircase(world,start,goal,{excluded=()=>false}={}){
 
 export class Climbing{
  constructor(world,report=()=>{}){this.world=world;this.report=report;this.builder=new Building(world,report);this.reset()}
- reset(){this.steps=new Map();this.current=null;this.placed=0;this.total=0;this.reason='';this.builder.reset()}
- prepare(stairs=[]){this.cancel();this.reset();this.gameMode=this.world.gameMode;for(const s of stairs){this.steps.set(key(s.cell),s.targets.map(p=>({...p})));this.total+=s.targets.length}}
- cancel(reason='Climbing stopped; confirmed dirt stays in the world.'){this.builder.cancel(reason);this.steps.clear();this.current=null}
+ reset(){this.steps=new Map();this.kinds=new Map();this.current=null;this.edge=null;this.placed=0;this.total=0;this.reason='';this.builder.reset()}
+ prepare(stairs=[]){this.cancel();this.reset();this.gameMode=this.world.gameMode;for(const s of stairs){this.steps.set(key(s.cell),s.targets.map(p=>({...p})));this.kinds.set(key(s.cell),s.kind||'stair');this.total+=s.targets.length}}
+ cancel(reason='Climbing stopped; confirmed dirt stays in the world.'){this.builder.cancel(reason);this.steps.clear();this.kinds.clear();this.current=null;this.edge=null}
  beforeStep(cell,now){
   const targets=this.steps.get(key(cell));if(!targets)return {waiting:false}
   if(this.gameMode!==this.world.gameMode||!this.world.movementVerified||!this.world.editModeVerified||this.world.inputLocks?.jump)return {waiting:true,error:'Climbing needs unchanged verified mode, build permission and unlocked jump controls.'}
@@ -64,13 +64,27 @@ export class Climbing{
    if(this.builder.state!=='confirmed')return {waiting:true,error:this.builder.reason||'Dirt step was not confirmed.'}
    this.placed++;targets.shift();this.current=null
   }
-  if(!targets.length){this.steps.delete(key(cell));return {waiting:false}}
+  if(!targets.length){this.steps.delete(key(cell));this.kinds.delete(key(cell));return {waiting:false}}
   if(!this.current){
    const result=this.builder.begin({shape:'block',origin:targets[0],material:'dirt'},now)
    if(!result.accepted)return {waiting:true,error:result.message}
-   this.current=targets[0];this.report(`Climbing: placing dirt step ${this.placed+1}/${this.total}; waiting for the server before jumping.`)
+   this.current=targets[0];this.report(`${this.kinds.get(key(cell))==='bridge'?'Bridging':'Climbing'}: placing dirt support ${this.placed+1}/${this.total}; waiting for the server before ${this.kinds.get(key(cell))==='bridge'?'crossing':'jumping'}.`)
   }
-  return {...this.builder.tick(now),waiting:true}
+  if(this.kinds.get(key(cell))==='bridge'&&!this.builder.job?.pending&&!this.builder.anchor(targets[0])){
+   // A bridge side face cannot be clicked from the centre of the bank. Creep
+   // just beyond its edge, with part of the body still on confirmed support.
+   const w=this.world,p=w.position,target=targets[0],source={x:Math.floor(p.x),y:cell.y,z:Math.floor(p.z)}
+   if(!this.edge){
+    if(Math.abs(source.x-cell.x)+Math.abs(source.z-cell.z)!==1||!w.walkable(source))return {waiting:true,error:'No supported bridge edge to approach.'}
+    const dx=cell.x-source.x,dz=cell.z-source.z
+    this.edge={x:source.x+.5+dx*.52,z:source.z+.5+dz*.52,y:p.y,started:now}
+   }
+   if(now-this.edge.started>5000)return {waiting:true,error:'Bridge edge movement was not confirmed; stopped.'}
+   if(Math.hypot(this.edge.x-p.x,this.edge.z-p.z)<.005)return {waiting:true,error:'Bridge face is not visible from the supported edge.'}
+   return {waiting:true,sneak:true,edgeApproach:this.edge}
+  }
+  this.edge=null
+  return {...this.builder.tick(now),waiting:true,sneak:this.kinds.get(key(cell))==='bridge'}
  }
  snapshot(){return {active:this.steps.size>0,placed:this.placed,total:this.total,placement:this.builder.snapshot()}}
 }

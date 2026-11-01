@@ -1,6 +1,6 @@
-# Realm AI Live v0.35 — single-block placement
+# Realm AI Live v0.36 — adaptive following
 
-Current source: package `com.veilforge.realmagent.live`, versionCode **200016**. See [placement update and test instructions](UPDATE-NOTES-v0.35.md), [review and remaining work](REVIEW-v0.34.md) and [release notes](UPDATE-NOTES-v0.34.md). The historical v021 directory is the canonical Live app.
+Current source: package `com.veilforge.realmagent.live`, versionCode **200017**. See [adaptive follow behavior and test instructions](UPDATE-NOTES-v0.36.md), [placement update and test instructions](UPDATE-NOTES-v0.35.md), [review and remaining work](REVIEW-v0.34.md) and [release notes](UPDATE-NOTES-v0.34.md). The historical v021 directory is the canonical Live app.
 
 # Historical v0.26 background
 

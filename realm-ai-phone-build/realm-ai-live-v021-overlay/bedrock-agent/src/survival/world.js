@@ -140,8 +140,14 @@ export class WorldView{
   if(Math.abs(a.x-b.x)+Math.abs(a.z-b.z)!==1||b.y-a.y!==1||!this.walkable(a)||!this.walkable(b))return false
   return [a,b].every(p=>this.airAt({...p,y:a.y+2})&&this.airAt({...p,y:a.y+3}))
  }
- canDropBetween(a,b){
-  return a.y-b.y===1&&Math.abs(a.x-b.x)+Math.abs(a.z-b.z)===1&&this.walkable(a)&&this.walkable(b)&&this.airAt({...b,y:a.y+1})
+ canDropBetween(a,b,{maxDrop=1}={}){
+  const limit=Math.min(5,Math.max(1,maxDrop)),from=this.supportHeight(a),to=this.supportHeight(b)
+  if(a.y-b.y<1||a.y-b.y>limit||Math.abs(a.x-b.x)+Math.abs(a.z-b.z)!==1||!this.walkable(a)||!this.walkable(b)||from===null||to===null||from-to>limit+.001||from<=to)return false
+  const health=this.attributes['minecraft:health'],damage=Math.max(0,Math.ceil(from-to)-3)
+  if(this.gameMode==='survival'&&damage>0&&(health===undefined||health-damage<=6))return false
+  // Inspect the entire landing column: missing terrain is never assumed clear.
+  for(let y=to;y<=from+.0001;y+=.1)if(!this.clearBody({x:b.x+.5,y:y+1.62,z:b.z+.5}))return false
+  return this.clearBody({x:b.x+.5,y:from+1.62,z:b.z+.5})
  }
  standPosition(){if(!this.position)return null;const p={x:Math.floor(this.position.x),y:Math.floor(this.position.y-1.62+.001),z:Math.floor(this.position.z)},feet=this.position.y-1.62
   const above={...p,y:p.y+1},h=this.supportHeight(above),at=this.supportHeight(p)

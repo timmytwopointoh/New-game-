@@ -1,7 +1,7 @@
 // Bounded A* over observed, supported, level walking cells. No digging or teleporting.
 const key=p=>`${p.x},${p.y},${p.z}`
 const metric=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z)+Math.abs(a.y-b.y)
-export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSteps=false}={}){
+export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSteps=false,maxDrop=1}={}){
  if(![start?.x,start?.y,start?.z,goal?.x,goal?.y,goal?.z].every(Number.isSafeInteger))return {ok:false,reason:'Use whole block coordinates.'}
  if(!allowSteps&&start.y!==goal.y)return {ok:false,reason:'This preview requires a level route. Enable step-aware navigation for jumps.'}
  if(metric(start,goal)>maxDistance)return {ok:false,reason:`Destination exceeds the ${maxDistance}-block walking limit.`}
@@ -18,11 +18,11 @@ export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSte
    return {ok:true,path:path.reverse(),expanded:visited.size}
   }
   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
-   for(const dy of (allowSteps?[0,1,-1]:[0])){
-    const p={x:current.p.x+dx,y:current.p.y+dy,z:current.p.z+dz},pk=key(p),g=current.g+(dy?1.6:1)
+   for(const dy of (allowSteps?[0,1,...Array.from({length:Math.min(5,Math.max(1,Math.floor(maxDrop)))},(_,i)=>-i-1)]:[0])){
+    const p={x:current.p.x+dx,y:current.p.y+dy,z:current.p.z+dz},pk=key(p),g=current.g+(dy?1.6+Math.max(0,-dy-1)*.4:1)
     if(visited.has(pk)||metric(start,p)>maxDistance||!world.walkable(p)||g>=(cost.get(pk)??Infinity))continue
     if(dy===1&&!world.canJumpBetween?.(current.p,p))continue
-    if(dy===-1&&!world.canDropBetween?.(current.p,p))continue
+    if(dy<0&&!world.canDropBetween?.(current.p,p,{maxDrop}))continue
     cost.set(pk,g);parent.set(pk,current.p);open.push({p,g,f:g+metric(p,goal)})
    }
   }

@@ -174,7 +174,7 @@
         "type": "player"
       }
     ],
-    "note": ""
+    "note": "Follows with normal walking, one-block jumps and detours. May use hotbar dirt for short verified stairs or bridges, or mine reachable natural obstacles when no route is available. Maximum planned drop is 5 blocks, only with a known clear landing and enough health; 6-block drops are refused. Existing builds and containers stay protected. Stop cancels movement, building and mining immediately."
   },
   {
     "id": "route",

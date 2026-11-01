@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200017,
+  "issuedAt": 1793501230547,
+  "expiresAt": 1794106030547,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-036-adaptive-follow/Realm-AI-Live.apk",
+  "size": 110199029,
+  "sha256": "e7c58a0413ebd58089fca01f009e1895c3a7312de9e65c653e0674cb7dda7f44",
+  "notes": "Adaptive following: jumps and detours, short confirmed dirt bridges/stairs, bounded natural-obstacle mining, maximum five-block planned drops with health and terrain checks. Phone testing required.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

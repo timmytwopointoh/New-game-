@@ -26,10 +26,11 @@ test('only server position samples can mark stuck; missing feedback is not proof
  assert(p.stalled(2000));assert.equal(p.stalled(4000),false)
  p.reset();for(const [time,x] of [[1000,0],[1500,.4],[2000,.8]]){p.commanded(.4);p.observe({x,y:64,z:0},time)}assert.equal(p.feedback,'progressing')
 })
-test('follow prefers jump; solo prefers detour; follow never mines',()=>{
+test('follow prefers jump; solo prefers detour; follow mines only when authorized and no jump/detour exists',()=>{
  const mine={ok:true};assert.equal(recoveryDecision({mode:'follow',canJump:true,hasDetour:true,mine,allowMining:true}).action,'jump')
  assert.equal(recoveryDecision({mode:'solo',canJump:true,hasDetour:true,mine,allowMining:true}).action,'detour')
- assert.equal(recoveryDecision({mode:'follow',mine,allowMining:true}).action,'pause')
+ assert.equal(recoveryDecision({mode:'follow',mine,allowMining:true}).action,'mine')
+ assert.equal(recoveryDecision({mode:'follow',mine,allowMining:false}).action,'pause')
  assert.equal(recoveryDecision({mode:'solo',mine,allowMining:false}).action,'pause')
  assert.equal(recoveryDecision({mode:'solo',mine,allowMining:true}).action,'mine')
  assert.equal(recoveryDecision({mode:'follow',canJump:true,attempts:3}).action,'pause')

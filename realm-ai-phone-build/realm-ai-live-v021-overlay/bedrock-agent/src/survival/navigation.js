@@ -3,6 +3,7 @@ import {ProgressTracker,miningAssessment,recoveryDecision} from './obstacles.js'
 import {Mining} from './mining.js'
 import {Building} from './building.js'
 import {Climbing,dirtStaircase} from './climbing.js'
+import {dirtBridge} from './bridging.js'
 import {nearbyHostiles,safestEscape} from './threat-defense.js'
 import {meleeTarget,meleePacket} from './combat.js'
 import {Pickup,nearestDrop} from './pickup.js'
@@ -41,12 +42,12 @@ export class Navigation{
   if(before&&Math.hypot(before.x-p.position.x,before.y-p.position.y,before.z-p.position.z)>4){this.stop('Large server correction; work paused instead of jumping or digging.');this.progress.reset();return}
   this.progress.observe(p.position,now)
   if(this.progress.feedback==='progressing'&&this.lastRecoveryPosition&&flatDistance(p.position,this.lastRecoveryPosition)>=1){this.recoveryAttempts=0;this.lastRecoveryPosition=null}
-  if(this.job&&!this.flight&&this.progress.stalled(now))this.recover('Server feedback shows no forward progress.',now)
+  if(this.job&&!this.flight&&!this.climbing.current&&!this.building.job&&this.progress.stalled(now))this.recover('Server feedback shows no forward progress.',now)
  }
- routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false,avoidHostiles=true}={}){
+ routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false,avoidHostiles=true,maxDrop=this.job?.kind==='follow'?5:1,allowBridge=this.job?.kind==='follow'}={}){
   const now=Date.now(),w=this.world
-  const routeWorld={walkable:p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b)}
-  const plan=findPath(routeWorld,start,goal,{allowSteps,maxNodes});return plan.ok||!allowDirt||!start?plan:dirtStaircase(w,start,goal,{excluded:p=>this.blocked.get(key(p))>now})||plan
+  const routeWorld={walkable:p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
+  const plan=findPath(routeWorld,start,goal,{allowSteps,maxNodes,maxDrop});return plan.ok||!allowDirt||!start?plan:dirtStaircase(w,start,goal,{excluded:p=>this.blocked.get(key(p))>now})||(allowBridge?dirtBridge(w,start,goal,{excluded:p=>this.blocked.get(key(p))>now,maxDrop}):null)||plan
  }
  assignRoute(plan){this.climbing.prepare(plan.stairs);this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
  movementBlock(){
@@ -86,12 +87,12 @@ export class Navigation{
  follow(name){
   const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
-  this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.job={kind:'follow',name,allowMining:false};this.state='following';this.lastFollowPlan=0
+  this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.job={kind:'follow',name,allowMining:true};this.state='following';this.lastFollowPlan=0
   this.updateFollow(Date.now(),true)
   return {accepted:true,queued:!!this.route?.length,message:`${this.state}: ${name}. ${this.reason||'Route prepared; server movement remains unverified.'}`}
  }
  updateFollow(now,force=false){
-  if(this.job?.kind!=='follow'||this.flight||this.climbing.steps.size)return
+  if(this.job?.kind!=='follow'||this.flight||this.climbing.steps.size||this.mining.job||this.clearing)return
   const player=[...this.world.players.values()].find(p=>p.name.toLowerCase()===this.job.name.toLowerCase())
   if(!player){this.route=null;this.state='waiting-for-player';this.reason='Waiting for that player to be visible in the loaded Realm.';return}
   const start=this.world.standPosition(),target=player.position
@@ -100,16 +101,18 @@ export class Navigation{
   if(!force&&now-(this.lastFollowPlan||0)<1000)return
   this.lastFollowPlan=now
   const candidates=[]
-  for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(let dy=-4;dy<=4;dy++){
+  for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(let dy=-5;dy<=5;dy++){
    const p={x:Math.floor(target.x)+dx,y:start.y+dy,z:Math.floor(target.z)+dz}
    if(this.world.walkable(p))candidates.push(p)
   }
   candidates.sort((a,b)=>Math.hypot(a.x-target.x,a.z-target.z)+Math.abs(a.y-(target.y-1.62))-Math.hypot(b.x-target.x,b.z-target.z)-Math.abs(b.y-(target.y-1.62)))
+  if(candidates.length){const goal=candidates[0];if(this.lastFollowGoal!==key(goal)){this.lastFollowGoal=key(goal);this.recoveryAttempts=0}this.job.goal=goal}
   for(const goal of candidates.slice(0,4)){
    const plan=this.routeTo(goal,start,{allowSteps:true,maxNodes:768,allowDirt:true})
    if(plan.ok){this.job.goal=goal;this.assignRoute(plan);return}
   }
-  this.route=null;const terrainKnown=this.world.terrainKnown({x:target.x,y:target.y,z:target.z});this.state=terrainKnown?'blocked':'waiting-for-terrain';this.reason=terrainKnown?'Observed obstacles prevent a verified route; waiting for player movement.':'Terrain near the player is unknown; requesting terrain before planning a route.';if(!terrainKnown)try{this.world.requestNearby(this.client)}catch{}
+  if(candidates.length&&this.recoveryAttempts<3&&this.recover('No open route to the followed player.',now))return
+  this.route=null;const terrainKnown=this.world.terrainKnown({x:target.x,y:target.y,z:target.z});this.state=terrainKnown?'blocked':'waiting-for-terrain';this.reason=terrainKnown?'No safe jump, dirt route or permitted mining route is available; waiting for terrain or player movement.':'Terrain near the player is unknown; requesting terrain before planning a route.';if(!terrainKnown)try{this.world.requestNearby(this.client)}catch{}
  }
  mine(position,options={}){
   if(this.world.attributes['minecraft:health']===0||this.isRespawning?.())return {accepted:false,queued:false,message:'Respawn must be confirmed before mining.'}
@@ -202,13 +205,13 @@ export class Navigation{
   if(!dx&&!dz)return null
   const p={x:a.x+(Math.abs(dx)>=Math.abs(dz)?Math.sign(dx):0),y:a.y,z:a.z+(Math.abs(dx)<Math.abs(dz)?Math.sign(dz):0)}
   const foot=this.world.block(p),head=this.world.block({...p,y:p.y+1})
-  if(foot&&['air','cave_air','void_air'].includes(foot.name)&&head&&!['air','cave_air','void_air'].includes(head.name))p.y++
+  if(head&&!['air','cave_air','void_air'].includes(head.name)&&(foot&&['air','cave_air','void_air'].includes(foot.name)||!this.world.visible(p)&&this.world.visible({...p,y:p.y+1})))p.y++
   return p
  }
  recover(reason,now=Date.now()){
-  if(!this.job||this.flight||this.mining.job)return false
+  if(!this.job||this.flight||this.mining.job||this.climbing.current||this.building.job)return false
   const a=this.world.standPosition(),obstacle=this.obstacleAhead(),goal=this.job.goal
-  if(!a||!obstacle||!goal){this.stop(reason);return false}
+  if(!a||!obstacle||!goal){if(this.job.kind==='follow'){this.route=null;this.state='blocked';this.reason=reason}else this.stop(reason);return false}
   const landing={...obstacle,y:a.y+1},canJump=this.world.canJumpBetween?.(a,landing)
   // Temporarily exclude the troublesome cell even when the local block cache says air.
   this.blocked.set(key(obstacle),now+30000);while(this.blocked.size>32)this.blocked.delete(this.blocked.keys().next().value)
@@ -225,12 +228,12 @@ export class Navigation{
    if(result.accepted){this.route=null;this.state='mining-obstacle';this.clearing=obstacle;return true}
    this.note('pause',result.message)
   }
-  this.stop(this.reason);return false
+  if(this.job?.kind==='follow'){this.route=null;this.state='blocked'}else this.stop(this.reason);return false
  }
  beginFlight(target,kind,now=Date.now()){
   const a=this.world.standPosition()
   if(!a||!this.world.grounded())return false
-  if(kind==='jump'?!this.world.canJumpBetween?.(a,target):!this.world.canDropBetween?.(a,target))return false
+  if(kind==='jump'?!this.world.canJumpBetween?.(a,target):!this.world.canDropBetween?.(a,target,{maxDrop:this.job?.kind==='follow'?5:1}))return false
   this.yaw=Math.atan2(-(target.x+.5-this.world.position.x),target.z+.5-this.world.position.z)*180/Math.PI
   this.flight={target:{...target},kind,vy:kind==='jump'?.42:0,started:now,first:true};this.state=kind==='jump'?'jumping':'stepping-down';return true
  }
@@ -240,15 +243,16 @@ export class Navigation{
   if(now-f.started>2000){this.flight=null;this.stop('Jump/drop did not finish; stopped instead of retrying blindly.');return zero}
   const landing=f.target,dx=landing.x+.5-p.x,dz=landing.z+.5-p.z,d=Math.hypot(dx,dz),speed=Math.min(.1,d)
   const desired={x:p.x+(d?dx/d*speed:0),y:p.y+f.vy,z:p.z+(d?dz/d*speed:0)},floorY=(this.world.supportHeight(landing)??landing.y)+1.62
+  const clearTravel=to=>{const distance=Math.hypot(to.x-p.x,to.y-p.y,to.z-p.z),steps=Math.max(1,Math.ceil(distance/.05));for(let i=1;i<=steps;i++)if(!this.world.clearBody({x:p.x+(to.x-p.x)*i/steps,y:p.y+(to.y-p.y)*i/steps,z:p.z+(to.z-p.z)*i/steps}))return false;return true}
   if(f.vy<=0&&desired.y<=floorY&&Math.abs(desired.x-(landing.x+.5))<.35&&Math.abs(desired.z-(landing.z+.5))<.35&&this.world.walkable(landing)){
    desired.y=floorY
-   if(this.world.clearBody(desired)){const delta={x:desired.x-p.x,y:desired.y-p.y,z:desired.z-p.z};this.world.position=desired;this.flight=null;this.state='walking';if(this.afterJumpGoal){const goal=this.afterJumpGoal;this.afterJumpGoal=null;const plan=this.routeTo(goal,this.world.standPosition(),{allowSteps:true,allowDirt:true});if(plan.ok)this.assignRoute(plan);else this.route=null}return {delta,move:{x:0,z:1},flags:[]}}
+   if(clearTravel(desired)){const delta={x:desired.x-p.x,y:desired.y-p.y,z:desired.z-p.z};this.world.position=desired;this.flight=null;this.state='walking';if(this.afterJumpGoal){const goal=this.afterJumpGoal;this.afterJumpGoal=null;const plan=this.routeTo(goal,this.world.standPosition(),{allowSteps:true,allowDirt:true});if(plan.ok)this.assignRoute(plan);else this.route=null}return {delta,move:{x:0,z:1},flags:[]}}
   }
   let next=desired
-  if(!this.world.clearBody(next)){
+  if(!clearTravel(next)){
    const vertical={...p,y:desired.y},horizontal={...p,x:desired.x,z:desired.z}
-   if(this.world.clearBody(vertical))next=vertical
-   else if(f.kind==='drop'&&this.world.clearBody(horizontal)){next=horizontal;f.vy=0}
+   if(clearTravel(vertical))next=vertical
+   else if(f.kind==='drop'&&clearTravel(horizontal)){next=horizontal;f.vy=0}
    else{this.flight=null;this.stop('Jump clearance changed; stopped.');return zero}
   }
   const flags=f.first&&f.kind==='jump'?['start_jumping','jump_down','jumping']:f.kind==='jump'?['jumping']:[];f.first=false
@@ -259,6 +263,7 @@ export class Navigation{
   const active=!!this.job||this.route!==null||!!this.flight||!!this.mining.job
   if(this.flight)this.vy=this.flight.vy
   this.route=null;this.job=null;this.flight=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
+  if(this.edgeSneaking){this.pendingFlags.push('stop_sneaking');this.edgeSneaking=false}
   this.pickup.stop();this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason);this.survey=null
   // Send neutral input now, including abort_break, rather than waiting for the next timer tick.
   if(active&&this.spawned&&this.client&&!this.stopping){this.stopping=true;try{this.step(Date.now())}finally{this.stopping=false}}
@@ -298,7 +303,7 @@ export class Navigation{
   if(this.job?.kind==='solo'&&now-this.startedAt>60000)this.stop('Travel time limit reached.')
   if(this.clearing&&!this.mining.job){
    const goal=this.job?.goal
-   if(this.mining.result==='confirmed'&&goal){this.blocked.delete(key(this.clearing));this.clearing=null;const plan=this.routeTo(goal);if(plan.ok)this.assignRoute(plan);else this.recover(plan.reason,now)}
+   if(this.mining.result==='confirmed'&&goal){this.blocked.delete(key(this.clearing));this.clearing=null;this.recoveryAttempts=0;const plan=this.routeTo(goal,this.world.standPosition(),{allowDirt:true});if(plan.ok)this.assignRoute(plan);else this.recover(plan.reason,now)}
    else if(this.mining.result==='cancelled')this.stop(this.mining.reason)
   }
   if(!this.world.terrainKnown(this.world.position)){
@@ -314,7 +319,11 @@ export class Navigation{
   let delta={x:0,y:0,z:0},move={x:0,z:0},flags=[]
   let construction=this.route?.length?this.climbing.beforeStep(this.route[0],now):{}
   if(construction.error){this.stop(construction.error);construction={waiting:true}}
-  if(this.flight){({delta,move,flags}=this.flightStep(now))}
+  if(construction.edgeApproach){
+   const p=this.world.position,e=construction.edgeApproach,d=Math.hypot(e.x-p.x,e.z-p.z),speed=Math.min(.035,d),next={x:p.x+(d?(e.x-p.x)/d*speed:0),y:p.y,z:p.z+(d?(e.z-p.z)/d*speed:0)}
+   if(!this.world.clearBody(next)||!this.world.grounded(next)){this.stop('Bridge edge lost collision support; stopped.');construction={waiting:true}}
+   else{delta={x:next.x-p.x,y:0,z:next.z-p.z};this.world.position=next;move={x:0,z:1};this.state='approaching-bridge-edge'}
+  }else if(this.flight){({delta,move,flags}=this.flightStep(now))}
   else if(this.route?.length&&!construction.waiting&&!this.mining.job&&this.world.grounded()){
    const target=this.route[0],a=this.world.standPosition(),p=this.world.position
    if(target.y!==a.y){
@@ -334,6 +343,7 @@ export class Navigation{
     }
    }
   }
+  if(construction.sneak){flags.push('sneaking','sneak_down');if(!this.edgeSneaking)flags.push('start_sneaking');this.edgeSneaking=true}else if(this.edgeSneaking){flags.push('stop_sneaking');this.edgeSneaking=false}
   if(move.z){this.progress.commanded(Math.hypot(delta.x,delta.z));if(delta.x||delta.z)this.yaw=Math.atan2(-delta.x,delta.z)*180/Math.PI}
   if(!this.flight){
    const p=this.world.position
@@ -390,5 +400,5 @@ export class Navigation{
   try{this.onResourceTick?.(now)}catch(e){this.reportRuntimeError?.(e);this.stop('Internal resource task error.');this.onResourceError?.(e)}
  }
  snapshot(){return {state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
- detach(){if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
+ detach(){if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
 }

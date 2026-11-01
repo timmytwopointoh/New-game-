@@ -1,0 +1,1 @@
+Owner requested follow jumping, dirt recovery, maximum five-block falls and obstacle mining. Publish locally compiled, same-key signed test APK. No hosted compilation or private key upload.

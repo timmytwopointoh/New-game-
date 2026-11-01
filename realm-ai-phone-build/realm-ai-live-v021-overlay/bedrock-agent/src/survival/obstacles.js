@@ -57,8 +57,8 @@ export function recoveryDecision({mode,canJump=false,hasDetour=false,mine=null,a
  if(attempts>=3)return {action:'pause',reason:'Recovery attempt limit reached.'}
  if(mode==='follow'&&canJump)return {action:'jump',reason:'Following: one-block obstacle, known landing and headroom.'}
  if(hasDetour)return {action:'detour',reason:mode==='follow'?'Jump is unavailable; taking another route.':'Solo travel: taking another route first.'}
- if(mode!=='follow'&&allowMining&&mine?.ok)return {action:'mine',reason:'No route around; target is within the current clearing job and tool budget.'}
- return {action:'pause',reason:mode==='follow'?'No clear jump or route; never mining while following.':mine?.reason||'No safe detour or authorized mining option.'}
+ if(allowMining&&mine?.ok)return {action:'mine',reason:'No route around; target is within the current clearing job and tool budget.'}
+ return {action:'pause',reason:mode==='follow'?'No safe jump, dirt route or permitted natural obstacle to clear; waiting.':mine?.reason||'No safe detour or authorized mining option.'}
 }
 export class ProgressTracker{
  constructor(){this.reset()}
