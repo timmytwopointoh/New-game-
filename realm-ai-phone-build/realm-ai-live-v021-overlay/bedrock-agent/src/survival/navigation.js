@@ -52,12 +52,12 @@ export class Navigation{
   const routeWorld={walkable:p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
   // Prefer dry routes, but consider short, observed shallow-water crossings.
   const dry=findPath(routeWorld,start,goal,{allowSteps,maxNodes,maxDrop})
-  if(dry.ok)return dry
   if(allowWater){
    const wetWorld={...routeWorld,walkable:p=>w.walkable(p,{avoidHostiles,allowWater:true})&&!(this.blocked.get(key(p))>now),shallowWater:p=>w.shallowWater(p)}
    const wet=findPath(wetWorld,start,goal,{allowSteps,maxNodes,maxDrop,waterBudget:8,waterPenalty:3})
-   if(wet.ok)return wet
+   if(wet.ok&&(!dry.ok||wet.totalCost<dry.totalCost*.75))return wet
   }
+  if(dry.ok)return dry
   return !allowDirt||!start?dry:dirtStaircase(w,start,goal,{maxDrop,excluded:p=>this.blocked.get(key(p))>now})||(allowBridge?dirtBridge(w,start,goal,{excluded:p=>this.blocked.get(key(p))>now,maxDrop}):null)||dry
  }
  assignRoute(plan){this.routeAlignment=null;const start=plan.path[0],next=plan.path[1],p=this.world.position;if(start&&next&&p){const axis=next.x!==start.x?'z':'x',value=start[axis]+.5;if(Math.abs(p[axis]-value)>.025)this.routeAlignment={axis,value}}this.climbing.prepare(plan.stairs);this.route=plan.path.slice(1);if(this.job)this.job.waterRouting=!!plan.waterCrossing;this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
