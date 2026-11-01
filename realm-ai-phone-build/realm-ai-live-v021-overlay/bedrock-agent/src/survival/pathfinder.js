@@ -16,7 +16,7 @@ export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSte
   if(key(current.p)===key(goal)){
    const path=[current.p];let at=ck
    while(parent.has(at)){const p=parent.get(at);path.push(p.p);at=p.parent}
-   return {ok:true,path:path.reverse(),expanded:visited.size,waterCrossing:path.some(p=>world.shallowWater?.(p))}
+   return {ok:true,path:path.reverse(),expanded:visited.size,totalCost:current.g,waterCrossing:path.some(p=>world.shallowWater?.(p))}
   }
   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
    for(const dy of (allowSteps?[0,1,...Array.from({length:Math.min(5,Math.max(1,Math.floor(maxDrop)))},(_,i)=>-i-1)]:[0])){
