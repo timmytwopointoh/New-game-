@@ -9,9 +9,9 @@ const airNames=new Set(['air','cave_air','void_air'])
 const isWater=name=>/^(?:flowing_)?water$/.test(name||'')
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.blockStates=new Map();this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
+ reset(){this.terrainRevision=0;this.visibilityCache=null;this.blockStates=new Map();this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
  initialize(packet,version='1.26.60'){
-  this.blockStates.clear();this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
+  this.terrainRevision++;this.visibilityCache=null;this.blockStates.clear();this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.ownedPlacements.clear();this.sections.clear();this.biomeStores.clear();this.biomeNames.clear();this.biomeDecodeErrors=0;this.updates.clear();this.entities.clear();this.players.clear();this.drops.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryProtocol.reset();this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null
@@ -26,6 +26,7 @@ export class WorldView{
  }
  runtime(id){return this.registry?.blocksByRuntimeId?.[id|0]||this.registry?.blocksByRuntimeId?.[id>>>0]}
  save(x,z,section){
+  this.terrainRevision++
   const k=`${x},${section.y},${z}`;this.sections.delete(k);this.sections.set(k,section)
   while(this.sections.size>192)this.sections.delete(this.sections.keys().next().value)
  }
@@ -198,6 +199,16 @@ export class WorldView{
   return true
  }
  visible(p){
+  const at=this.position;if(!at)return false
+  let cache=this.visibilityCache
+  if(!cache||cache.x!==at.x||cache.y!==at.y||cache.z!==at.z||cache.revision!==this.blockRevision||cache.terrain!==this.terrainRevision||cache.enabled!==this.enabled||cache.dimension!==this.dimension){cache=this.visibilityCache={...at,revision:this.blockRevision,terrain:this.terrainRevision,enabled:this.enabled,dimension:this.dimension,values:new Map()}}
+  const id=`${p.x},${p.y},${p.z}`
+  if(cache.values.has(id))return cache.values.get(id)
+  const result=this.rayVisible(p);cache.values.set(id,result)
+  if(cache.values.size>4096)cache.values.delete(cache.values.keys().next().value)
+  return result
+ }
+ rayVisible(p){
   if(!this.position)return false
   const target={x:p.x+.5,y:p.y+.5,z:p.z+.5},distance=Math.hypot(target.x-this.position.x,target.y-this.position.y,target.z-this.position.z)
   const steps=Math.ceil(distance*5)

@@ -33,10 +33,31 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
   let stackReceived=false, finished=false, failed=false
   let totalBytes=0, skippedOptional=0, activeCdn=0
   const cdnQueue=[]
+  // The bundled client schedules radius after 500ms, not after downloads.
+  // Strict Realms reject this gameplay packet during the pack exchange.
+  const originalQueue=client.queue,originalWrite=client.write
+  let gameStarted=false,pendingRadius=null,radiusDeferred=0,cacheQueued=false
+  const canRequestTerrain=()=>finished&&gameStarted&&!failed
+  function gate(method,queued=false){return function(name,packet,...args){
+    if(queued&&name==='client_cache_status'){if(cacheQueued)return;cacheQueued=true}
+    if(name==='request_chunk_radius'&&!canRequestTerrain()){pendingRadius={method,packet,args};radiusDeferred++;return}
+    return method.call(this,name,packet,...args)
+  }}
+  const gatedWrite=gate(originalWrite),gatedQueue=originalQueue?gate(originalQueue,true):null
+  client.write=gatedWrite;if(gatedQueue)client.queue=gatedQueue
+  function flushRadius(){if(pendingRadius&&canRequestTerrain()){const request=pendingRadius;pendingRadius=null;(originalQueue||originalWrite).call(client,'request_chunk_radius',request.packet,...request.args)}}
+  const onStartGame=()=>{gameStarted=true;flushRadius()}
+  client.on('start_game',onStartGame)
+  // createClient installs its own info listener asynchronously after this one.
+  // Announce cache policy FIRST and suppress the later queued duplicate.
+  const cacheFirst=()=>{if(gatedQueue)client.queue('client_cache_status',{enabled:false})}
+  client.prependListener('resource_packs_info',cacheFirst)
   const cancellation = new AbortController()
   const emit = (stage, message, done=0, total=packs.size) => report({stage,message,done,total})
   const response = (name,ids=[]) => {
-    client.write('resource_pack_client_response', {
+    // Keep the response behind the library's queued client_cache_status.
+    const send=typeof client.queue==='function'?client.queue:client.write
+    send.call(client,'resource_pack_client_response', {
       response_status:name,
       // Modern Bedrock's response text differs from Prismarine enum labels.
       // Variant tags are 0..3; wire response strings are lowercase (Gophertunnel reference).
@@ -71,6 +92,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     if([...packs.values()].some(p=>!p.ready))return
     finished=true
     response('completed')
+    flushRadius()
     emit('packs-ready',`Realm pack handshake completed (${packs.size} packs)`,packs.size)
   }
   function pumpCdn(){
@@ -188,7 +210,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>cancellation.abort())
-  return {snapshot:()=>({policy:'required-only',skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'required-only',radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
+    pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
+    if(client.write===gatedWrite)client.write=originalWrite
+    if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
     cancellation.abort()
     for(const p of packs.values()){
       if(p.fd!==undefined){try{fs.closeSync(p.fd)}catch{}}

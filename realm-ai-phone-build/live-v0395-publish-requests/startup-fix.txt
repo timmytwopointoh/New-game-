@@ -1,0 +1,1 @@
+Publish locally compiled and permanent-key signed startup fix. Public bytes only; no hosted compilation.

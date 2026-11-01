@@ -1,0 +1,15 @@
+Realm AI Live v0.39.5 — pack ordering and movement-loop timing
+
+Package com.veilforge.realmagent.live, versionCode 200024. Same permanent 77694D4F certificate, Switch authentication, saved sessions, language/definition fixes and required-only downloads. Install over Live; do not uninstall or reset login.
+
+Owner evidence: v0.39.4 report has a pack-request disconnect with unexpected_packet, zero pack headers/chunks, and earlier successful Survival spawn samples. Screenshot also shows repeated “Phone paused; work stopped” during quarry dirt. The report alone does not identify the rejected outgoing packet or measure CPU time.
+
+Pack ordering: the preserved bedrock-protocol library schedules request_chunk_radius 500ms after resource_packs_info even when required downloads have not completed. Gate both queued and direct radius requests until the pack handshake is complete AND server start_game has arrived; retain only the latest deferred radius. Send client_cache_status once at the front of resource-info handlers, suppress the later library duplicate, and queue pack responses in order. Restore wrappers and discard deferred work on cleanup. No native/dependency/auth changes. Required-only selection, byte/hash checks, two concurrent CDN transfers and waiting for every required pack remain.
+
+False pause: movement-loop pause detection used time since the previous tick started, so synchronous scanning/pathfinding could cancel its own quarry job as if Android had suspended the app. Subtract the measured previous tick work before checking the existing 500ms outside-loop gap. A real detected pause cancels high-level task producers and the queue before neutral input so they cannot recreate a stopped job. Stop, death/mode checks, gravity and authoritative position reconciliation remain.
+
+Scanning: reuse at most 4,096 terrain-ray visibility results across repeated scans at the exact same pose/terrain revision. Block updates, received sections, position, dimension and view-state changes invalidate this cache; unknown terrain never becomes visible by assumption. Runtime trace adds previous/max work duration and outside-loop scheduling gap, allowing later reports to distinguish processing delays from actual pauses.
+
+Validation: 396 Node tests and 53 Android tests passed. New tests reproduce the early-radius sequence for required/empty packs, packet/cache FIFO ordering, cleanup with a deferred radius, an expensive previous tick, real suspension without producer restart and visibility invalidation by actual block updates. Exact signed APK source/native/dependency verification passed. These tests establish local regressions, not live acceptance by the new Realm.
+
+Phone test: install, stop/start the service once, wait for required downloads, and retry quarry dirt. If the Realm still rejects the join, export a fresh report; do not repeatedly clear authentication or change the Switch identity. Persistent unexpected_packet may require another protocol trace rather than simply extending download timeouts.

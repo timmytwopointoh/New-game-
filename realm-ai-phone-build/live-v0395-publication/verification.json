@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200024,
+  "issuedAt": 1793525139257,
+  "expiresAt": 1794129939257,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0395-pack-order-and-timing/Realm-AI-Live.apk",
+  "size": 110253614,
+  "sha256": "e3e8b829e1b3c7113f9a8a23fa243a74c7c0dd3aba41a036af74d01bc9affebf",
+  "notes": "Fix pack/cache/terrain packet ordering and false pause cancellations; preserve the permanent key and saved Switch login.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

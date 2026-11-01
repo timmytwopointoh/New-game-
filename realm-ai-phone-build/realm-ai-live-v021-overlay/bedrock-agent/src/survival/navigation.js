@@ -373,15 +373,17 @@ export class Navigation{
  }
  step(now=Date.now()){
   if(this.inStep)return;this.inStep=true
+  const workStarted=Date.now()
   try{this.inputStep(now)}
   catch(e){
    if(now-(this.lastStepFailure||0)>5000){this.lastStepFailure=now;this.reportRuntimeError?.(e);this.report('Movement engine encountered an error and stopped the current action. Export a Bug report ZIP for its source location.')}
    try{this.stop('Movement input failed; no unverified action should continue.',false)}catch{}
-  }finally{this.inStep=false}
+  }finally{this.lastWorkDurationMs=Math.max(0,Date.now()-workStarted);this.maxWorkDurationMs=Math.max(this.maxWorkDurationMs||0,this.lastWorkDurationMs);this.inStep=false}
  }
  inputStep(now=Date.now()){
   if(!this.spawned||!this.client||!this.world.position)return
-  if(now-this.lastInputAt>500&&this.lastInputAt&&(this.job||this.flight))this.stop('Phone paused; work stopped.')
+  this.lastSchedulingGapMs=this.lastInputAt?Math.max(0,now-this.lastInputAt-(this.lastWorkDurationMs||0)):0
+  if(this.lastSchedulingGapMs>500&&this.lastInputAt&&(this.job||this.flight)){const reason='Phone paused outside the movement loop; work stopped.';this.onSchedulingPause?.(reason);this.stop(reason)}
   this.lastInputAt=now
   if(this.checkRespawn?.(now)){
    this.externalMotion=null;this.vy=0
