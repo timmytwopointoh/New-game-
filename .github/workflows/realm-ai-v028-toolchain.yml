@@ -42,6 +42,19 @@ jobs:
               assert 'classes2.dex' in z.namelist()
           print('Base APK ZIP and ARM64 runtime verified')
           PY
+      - name: Include Linux zipalign runtime dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          LIB="$(find "$SDK" /usr/local/lib /usr/lib -name 'libc++.so' -type f -print -quit 2>/dev/null || true)"
+          if [ -z "$LIB" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y libc++-dev
+            LIB="$(find /usr/lib -name 'libc++.so' -print -quit)"
+          fi
+          test -n "$LIB"
+          cp -L "$LIB" compiler/android/libc++.so
       - uses: actions/upload-artifact@v4
         with:
           name: realm-v028-private-local-compiler-inputs
