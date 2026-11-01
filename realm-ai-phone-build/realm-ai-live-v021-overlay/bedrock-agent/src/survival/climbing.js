@@ -6,7 +6,7 @@ const full=b=>b?.shapes?.some(q=>q.every((v,i)=>v===(i<3?0:1)))
 
 // Preview a small supported dirt staircase in a separate view. Never change
 // the real world cache: only server block updates may do that.
-export function dirtStaircase(world,start,goal,{excluded=()=>false}={}){
+export function dirtStaircase(world,start,goal,{excluded=()=>false,maxDrop=1}={}){
  if(!world.editModeVerified||world.inputLocks?.jump||world.abilityState?.effective.build===false||!world.inventoryKnown)return null
  const builder=new Building(world),stock=builder.inventory('dirt').reduce((n,[,v])=>n+v.count,0)
  if(!stock)return null
@@ -20,7 +20,7 @@ export function dirtStaircase(world,start,goal,{excluded=()=>false}={}){
   const prefix=findPath(world,start,base,{allowSteps:true,maxNodes:128,maxDistance:8});if(!prefix.ok||prefix.path.some(excluded))continue
   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])for(let rise=2;rise<=4;rise++){
    const ledge={x:base.x+dx*rise,y:base.y+rise,z:base.z+dz*rise}
-   if(excluded(ledge)||!world.walkable(ledge)||Math.abs(ledge.y-goal.y)>Math.abs(start.y-goal.y)+1)continue
+   if(excluded(ledge)||!world.walkable(ledge)||Math.abs(ledge.y-goal.y)>(maxDrop>1?maxDrop:Math.abs(start.y-goal.y)+1))continue
    if(++trials>24)return null
    const added=new Map(),view=Object.create(world),stairs=[],steps=[]
    view.block=(p,layer=0)=>!layer&&added.has(key(p))?world.Block.fromStateId(dirt.defaultState,0):world.block(p,layer)
@@ -44,7 +44,7 @@ export function dirtStaircase(world,start,goal,{excluded=()=>false}={}){
     steps.push(cell);previous=cell
    }
    if(!valid||!added.size||world.gameMode!=='creative'&&added.size>stock||!view.canJumpBetween(previous,ledge))continue
-   const suffix=findPath(view,ledge,goal,{allowSteps:true,maxNodes:768})
+   const suffix=findPath(view,ledge,goal,{allowSteps:true,maxNodes:768,maxDrop})
    if(suffix.ok)return {ok:true,path:[...prefix.path,...steps,...suffix.path],stairs,dirtRequired:added.size,expanded:prefix.expanded+suffix.expanded}
   }
  }

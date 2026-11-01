@@ -35,8 +35,9 @@ export class Building{
   if(this.job)return {accepted:false,queued:false,message:'A building job is already active.'}
   const denied=this.check();if(denied)return {accepted:false,queued:false,message:denied}
   let design;try{design=blueprint(descriptor)}catch(e){return {accepted:false,queued:false,message:e.message}}
+  const internalStructure=descriptor.internalStructure===true&&['chest','crafting_table','furnace'].includes(design.material)
   const w=this.world,definition=w.registry.blocksByName[design.material]
-  if(!definition||functional.test(design.material)||!full(w.Block.fromStateId(definition.defaultState,0)))return {accepted:false,queued:false,message:'Choose a simple full solid block, such as dirt, cobblestone, stone or planks. Interactive, falling, partial and hazardous blocks are not supported.'}
+  if(!definition||!internalStructure&&(functional.test(design.material)||!full(w.Block.fromStateId(definition.defaultState,0))))return {accepted:false,queued:false,message:'Choose a simple full solid block, such as dirt, cobblestone, stone or planks. Interactive, falling, partial and hazardous blocks are not supported.'}
   const slots=this.inventory(design.material),stock=slots.reduce((n,[,item])=>n+item.count,0),creative=w.gameMode==='creative'
   if(creative?!slots.length:stock<design.positions.length)return {accepted:false,queued:false,message:creative?`Put at least one known ${design.material} block in the hotbar first. No placement sent.`:`Need ${design.positions.length} ${design.material} in known hotbar stacks; have ${stock}. Put the required blocks in the hotbar first. No placement sent.`}
   if(Math.hypot(design.origin.x-w.position.x,design.origin.y-(w.position.y-1.62),design.origin.z-w.position.z)>12)return {accepted:false,queued:false,message:'Choose a build origin within 12 blocks.'}
@@ -45,10 +46,10 @@ export class Building{
    for(const d of directions){const q={x:p.x+d.x,y:p.y+d.y,z:p.z+d.z},b=w.block(q),fluid=w.block(q,1)
     if(!b||!fluid)return {accepted:false,queued:false,message:`Terrain beside ${key(p)} is unknown; look around before building.`}
     if(!air(fluid)||/water|lava|fire|powder_snow/.test(b.name))return {accepted:false,queued:false,message:'Fluid or hazardous terrain beside the footprint; placement refused.'}
-    if(!air(b)&&placementEvidence(w,q,b).classification!=='natural-looking')return {accepted:false,queued:false,message:'Footprint is beside an existing build or protected block; choose a clear location.'}
+    if(!air(b)&&!w.ownedPlacements?.has(`${w.dimension}:${key(q)}`)&&placementEvidence(w,q,b).classification!=='natural-looking')return {accepted:false,queued:false,message:'Footprint is beside an existing build or protected block; choose a clear location.'}
    }
   }
-  this.job={...design,remaining:design.positions.map(p=>({...p})),confirmed:new Set(),pending:null,started:now,lastProgress:now,approachAttempts:0};this.state='building';this.reason=creative?'Creative placement prepared; every block requires server confirmation.':'Build prepared; each block requires server and inventory confirmation.';this.placed=0;this.total=design.positions.length
+  this.job={...design,allowAirborne:descriptor.allowAirborne===true,remaining:design.positions.map(p=>({...p})),confirmed:new Set(),pending:null,started:now,lastProgress:now,approachAttempts:0};this.state='building';this.reason=creative?'Creative placement prepared; every block requires server confirmation.':'Build prepared; each block requires server and inventory confirmation.';this.placed=0;this.total=design.positions.length
   return {accepted:true,queued:true,message:`Building ${design.shape}: ${this.total} ${design.material}, origin ${key(design.origin)}; +X width, +Z length. Existing blocks are preserved. Waiting for server-confirmed placements${creative?' (Creative does not consume the held block)':''}.`}
  }
  cancel(reason='Building stopped. Confirmed blocks remain in the Realm.') {if(this.job){this.state='interrupted';this.reason=`${reason} ${this.placed}/${this.total} placements confirmed.`;this.job=null;this.report(this.reason)}}
@@ -56,7 +57,7 @@ export class Building{
   const w=this.world,j=this.job
   for(const d of directions){const p={x:target.x+d.x,y:target.y+d.y,z:target.z+d.z},b=w.block(p)
    if(!full(b)||!air(w.block(p,1)))continue
-   if(!j.confirmed.has(key(p))&&placementEvidence(w,p,b).classification!=='natural-looking')continue
+   if(!j.confirmed.has(key(p))&&!w.ownedPlacements?.has(`${w.dimension}:${key(p)}`)&&placementEvidence(w,p,b).classification!=='natural-looking')continue
    const click={x:d.face===4?0:d.face===5?1:.5,y:d.face===0?0:d.face===1?1:.5,z:d.face===2?0:d.face===3?1:.5},hit={x:p.x+click.x,y:p.y+click.y,z:p.z+click.z}
    const outside=[eye.y<hit.y,eye.y>hit.y,eye.z<hit.z,eye.z>hit.z,eye.x<hit.x,eye.x>hit.x][d.face]
    if(!outside||Math.hypot(hit.x-eye.x,hit.y-eye.y,hit.z-eye.z)>4)continue
@@ -77,7 +78,7 @@ export class Building{
    if(version>p.version&&block?.name===j.material){
     p.blockConfirmed=true
     if(p.creative||(w.inventoryProtocol?w.inventoryProtocol.consumed(p.slot,p.inventoryBefore):stack?.network_id===p.heldId&&stack.count===p.count-1||(p.count===1&&(!stack?.network_id||stack.count===0)))){
-     j.confirmed.add(key(p.target));j.remaining=j.remaining.filter(q=>key(q)!==key(p.target));j.pending=null;j.lastProgress=now;j.approachAttempts=0;this.placed++;this.report(p.creative?`Server confirms ${this.placed}/${this.total} placed ${j.material} in Creative; held block was not consumed.`:`Server confirms ${this.placed}/${this.total} placed ${j.material}; inventory decreased by one.`)
+     w.ownedPlacements?.set(`${w.dimension}:${key(p.target)}`,{...p.target,dimension:w.dimension,name:j.material});j.confirmed.add(key(p.target));j.remaining=j.remaining.filter(q=>key(q)!==key(p.target));j.pending=null;j.lastProgress=now;j.approachAttempts=0;this.placed++;this.report(p.creative?`Server confirms ${this.placed}/${this.total} placed ${j.material} in Creative; held block was not consumed.`:`Server confirms ${this.placed}/${this.total} placed ${j.material}; inventory decreased by one.`)
      if(!j.remaining.length){this.state='confirmed';this.reason=p.creative?`Server confirms all ${this.total} ${j.material} Creative placements.`:`Server confirms all ${this.total} ${j.material} placements and inventory consumption.`;this.job=null;this.report(this.reason)}
      return {}
     }
@@ -85,7 +86,7 @@ export class Building{
    if(now-p.sentAt>5000){this.cancel(p.blockConfirmed?'Block placed, but inventory consumption was not confirmed; halted further placement.':'Server did not confirm placement. Check building permission, reach and Realm spawn protection.');return {}}
    return {}
   }
-  if(!w.grounded())return {}
+  if(!w.grounded()&&!j.allowAirborne)return {}
   const slots=this.inventory(j.material);if((w.gameMode==='creative'?!slots.length:slots.reduce((sum,[,item])=>sum+item.count,0)<j.remaining.length)){this.cancel('Supplies changed; no matching hotbar block remains for the unfinished footprint.');return {}}if(!slots.length){this.cancel('No remaining matching hotbar stack; no inventory was invented.');return {}}
   const stage=Math.min(...j.remaining.map(p=>p.y)),elevated=['wall','shelter'].includes(j.shape)&&w.position.y-1.62<stage-.08
   const targets=j.remaining.filter(p=>p.y===stage).sort((a,b)=>Math.hypot(a.x-w.position.x,a.y-(w.position.y-1.62),a.z-w.position.z)-Math.hypot(b.x-w.position.x,b.y-(w.position.y-1.62),b.z-w.position.z))

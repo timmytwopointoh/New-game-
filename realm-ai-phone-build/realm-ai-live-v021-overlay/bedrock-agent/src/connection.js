@@ -68,6 +68,7 @@ export class Connection extends EventEmitter {
           this.survival.learning.setScope(String(selected.id))
           this.survival.commandVocabulary.setScope(String(selected.id))
           this.survival.landmarks.setScope(String(selected.id))
+          this.survival.workshop.setScope(String(selected.id))
           this.authChallenge=null;this.lastPhase='realm-selected';this.authState='realm-selected'
           this.log('Realm selected; attempting game connection.')
           return selected

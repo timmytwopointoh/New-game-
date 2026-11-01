@@ -3,8 +3,8 @@
 import {parseCommandRequest,renderDescriptor} from './survival/command-plans.js'
 import {parseExploreCommand} from './survival/exploration-jobs.js'
 
-const IMPERATIVE=/^(?:roam|explore|walk|go|move|head|travel|follow|come|dig|mine|break|place|build|select|look|scan|survey|find|locate|collect|pick|clear|check|show|inspect|respawn)\b/i
-const READ_ONLY=new Set(['status','movement','look','inventory','help','plan_status','find','materials','about','recipe','route','view_off'])
+const IMPERATIVE=/^(?:strip|quarry|gather|craft|roam|explore|walk|go|move|head|travel|follow|come|dig|mine|break|place|build|select|look|scan|survey|find|locate|collect|pick|clear|check|show|inspect|respawn)\b/i
+const READ_ONLY=new Set(['status','movement','look','inventory','help','plan_status','find','materials','about','recipe','route','view_off','situation'])
 const CLEAN_PREFIX=/^(?:(?:please|hey bot|bot)[, ]+|(?:can|could|would|will) you\s+|i (?:want|need) you to\s+|i'd like you to\s+|i would like you to\s+|go ahead and\s+)+/i
 const NUMBERS={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,twelve:12}
 function number(text){return /^\d+$/.test(text)?Number(text):NUMBERS[text.toLowerCase()]}
@@ -47,7 +47,7 @@ export function runAutonomous(text,survival){
  const intent=recognizeAutonomous(text,{world:survival?.world,yaw:n?.yaw,vocabulary:survival?.commandVocabulary})
  if(!intent)return null
  if(intent.error)return {accepted:false,queued:false,message:intent.error}
- if(!intent.readOnly&&(n?.job||plans?.batch||n?.survey))return {accepted:false,queued:false,message:'A task is already active. Say Stop before starting a different task.'}
+ if(!intent.readOnly&&(n?.job||plans?.batch||n?.survey||survival?.miningJobs?.active||survival?.acquisition?.active||survival?.resources?.active||survival?.operations?.pending))return {accepted:false,queued:false,message:'A task is already active. Say Stop before starting a different task.'}
  const cmd=intent.command||(intent.descriptor&&renderDescriptor(intent.descriptor))
  const response=survival.handle(cmd)
  return {...response,autonomous:true,message:(response?.accepted?'Handled without an Activate tap. ':'Not started. ')+(response?.message||'Waiting for server feedback; game success is not yet confirmed.')}

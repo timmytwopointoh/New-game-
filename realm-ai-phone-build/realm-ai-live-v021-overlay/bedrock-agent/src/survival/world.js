@@ -2,18 +2,18 @@ import {InventoryProtocol} from './inventory-protocol.js'
 import {abilityEvidence} from './verification.js'
 import registryFactory from 'prismarine-registry'
 import blockFactory from 'prismarine-block'
-import {Reader,decodeSection,blockIndex} from './chunks.js'
+import {Reader,decodeSection,decodeBiomeStores,blockIndex} from './chunks.js'
 const dimensionNumber=d=>typeof d==='number'?d:({overworld:0,nether:1,end:2}[d]??0)
 const dangerous=/^(?:flowing_)?(?:lava|water)$|fire|campfire|cactus|magma|powder_snow|sweet_berry|wither_rose|portal|web/
 const airNames=new Set(['air','cave_air','void_air'])
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
+ reset(){this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
  initialize(packet,version='1.26.60'){
   this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
-  this.sections.clear();this.updates.clear();this.entities.clear();this.players.clear();this.drops.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryProtocol.reset();this.attributes={}
+  this.ownedPlacements.clear();this.sections.clear();this.biomeStores.clear();this.biomeNames.clear();this.biomeDecodeErrors=0;this.updates.clear();this.entities.clear();this.players.clear();this.drops.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryProtocol.reset();this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null
   this.serverAuthoritativeInventory=typeof packet.server_authoritative_inventory==='boolean'?packet.server_authoritative_inventory:null
   this.serverAuthoritativeBreaking=typeof packet.server_authoritative_block_breaking==='boolean'?packet.server_authoritative_block_breaking:null;this.blockRevision=0;this.blockRevisions.clear();this.serverPosition={...packet.player_position};this.serverGrounded=null;this.inputLocks={};this.hardcore=packet.hardcore===true;this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
   this.gameMode=this.normalizeMode(packet.player_gamemode);this.gameModeSource=this.gameMode?'player-specific start_game':null
@@ -32,12 +32,14 @@ export class WorldView{
   if(!this.enabled||!this.registry||dimensionNumber(packet.dimension)!==this.dimension)return
   const count=packet.sub_chunk_count>>>0
   if(packet.cache_enabled){this.lastError='Cached chunk data unavailable; waiting for uncached data';return}
-  if(count>24){this.requestNearby(client);return}
+  if(count>24){this.receiveBiomes(packet,new Reader(Buffer.from(packet.payload||[])));this.requestNearby(client);return}
   const r=new Reader(Buffer.from(packet.payload)),sections=[]
   for(let i=0;i<count;i++)sections.push(decodeSection(r,(this.dimension===0?-4:0)+i))
   for(const s of sections)this.save(packet.x,packet.z,s)
+  this.receiveBiomes(packet,r)
   this.chunks++
  }
+ receiveBiomes(packet,r){if(r.i>=r.b.length)return;try{const stores=decodeBiomeStores(r,this.dimension===0?24:this.dimension===1?8:16),minY=this.dimension===0?-4:0;for(let i=0;i<stores.length;i++)this.biomeStores.set(`${packet.x},${minY+i},${packet.z}`,stores[i]);while(this.biomeStores.size>192)this.biomeStores.delete(this.biomeStores.keys().next().value)}catch{this.biomeDecodeErrors++}}
  requestNearby(client){
   if(!this.position||!this.registry||!this.enabled)return
   const origin={x:Math.floor(this.position.x/16),y:Math.floor((this.position.y-1.62)/16),z:Math.floor(this.position.z/16)},requests=[]
@@ -92,13 +94,13 @@ export class WorldView{
  get editModeVerified(){return this.survivalVerified||this.creativeEditsVerified}
  get movementVerified(){return this.survivalVerified||this.creativeMovementVerified}
  // Collision uses received block shapes in both layers. Unknown cells remain solid.
- clearBody(position){
+ clearBody(position,{allowWater=false,allowLava=false,allowPowder=false,allowPortal=false}={}){
   const feet=position.y-1.62,eps=.00001
   for(let x=Math.floor(position.x-.3+eps);x<=Math.floor(position.x+.3-eps);x++)
    for(let z=Math.floor(position.z-.3+eps);z<=Math.floor(position.z+.3-eps);z++)
     for(let y=Math.floor(feet+eps);y<=Math.floor(feet+1.8-eps);y++)for(const layer of [0,1]){
      const b=this.block({x,y,z},layer)
-     if(!b||dangerous.test(b.name))return false
+     if(!b||dangerous.test(b.name)&&!(allowWater&&/^(?:flowing_)?water$/.test(b.name))&&!(allowLava&&/^(?:flowing_)?lava$/.test(b.name))&&!(allowPowder&&b.name==='powder_snow')&&!(allowPortal&&/^(?:portal|nether_portal|end_portal)$/.test(b.name)))return false
      if(!Array.isArray(b.shapes))return false
      for(const q of b.shapes)if(position.x+.3>x+q[0]+eps&&position.x-.3<x+q[3]-eps&&feet+1.8>y+q[1]+eps&&feet<y+q[4]-eps&&position.z+.3>z+q[2]+eps&&position.z-.3<z+q[5]-eps)return false
     }
@@ -195,13 +197,16 @@ export class WorldView{
   on('set_player_game_type',p=>{this.gameMode=this.normalizeMode(p.gamemode);this.gameModeSource='server set-player update'})
   on('update_client_input_locks',p=>{this.inputLocks={...p.locks}})
   on('item_registry',p=>{if(this.registry)this.registry.handleStartGame({itemstates:p.itemstates,block_network_ids_are_hashes:this.hashMode})})
+  on('biome_definition_list',p=>{for(const b of (p.biome_definitions||[]).slice(0,1024)){const name=p.string_list?.[b.name_index];if(Number.isSafeInteger(b.biome_id)&&typeof name==='string'&&name.length<96)this.biomeNames.set(b.biome_id,name)}})
   on('level_chunk',p=>this.receiveChunk(p,client));on('subchunk',p=>this.receiveSections(p));on('update_block',p=>this.update(p));on('update_block_synced',p=>this.update(p));on('update_subchunk_blocks',p=>{for(const [layer,entries] of [[0,p.blocks],[1,p.extra]])for(const entry of (entries||[]).slice(0,4096))this.update({position:entry.position,block_runtime_id:entry.runtime_id,layer})})
   on('inventory_content',p=>this.inventoryProtocol.content(p))
   on('inventory_slot',p=>this.inventoryProtocol.slot(p))
   on('container_open',p=>this.inventoryProtocol.opened(p));on('container_close',p=>this.inventoryProtocol.closed(p));on('item_stack_response',p=>this.inventoryProtocol.stackResponse(p))
   on('mob_effect',p=>{if(String(p.runtime_entity_id)===this.entityId){if(p.event_id==='remove')this.effects.delete(p.effect_id);else if(['add','update'].includes(p.event_id))this.effects.set(p.effect_id,{amplifier:p.amplifier,expires:p.duration<0?Infinity:Date.now()+p.duration*50})}})
-  on('set_health',p=>{if(Number.isFinite(p.health))this.attributes['minecraft:health']=p.health})
-  on('update_attributes',p=>{if(String(p.runtime_entity_id)===this.entityId)for(const a of p.attributes||[])this.attributes[a.name]=a.current})
+  on('set_health',p=>{if(Number.isFinite(p.health)){if(p.health<(this.attributes['minecraft:health']??p.health))this.lastHurtAt=Date.now();this.attributes['minecraft:health']=p.health;this.healthRevision++}})
+  on('update_attributes',p=>{if(String(p.runtime_entity_id)===this.entityId)for(const a of p.attributes||[]){if(a.name==='minecraft:health'&&Number.isFinite(a.current)){if(a.current<(this.attributes[a.name]??a.current))this.lastHurtAt=Date.now();this.healthRevision++}this.attributes[a.name]=a.current}})
+  on('entity_event',p=>{if((p.event_id==='ender_dragon_death'||p.event_id===37)&&this.dimension===2&&/(?:^|:)ender_dragon$/.test(this.entities.get(String(p.runtime_entity_id))?.type||''))this.dragonState='defeated';if(String(p.runtime_entity_id)!==this.entityId)return;if(p.event_id==='hurt_animation'||p.event_id===2)this.lastHurtAt=Date.now();if(p.event_id==='death_animation'||p.event_id===3)this.deathReportedAt=Date.now()})
+  on('death_info',()=>{this.deathReportedAt=Date.now()})
   on('player_hotbar',p=>{if((p.window_id==='inventory'||p.window_id===0)&&p.selected_slot>=0&&p.selected_slot<=8)this.selectedSlot=p.selected_slot})
   on('mob_equipment',p=>{if(String(p.runtime_entity_id)===this.entityId&&p.selected_slot>=0&&p.selected_slot<=8)this.selectedSlot=p.selected_slot})
   on('add_player',p=>{if(String(p.runtime_id)!==this.entityId){this.players.set(String(p.runtime_id),{name:p.username,position:p.position,uniqueId:String(p.unique_id)});while(this.players.size>64)this.players.delete(this.players.keys().next().value)}})
@@ -216,11 +221,12 @@ export class WorldView{
     while(this.drops.size>128)this.drops.delete(this.drops.keys().next().value)
   }
   on('add_item_entity',addDrop);on('add_item_actor',addDrop)
-  on('add_entity',p=>{this.entities.set(String(p.runtime_id),{type:p.entity_type,position:p.position,uniqueId:String(p.unique_id)});while(this.entities.size>256)this.entities.delete(this.entities.keys().next().value)})
+  on('add_entity',p=>{if(/(?:^|:)ender_dragon$/.test(p.entity_type))this.dragonState='alive';this.entities.set(String(p.runtime_id),{type:p.entity_type,position:p.position,uniqueId:String(p.unique_id)});while(this.entities.size>256)this.entities.delete(this.entities.keys().next().value)})
   on('move_entity',p=>{const d=this.drops.get(String(p.runtime_entity_id));if(d&&p.position)d.position=p.position;const e=this.entities.get(String(p.runtime_entity_id))||this.players.get(String(p.runtime_entity_id));if(e)e.position=p.position})
   on('remove_entity',p=>{for(const [id,e] of this.drops)if(id===String(p.entity_id_self)||e.uniqueId===String(p.entity_id_self))this.drops.delete(id);for(const map of [this.entities,this.players])for(const [id,e] of map)if(e.uniqueId===String(p.entity_id_self))map.delete(id)})
-  on('change_dimension',p=>{this.dimension=dimensionNumber(p.dimension);this.position=p.position;this.serverPosition={...p.position};this.blockRevisions.clear();this.blockRevision=0;this.sections.clear();this.updates.clear();this.pending.clear();this.entities.clear();this.players.clear()})
+  on('change_dimension',p=>{this.dimension=dimensionNumber(p.dimension);this.position=p.position;this.serverPosition={...p.position};this.blockRevisions.clear();this.blockRevision=0;this.sections.clear();this.biomeStores.clear();this.updates.clear();this.pending.clear();this.entities.clear();this.players.clear()})
  }
  detach(){for(const [c,e,f] of this.listeners)c.off(e,f);this.listeners=[]}
- snapshot(){return {inventoryAuthority:this.serverAuthoritativeInventory===null?'unknown':this.serverAuthoritativeInventory?'server-authoritative':'legacy',blockBreakingMode:this.serverAuthoritativeBreaking===null?'unknown':this.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',abilities:this.abilityState,editModeVerified:this.editModeVerified,creativeEditsVerified:this.creativeEditsVerified,gameMode:this.gameMode,gameModeSource:this.gameModeSource,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventoryEvidence:this.inventoryProtocol.snapshot(),inventory:this.items(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,groundDrops:this.drops.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
+ biomeAt(position=this.serverPosition){if(!position)return null;const x=Math.floor(position.x),y=Math.floor(position.y-1.62),z=Math.floor(position.z),store=this.biomeStores.get(`${Math.floor(x/16)},${Math.floor(y/16)},${Math.floor(z/16)}`);if(!store)return null;const id=store[blockIndex(x,y,z)],name=this.biomeNames.get(id)||this.registry?.biomes?.[id]?.name;return {id,name:name||null,source:'server-biome-palette'}}
+ snapshot(){return {biome:this.biomeAt(),biomeDecodeErrors:this.biomeDecodeErrors,inventoryAuthority:this.serverAuthoritativeInventory===null?'unknown':this.serverAuthoritativeInventory?'server-authoritative':'legacy',blockBreakingMode:this.serverAuthoritativeBreaking===null?'unknown':this.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',abilities:this.abilityState,editModeVerified:this.editModeVerified,creativeEditsVerified:this.creativeEditsVerified,gameMode:this.gameMode,gameModeSource:this.gameModeSource,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventoryEvidence:this.inventoryProtocol.snapshot(),inventory:this.items(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,groundDrops:this.drops.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
 }

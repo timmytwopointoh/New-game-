@@ -78,7 +78,7 @@ test('death sends normal Respawn action, acknowledges own server-ready position,
  r.attach(f.c);f.n.checkRespawn=now=>r.tick(now);assert(f.n.walk({x:2,y:64,z:0}).accepted)
  f.c.emit('set_health',{health:0});assert.equal(f.n.job,null);assert.equal(interrupts.length,1);assert(f.sent.some(([name,p])=>name==='player_action'&&p.action==='respawn'))
  f.c.emit('respawn',{runtime_entity_id:99n,state:1,position:{x:4.5,y:69.62,z:.5}});assert.equal(r.readyPosition,null)
- const now=Date.now();f.c.emit('respawn',{runtime_entity_id:1n,state:0,position:{x:4.5,y:69.62,z:.5}});assert(!f.sent.some(([name])=>name==='respawn'))
+ const now=Date.now(),pressed=f.sent.filter(([name])=>name==='respawn').length;f.c.emit('respawn',{runtime_entity_id:1n,state:0,position:{x:4.5,y:69.62,z:.5}});assert.equal(f.sent.filter(([name])=>name==='respawn').length,pressed);assert.equal(f.w.position.y,65.62,'searching position is not a teleport')
  f.c.emit('respawn',{runtime_entity_id:1n,state:1,position:{x:4.5,y:69.62,z:.5}});r.tick(now+2100)
  assert(f.sent.some(([name,p])=>name==='respawn'&&p.state===2));assert.equal(f.w.attributes['minecraft:health'],0);assert.equal(f.n.job,null)
  f.c.emit('set_health',{health:20});assert.equal(r.state,'respawned');assert.equal(f.n.job,null)

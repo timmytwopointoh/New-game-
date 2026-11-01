@@ -28,3 +28,23 @@ export function decodeSection(reader,fallbackY){
  return {y,layers}
 }
 export const blockIndex=(x,y,z)=>((x&15)<<8)|((z&15)<<4)|(y&15)
+// Biomes follow block subchunks in uncached level_chunk payloads. Their
+// paletted stores use the same XZY ordering; 0xff reuses the previous store.
+export function decodeBiomeStores(reader,count){
+ const stores=[];let previous=null
+ for(let section=0;section<count;section++){
+  const header=reader.byte()
+  if(header===255){if(!previous)throw Error('Biome reuse without a previous store');stores.push(previous);continue}
+  const bits=header>>>1;if(!(header&1)||![0,1,2,3,4,5,6,8,16].includes(bits))throw Error('Unsupported biome palette')
+  const data=new Int32Array(4096)
+  if(!bits)data.fill(reader.signed())
+  else{
+   const perWord=Math.floor(32/bits),words=Array.from({length:Math.ceil(4096/perWord)},()=>reader.u32()),size=reader.signed()
+   if(size<1||size>4096)throw Error('Invalid biome palette size')
+   const palette=Array.from({length:size},()=>reader.signed()),mask=(1<<bits)-1
+   for(let i=0;i<4096;i++){const index=(words[Math.floor(i/perWord)]>>>((i%perWord)*bits))&mask;if(index>=size)throw Error('Invalid biome index');data[i]=palette[index]}
+  }
+  previous=data;stores.push(data)
+ }
+ return stores
+}

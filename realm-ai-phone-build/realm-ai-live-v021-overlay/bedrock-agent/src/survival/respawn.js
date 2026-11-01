@@ -7,24 +7,28 @@ export function respawnState(state){
 }
 export class RespawnRecovery{
  constructor(world,navigation,interrupt=()=>{},report=()=>{}){this.world=world;this.navigation=navigation;this.interrupt=interrupt;this.report=report;this.listeners=[];this.reset()}
- reset(){this.state='alive';this.attempts=0;this.readyAttempts=0;this.startedAt=null;this.lastAttemptAt=null;this.readyPosition=null;this.reason=''}
+ reset(){this.state='alive';this.attempts=0;this.readyAttempts=0;this.startedAt=null;this.lastAttemptAt=null;this.readyPosition=null;this.searchPosition=null;this.deathHealthRevision=0;this.healthAtDeath=null;this.reason=''}
  attach(client){this.detach();this.reset();this.client=client;const on=(name,fn)=>{client.on(name,fn);this.listeners.push([name,fn])}
   on('respawn',p=>{
    // Different protocol decoders may expose the enum as a number or a label.
    const state=respawnState(p?.state)
-   if(String(p?.runtime_entity_id)!==this.world.entityId||![0,1].includes(state))return
-   if(['alive','respawned'].includes(this.state)&&this.world.attributes['minecraft:health']>0)return
+   const id=String(p?.runtime_entity_id),own=id===this.world.entityId,dead=!['alive','respawned'].includes(this.state)||this.world.attributes['minecraft:health']===0||!!this.world.deathReportedAt
+   if(![0,1].includes(state)||(!own&&!(id==='0'&&dead)))return
+   if(!own&&!dead)return
    this.begin(Date.now())
+   if(state===0&&p.position&&['x','y','z'].every(k=>Number.isFinite(p.position[k])))this.searchPosition={...p.position}
    if(state===1&&p.position&&['x','y','z'].every(k=>Number.isFinite(p.position[k]))){
     this.readyPosition={...p.position};this.state='server-ready';this.tick(Date.now())
    }
   })
   on('update_attributes',p=>{if(String(p.runtime_entity_id)===this.world.entityId)this.tick(Date.now())})
   on('set_health',()=>this.tick(Date.now()))
+  on('entity_event',p=>{if(String(p.runtime_entity_id)===this.world.entityId&&(p.event_id==='death_animation'||p.event_id===3)){this.begin(Date.now());this.tick(Date.now())}})
+  on('death_info',()=>{this.begin(Date.now());this.tick(Date.now())})
  }
  begin(now){
   if(!['alive','respawned'].includes(this.state))return
-  this.state=this.world.hardcore?'blocked':'dead';this.startedAt=now;this.attempts=0;this.readyAttempts=0;this.lastAttemptAt=null;this.readyPosition=null
+  this.state=this.world.hardcore?'blocked':'dead';this.startedAt=now;this.attempts=0;this.readyAttempts=0;this.lastAttemptAt=null;this.readyPosition=null;this.searchPosition=null;this.deathHealthRevision=this.world.healthRevision||0;this.healthAtDeath=this.world.attributes['minecraft:health']
   this.interrupt('Player died; queued work interrupted. Activate again after respawn.');this.navigation.stop('Player died; requesting normal respawn.')
   this.reason='Server confirmed death; requesting normal respawn. Saved login and plans are kept.';this.report(this.reason)
   if(this.world.hardcore){this.state='blocked';this.reason='The server reports Hardcore; automatic respawn is unavailable. Work remains stopped.';this.report(this.reason)}
@@ -36,8 +40,8 @@ export class RespawnRecovery{
   // Positive health is server-sourced evidence of recovery even if the phone
   // never observed ReadyToSpawn, or it arrived after our 15-second timeout.
   // A sent Respawn/ClientReady packet is NOT required as evidence of success.
-  if(health>0){
-   this.state='respawned';this.navigation.vy=0;this.navigation.unknownSince=null;this.navigation.loading={state:'waiting-for-terrain',id:null,dimension:false}
+  if(health>0&&((this.world.healthRevision||0)>this.deathHealthRevision||this.healthAtDeath===0)){
+   this.state='respawned';this.world.deathReportedAt=null;this.navigation.vy=0;this.navigation.unknownSince=null;this.navigation.loading={state:'waiting-for-terrain',id:null,dimension:false}
    this.reason='Server reports positive health after death. Previous work remains stopped; waiting for observed terrain.';this.report(this.reason);return false
   }
   if(this.state==='blocked')return true
@@ -54,6 +58,11 @@ export class RespawnRecovery{
    }else if(!this.readyPosition&&this.attempts<3){
     const p=this.world.standPosition();if(!p)return true
     this.client.queue('player_action',{runtime_entity_id:BigInt(this.world.entityId),action:'respawn',position:p,result_position:p,face:0})
+    // Some servers wait for ClientReadyToSpawn before sending ReadyToSpawn.
+    // Acknowledge only the server-provided search/death position; never move
+    // the local body to it until the server supplies a ready spawn position.
+    const pos=this.searchPosition||this.world.serverPosition
+    if(pos&&['x','y','z'].every(k=>Number.isFinite(pos[k])))this.client.queue('respawn',{position:{...pos},state:2,runtime_entity_id:BigInt(this.world.entityId)})
     this.attempts++;this.lastAttemptAt=now;this.state='waiting-for-server';this.reason='Requested Respawn; waiting for the server spawn position.'
    }
   }catch{this.state='blocked';this.reason='Could not send the normal respawn input; work remains stopped.';this.report(this.reason)}

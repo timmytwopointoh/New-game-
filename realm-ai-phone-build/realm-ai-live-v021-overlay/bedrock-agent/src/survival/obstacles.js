@@ -14,7 +14,7 @@ export function placementEvidence(world,pos,block=world.block(pos)){
  }
  return {classification:naturalLooking.has(block.name)?'natural-looking':'unknown',reason:'Minecraft does not identify who placed this block.'}
 }
-export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxMs=null}={}){
+export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxMs=null,allowAbove=false,allowLowerForward=false}={}){
  // Explicit mining may be slow by hand; automatic obstacle clearing stays brief.
  // Tool suitability affects drops, not whether a finite-hardness block can break.
  maxMs ??= explicit ? 120000 : 5000
@@ -35,7 +35,7 @@ export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxM
  }
  const feet=world.standPosition()
  if(!feet||!world.walkable(feet)||!world.grounded())return {ok:false,reason:'Must stand on safe ground before mining.',evidence}
- if(pos.y<feet.y||pos.y>feet.y+1)return {ok:false,reason:'Will not mine underfoot or overhead while recovering movement.',evidence}
+ if(pos.y<feet.y&&!(allowLowerForward&&pos.y===feet.y-1&&Math.abs(pos.x-feet.x)+Math.abs(pos.z-feet.z)===1)||pos.y>feet.y+1&&!allowAbove)return {ok:false,reason:'Will not mine underfoot or overhead while recovering movement.',evidence}
  const above=world.block({...pos,y:pos.y+1})
  if(!above||/sand|gravel|concrete_powder|anvil|water|lava/.test(above.name))return {ok:false,reason:'Unknown or falling/fluid block above the target.',evidence}
  if(!world.inventoryKnown||world.selectedSlot===null)return {ok:false,reason:'Held tool is unknown. Use “select slot 1” after inventory loads.',evidence}

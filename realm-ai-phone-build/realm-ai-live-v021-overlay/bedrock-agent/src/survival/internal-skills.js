@@ -17,6 +17,10 @@ export function parseResourceGoal(raw){
  const s=norm(raw)
  if(/^(?:(?:go |start |keep )?(?:cut(?:ting)? down|chop(?:ping)? down|harvest|mine) (?:all |every |nearby |the )?(?:trees|tree trunks|logs)|(?:cut down|harvest|chop) (?:all |every )?tree(?:s)? (?:you see|you find|you come across)?)$/.test(s))return {kind:'tree-harvest',target:'tree_trunks',maxBlocks:null,maxDistance:8,needsPickup:true}
  if(/^(?:go )?(?:get|gather|collect|chop(?: down)?) (?:some )?(?:wood|logs|tree logs)$/.test(s))return {kind:'tree-harvest',target:'tree_trunks',maxBlocks:null,maxDistance:8,needsPickup:true}
+ const trees=s.match(/^gather (\d+) trees$/)
+ if(trees){const count=Number(trees[1]);return count>=1&&count<=16?{kind:'mine-material',target:'tree_trunks',sourceFamily:'logs',requiredTrees:count,maxBlocks:512,maxDistance:8,needsPickup:true,continuousSearch:true}:{error:'Choose 1–16 trees.'}}
+ const gather=s.match(/^(?:gather|collect|mine|get) (\d{1,4}) (.+)$/)
+ if(gather){const quantity=Number(gather[1]),raw=gather[2].replace(/ blocks?$/,''),target=resolveMaterial(raw);if(!target||quantity<1||quantity>2304)return {error:'Choose a known material and a quantity from 1–2304.'};return {kind:'mine-material',target,maxBlocks:Math.min(4096,quantity*4+16),quantity,maxDistance:8,needsPickup:true,continuousSearch:true,sourceFamily:/^(?:wood|logs|log)$/.test(raw)?'logs':null}}
  const m=s.match(/^(?:go )?(?:find and mine|find and break|locate and mine|search for and mine) (?:some |a |the )?(.+)$/)
  if(!m)return null
  const requested=m[1].trim(),target=resolveMaterial(requested)
@@ -35,7 +39,7 @@ export function mineableKnowledge(block,toolId=null){
 
 export function selectKnownResource(world,goal,excluded=new Set()){
  if(!world?.position||!world?.scan||!goal)return null
- const names=goal.kind==='tree-harvest'?treeTrunks:[goal.target]
+ const names=goal.kind==='tree-harvest'||goal.sourceFamily==='logs'?treeTrunks:[...new Set([...(recognizedBlocks.has(goal.target)?[goal.target]:[]),...(world.registry?.blocksArray||[]).filter(b=>(b.drops||[]).some(id=>world.registry.items[id]?.name===goal.target)).map(b=>b.name)])]
  const candidates=[]
  for(const name of names){
   for(const p of world.scan(name,{range:Math.min(8,goal.maxDistance||8)})?.found||[]){

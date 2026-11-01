@@ -31,6 +31,11 @@ export function parseDescriptor(raw){
  if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f]/.test(raw))throw Error('Use a supported command in one line.')
  let s=raw.trim().replace(/[.!?]+$/,'').replace(/^(?:please |can you |could you )/i,'')
  if(/^mine(?: block at)? -?\d+[, ]+-?\d+[, ]+-?\d+$/i.test(s))s=s.replace(/^mine(?: block at)?/i,'dig')
+ s=s.replace(/^place (?:a )?block at /i,'place dirt at ').replace(/^build (wall|floor) (\d+) by (\d+) at /i,'build $1 $2 by $3 with dirt at ').replace(/^build (?:a )?shelter at /i,'build shelter with dirt at ')
+ if(/^strip min(?:e|ing)$/i.test(s))s='strip mine 8 rows at -20'
+ if(/^mine dirt$/i.test(s))s='quarry dirt'
+ if(/^(?:mine|get) [a-z_ ]+$/i.test(s)&&!/^mine dirt$/i.test(s))s=s.replace(/^(?:mine|get) /i,'gather 64 ')
+ if(/^biome$/i.test(s))s='surroundings'
  if(/^mine$/i.test(s))throw Error('Choose Commands → Dig one block, or enter “dig X Y Z”. A target and known held item are required.')
  const aliases={status:'survival status',position:'survival status',look:'look around','view on':'look around',help:'help survival',commands:'help survival',rejoin:'rejoin realm','show plan':'plan status'};s=aliases[s.toLowerCase()]||s
  for(const def of commandCatalog){
@@ -139,6 +144,9 @@ export class CommandPlans{
    if(elapsed>60000)this.failActive('Realm rejoin was not confirmed; remaining commands stayed queued.');return
   }
   if(descriptor.id==='look'){if(nav?.survey)return;this.completeActive('360-degree survey finished or was interrupted; inspect scan results before acting.');return}
+  if(['strip_mine','quarry'].includes(descriptor.id)){const task=this.controller.miningJobs;if(task?.active){if(task.active.state==='blocked')this.failActive(task.active.reason);return}if(task?.last?.state==='completed')this.completeActive(task.last.reason);else this.failActive(task?.last?.reason||'Excavation interrupted.');return}
+  if(descriptor.id==='gather'){const task=this.controller.acquisition||this.controller.resources;if(task?.active){if(task.active.state==='blocked')this.failActive(task.active.reason);return;}if(task?.last?.state==='completed')this.completeActive(task.last.reason);else this.failActive(task?.last?.reason||'Gathering interrupted.');return}
+  if(descriptor.id==='craft'){const ops=this.controller.operations;if(ops?.pending)return;if(ops?.state==='confirmed')this.completeActive(ops.reason);else this.failActive(ops?.reason||'Crafting unconfirmed.');return}
   if(descriptor.id==='follow')return // Continuous follow ends only when Stop is pressed.
   if(descriptor.id==='collect'){
    if(nav?.pickup?.state==='confirmed'){this.completeActive(nav.pickup.reason||'Server inventory confirms item pickup.');return}

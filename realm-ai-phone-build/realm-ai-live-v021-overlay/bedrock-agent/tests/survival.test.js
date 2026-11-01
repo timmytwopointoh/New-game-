@@ -65,7 +65,7 @@ test('supply plans round crafting batches, reserve shared supplies and do not in
 })
 test('no-addon controller never sends legacy behavior-pack commands',()=>{
  const c={events:[],nextEventId:0,emit(){},send(){throw Error('Must not invoke legacy bridge')},reconnect:()=>({accepted:true,message:'rejoined'})},s=new SurvivalController(c)
- assert(s.handle('rejoin realm').accepted);assert.match(s.handle('mine 5 iron ore').message,/not implemented/i);assert.match(s.handle('start plan').message,/not implemented/i);assert.match(s.handle('plan get 8 torches').message,/plan/i)
+ assert(s.handle('rejoin realm').accepted);assert.match(s.handle('mine 5 iron ore').message,/not implemented|Waiting for inventory/i);assert.match(s.handle('start plan').message,/not implemented/i);assert.match(s.handle('plan get 8 torches').message,/plan/i)
 })
 
 test('manual reconnect resets dead transport state without forcing a Microsoft cache refresh',async()=>{

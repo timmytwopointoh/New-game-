@@ -522,5 +522,80 @@
     "template": "respawn",
     "fields": [],
     "note": "Automatic after server-confirmed death. This retries the normal Respawn input only when dead; it never restores health locally or resumes work."
+  },
+  {
+    "id": "strip_mine",
+    "label": "Strip mine \u2014 prepare and dig",
+    "template": "strip mine {rows} rows at {depth}",
+    "fields": [
+      {
+        "id": "rows",
+        "label": "30-block tunnel legs (1\u201316)",
+        "type": "integer",
+        "min": 1,
+        "max": 16
+      },
+      {
+        "id": "depth",
+        "label": "Feet-level target Y (default -20)",
+        "type": "integer",
+        "min": -54,
+        "max": 315
+      }
+    ],
+    "note": "Two blocks high; four-block connectors advance into fresh lanes. Plans tools, 64 dirt, staircase descent and server-confirmed double-chest storage. Never digs straight under the bot."
+  },
+  {
+    "id": "quarry",
+    "label": "Mine dirt / quarry material",
+    "template": "quarry {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Material to collect (dirt uses a shovel)",
+        "type": "block"
+      }
+    ],
+    "note": "15\u00d715 area, two blocks deep. May continue into adjacent areas until 640 requested items; then deposit at the second tree site. Does not count occupied slots as full stacks. Keeps all real drops."
+  },
+  {
+    "id": "gather",
+    "label": "Gather a material",
+    "template": "gather {quantity} {material}",
+    "fields": [
+      {
+        "id": "quantity",
+        "label": "Inventory target amount",
+        "type": "integer",
+        "min": 1,
+        "max": 2304
+      },
+      {
+        "id": "material",
+        "label": "Material",
+        "type": "material"
+      }
+    ],
+    "note": "Finds observed source blocks, collects server-confirmed drops and roams again when no source is nearby. Existing inventory counts toward the target."
+  },
+  {
+    "id": "craft",
+    "label": "Craft from received server recipe",
+    "template": "craft {material}",
+    "fields": [
+      {
+        "id": "material",
+        "label": "Output material",
+        "type": "material"
+      }
+    ],
+    "note": "Crafts one recipe batch using real ingredients and a received recipe. Larger recipes need an open crafting table. Only server-confirmed output counts."
+  },
+  {
+    "id": "situation",
+    "label": "Health, biome and surroundings",
+    "template": "surroundings",
+    "fields": [],
+    "note": "Own health/death state, server position, received biome data and relative positions of observed mobs/blocks. Unknown observations stay unknown."
   }
 ]

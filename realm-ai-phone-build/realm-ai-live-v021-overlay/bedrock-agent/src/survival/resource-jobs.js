@@ -40,6 +40,7 @@ export class ResourceJobs {
   if(!this.world.inventoryKnown||!this.world.enabled)return {accepted:false,queued:false,message:'Waiting for inventory and visible terrain; task not started.'}
   const blocked=this.navigation.movementBlock()
   if(blocked)return {accepted:false,queued:false,message:blocked}
+  this.controller.workshop?.close()
   this.active={goal:plan.goal,plan,state:'search',started:Date.now(),lastAt:0,breaks:0,pickups:0,trees:new Set(),trunks:[],checkpoints:[],axeCount:0,waitingCapabilities:[],visited:new Set(),target:null,reason:'Searching observed terrain.',pickupStarted:0,inventoryBefore:{...this.world.items()},movementObservedAt:0,triedTrees:new Set(),rememberedTarget:null,scoutAttempts:0,nextScoutAt:0,scoutHeading:0,scoutGoal:null,scoutPoseAt:0,requestedAxeSlot:null,axeRequestAt:0,lastReportAt:0,hadAxes:false,warnedOutOfAxes:false}
   this.tick(Date.now())
   return {accepted:true,queued:!!this.active,message:this.active?'Resource task started internally: '+this.active.reason:'Resource scan finished. '+(this.last?.reason||'No target found.'),resourceTask:this.snapshot()}
@@ -97,7 +98,7 @@ export class ResourceJobs {
   if(!this.active)return true
   // Forestry is intentionally continuous until Stop, danger or a disconnect.
   // A single explicit 'find and mine' request keeps its finite safety limit.
-  if(this.active.goal.kind!=='tree-harvest'&&now-this.active.started>180000){this.finish('Resource task reached its three-minute safety limit.','timed-out');return true}
+  if(this.active.goal.kind!=='tree-harvest'&&!this.active.goal.continuousSearch&&now-this.active.started>180000){this.finish('Resource task reached its three-minute safety limit.','timed-out');return true}
   if(this.world.attributes['minecraft:health']===0||this.world.attributes['minecraft:health']>0&&this.world.attributes['minecraft:health']<=6||this.navigation.isRespawning?.()){
    this.finish('Resource task stopped on death or low health.');return true
   }
@@ -167,19 +168,19 @@ export class ResourceJobs {
   // Do not treat unobserved cells as empty or teleport into unloaded chunks.
   // Try short, observable forward segments, then other cardinal directions.
   const directions=[{x:0,z:1},{x:1,z:0},{x:0,z:-1},{x:-1,z:0}]
-  const head=directions[(a.scoutHeading++)%4]
+  const head=directions[(a.scoutHeading)%4];a.scoutVisited||=new Set()
   for(const d of [5,3,2,1])for(const dy of [0,1,-1]){
    const goal={x:feet.x+head.x*d,y:feet.y+dy,z:feet.z+head.z*d}
-   if(!w.walkable(goal))continue
+   if(!w.walkable(goal)||a.scoutVisited.has(id(goal)))continue
    const plan=n.routeTo(goal,feet,{allowDirt:false,maxNodes:900})
    if(!plan?.ok||plan.path.length<2)continue
    const result=n.walk(goal,{allowMining:false})
-   if(result.accepted){a.scoutGoal=goal;a.scoutPoseAt=n.lastPoseAt||0;a.state='scouting';a.scoutStarted=now;a.reason='Searching another safely observed section for trees; continuing until Stop.';return}
+   if(result.accepted){a.scoutVisited.add(id(goal));if(a.scoutVisited.size>512)a.scoutVisited.delete(a.scoutVisited.values().next().value);a.scoutGoal=goal;a.scoutPoseAt=n.lastPoseAt||0;a.state='scouting';a.scoutStarted=now;a.reason='Roaming through another observed section to find the requested material; continuing until Stop.';return}
   }
   try{w.requestNearby?.(n.client)}catch{}
-  a.scoutAttempts++;a.nextScoutAt=now+2000
+  a.scoutHeading++;a.scoutAttempts++;a.nextScoutAt=now+2000
   a.reason='No safe forward segment known; waiting for server terrain and trying another direction.'
-  if(a.scoutAttempts%10===0)this.report('Still looking for trees; safe path is not confirmed. Stop remains available.')
+  if(a.scoutAttempts%10===0)this.report('Still looking for the requested material; safe path is not confirmed. Stop remains available.')
  }
  chooseMemoryApproach(target){
   const w=this.world,n=this.navigation,start=w.standPosition?.();if(!start)return null
@@ -212,7 +213,9 @@ export class ResourceJobs {
   if(['returning-home','return-walking','return-paused'].includes(a.state)){this.tickHomeward(now);return}
   const w=this.world,n=this.navigation
   if(a.state==='search'){
-   if(a.goal.kind!=='tree-harvest'&&a.breaks>=a.goal.maxBlocks){this.finish('Finished bounded resource pass: '+a.breaks+' server-confirmed breaks; '+a.pickups+' inventory-confirmed pickups.','completed');return}
+   if(a.goal.requiredTrees&&a.trunks.length>=a.goal.requiredTrees){this.finish(`Confirmed log collection at ${a.trunks.length} distinct tree sites.`,'completed');return}
+   if(a.goal.quantity){const amount=a.goal.sourceFamily==='logs'?Object.entries(w.items()).reduce((n,[name,count])=>n+(/_(?:log|wood|stem|hyphae)$/.test(name)?count:0),0):(w.items()[a.goal.target]||0);if(amount>=a.goal.quantity){this.finish(`Server inventory confirms ${amount} ${a.goal.sourceFamily==='logs'?'logs':a.goal.target}.`,'completed');return}}
+   if(a.goal.kind!=='tree-harvest'&&a.breaks>=a.goal.maxBlocks){this.finish('Finished bounded resource pass: '+a.breaks+' server-confirmed breaks; '+a.pickups+' inventory-confirmed pickups.',a.goal.quantity?'partial':'completed');return}
    if(n.job||n.mining.job)return
    if(this.chooseTools(now))return
    const target=selectKnownResource(w,a.goal,a.visited)
@@ -236,13 +239,13 @@ export class ResourceJobs {
       return
      }
     }
-    if(a.goal.kind==='tree-harvest'){this.startScouting(now);return}
+    if(a.goal.kind==='tree-harvest'||a.goal.continuousSearch){this.startScouting(now);return}
     this.finish(`No more visible ${a.goal.target}. ${a.breaks} blocks server-confirmed broken; inventory pickup confirmed ${a.pickups} time(s).`,a.breaks?'partial':'blocked');return
    }
    a.target=target
    a.inventoryBefore={...w.items()}
-   const pos={x:target.x,y:target.y,z:target.z},assessment=miningAssessment(w,pos,{explicit:true})
-   if(assessment.ok){const result=n.mine(pos);if(result.accepted){a.state='mining';a.reason='Mining a visible '+target.name+'; waiting for server block update.';return}}
+   const pos={x:target.x,y:target.y,z:target.z},assessment=miningAssessment(w,pos,{explicit:true,allowAbove:true})
+   if(assessment.ok&&(!a.goal.quantity||assessment.canHarvest)){const result=n.mine(pos,{allowAbove:true});if(result.accepted){a.state='mining';a.reason='Mining a visible '+target.name+'; waiting for server block update.';return}}
    // If out of reach, navigate physically to a known safe cell, not through a block.
    const far=w.position&&distance(w.position,{x:target.x+.5,y:target.y+.5,z:target.z+.5})>4
    if(far){const approach=this.chooseApproach(target);if(approach){const p=n.walk(approach);if(p.accepted){a.state='approaching';a.movementGoal=approach;a.movementStartedAt=now;a.movementObservedAt=n.lastPoseAt||0;a.reason='Walking to visible '+target.name+'; movement not yet server-confirmed.';return}}}
@@ -284,7 +287,8 @@ export class ResourceJobs {
     this.finish('Mining was not server-confirmed: '+(n.mining.reason||'unknown result'));return
    }
    const target=a.target;a.visited.add(id(target));a.breaks++
-   if(a.goal.kind==='tree-harvest'){a.trees.add(treeTrunkAtPosition(target));this.noteTree(target,now)}
+   if(a.goal.sourceFamily==='logs'){const site=trunkIdentity(target,a.trunks);if(!a.trunks.includes(site))a.trunks.push(site);this.controller.workshop?.rememberTree(target)}
+   if(a.goal.kind==='tree-harvest'){this.controller.workshop?.rememberTree(target);a.trees.add(treeTrunkAtPosition(target));this.noteTree(target,now)}
    a.pickupStarted=now;a.state='pickup-wait'
    a.reason='Server confirmed '+target.name+' broken. Waiting for an observed item drop; inventory not yet confirmed.'
    return

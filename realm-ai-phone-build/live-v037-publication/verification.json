@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200018,
+  "issuedAt": 1793505424868,
+  "expiresAt": 1794110224868,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-037-survival-workflows/Realm-AI-Live.apk",
+  "size": 110232751,
+  "sha256": "d79cba78d03f1485e11759e8f111f42344261c7db9b9fb75a5119ec61939480f",
+  "notes": "Respawn handshake and awareness; experimental strip/quarry, crafting, furnace and storage workflows; confirmed dirt pillars, hazard recovery and portal prerequisites. Live testing needed; dragon combat and arbitrary loot/trade workflows remain unfinished.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}
