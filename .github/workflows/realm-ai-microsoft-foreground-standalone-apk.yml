@@ -1,5 +1,5 @@
 name: Realm AI Microsoft Code UI - Installable TEST APK
-# Run Robolectric tests against original package, then package separate signed installer.
+# Run Robolectric tests against original package, with correctly isolated UI dialog assertions.
 on:
   push:
     branches: [feature/realm-ai-0391-microsoft-code-frontmost-20261101]
