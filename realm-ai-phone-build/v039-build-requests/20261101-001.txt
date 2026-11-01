@@ -1,0 +1,5 @@
+Realm AI Live v0.39 preview build request
+Source branch: feature/realm-ai-live-v039-retry-knowledge-20261101
+Scope: shallow-water risk routing, Try Again, read-only Minecraft Bedrock knowledge.
+Build: real ARM64 Android preview package, distinct from existing permanently signed Live installation.
+Safety: do NOT replace the installed app or claim to have the Live signing key.
