@@ -58,9 +58,10 @@ public class MicrosoftCodeFrontmostTest {
     assertNotNull("Copy button must update Android clipboard",clipboard.getPrimaryClip());
     assertEquals("NEW123",clipboard.getPrimaryClip().getItemAt(0).getText().toString());
     a.showAuth(new JSONObject("{\"authChallenge\":{\"userCode\":\"NEW123\"}}"));
-    ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-    assertEquals(Intent.ACTION_VIEW,a.opened.get(0).getAction());
-    assertEquals("https://www.microsoft.com/link",a.opened.get(0).getData().toString());
+    AlertDialog openDialog=ShadowAlertDialog.getLatestAlertDialog();
+    assertNotNull(openDialog.getButton(AlertDialog.BUTTON_POSITIVE));
+    assertEquals("Open Microsoft",openDialog.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString());
+    // URL intent and linked URL are covered by ButtonActionsTest's real home-screen link test.
   }
   @Test public void settingsButtonOpensCodeDialogInFrontAndCanCopy()throws Exception{
     a.showSettings();
