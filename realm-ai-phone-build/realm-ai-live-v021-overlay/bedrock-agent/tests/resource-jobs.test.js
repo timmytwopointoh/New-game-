@@ -31,3 +31,20 @@ test('Stop cancels internal resource tasks independently of old saved plan cards
  const x=rig();x.agent.start('find and mine oak log');x.agent.cancel('Stop commanded')
  assert.equal(x.agent.snapshot().state,'interrupted');assert.equal(x.agent.active,null)
 })
+
+test('unrelated inventory gains never count as collected logs',()=>{
+ const x=rig(),now=Date.now();let inventory={};x.world.items=()=>inventory;x.agent.start('get wood');x.complete();x.agent.tick(now+400);inventory={dirt:5};x.agent.tick(now+1100);assert.equal(x.agent.snapshot().confirmedPickups,0);inventory={dirt:5,oak_log:1};x.agent.tick(now+1400);assert.equal(x.agent.snapshot().confirmedPickups,1)
+})
+test('resource approaches retain their goal after the navigation job is cleared',()=>{
+ const x=rig(),now=Date.now();x.agent.start('get wood');x.nav.job=null;x.nav.mining.job=null;x.nav.state='arrived-predicted';x.nav.lastPoseAt=20;x.world.serverPosition={x:6.5,y:65.62,z:.5};Object.assign(x.agent.active,{state:'approaching',movementGoal:{x:6,y:64,z:0},movementStartedAt:now,movementObservedAt:10,lastAt:0});delete x.world.lastPoseAt;x.agent.tick(now+500);assert.equal(x.agent.active.state,'search')
+})
+test('homeward legs use navigation authoritative timestamps, not an absent world timestamp',()=>{
+ const x=rig(),now=Date.now();x.agent.start('get wood');x.nav.job=null;x.nav.mining.job=null;x.nav.lastPoseAt=20;x.world.serverPosition={x:10.5,y:65.62,z:.5};Object.assign(x.agent.active,{state:'return-walking',returnPlan:{home:{position:{x:0,y:64,z:0}}},returnLeg:{x:10,y:64,z:0},returnLegPoseAt:10,returnLegStartedAt:now,returnIndex:0});delete x.world.lastPoseAt;x.agent.tickHomeward(now+500);assert.equal(x.agent.active.state,'returning-home');assert.equal(x.agent.active.returnIndex,1)
+})
+test('stopped or unconfirmed resource approaches cannot hang indefinitely or resume work',()=>{
+ const x=rig(),now=Date.now();x.agent.start('get wood');x.nav.job=null;x.nav.mining.job=null;x.nav.state='stopped';Object.assign(x.agent.active,{state:'approaching',movementGoal:{x:6,y:64,z:0},movementStartedAt:now,lastAt:0});x.agent.tick(now+500);assert.equal(x.agent.snapshot().state,'blocked')
+ const y=rig();y.agent.start('get wood');y.nav.job=null;y.nav.mining.job=null;y.nav.state='arrived-predicted';Object.assign(y.agent.active,{state:'approaching-memory',movementGoal:{x:6,y:64,z:0},movementStartedAt:now,lastAt:0});y.agent.tick(now+22000);assert.equal(y.agent.snapshot().state,'blocked')
+})
+test('discovered trunks are not reported as fully felled trees or physically placed chests',()=>{
+ const x=rig();x.agent.start('get wood');x.agent.noteTree({x:1,y:64,z:0},Date.now());assert.equal(x.agent.snapshot().trees,0);assert.equal(x.agent.snapshot().registeredTrunks,1);assert.equal(x.agent.snapshot().checkpointAt.length,0)
+})

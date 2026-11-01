@@ -5,10 +5,10 @@ import os from 'node:os'
 import path from 'node:path'
 import {AutomaticGoogleResearch,PrivateResearchKey,validateObservedPlan} from '../src/automatic-google-research.js'
 import {meleeTarget,meleePacket} from '../src/survival/combat.js'
-import {Pickup,nearestDrop,pickupPacket} from '../src/survival/pickup.js'
+import {Pickup,nearestDrop,withinPickupReach} from '../src/survival/pickup.js'
 import {extractGooglePlan} from '../src/research-action-plan.js'
 const fakeWorld=()=>({
- position:{x:0.5,y:65.62,z:0.5},standPosition(){return {x:0,y:64,z:0}},gameMode:'survival',survivalVerified:true,grounded:()=>true,movementVerified:true,
+ position:{x:0.5,y:65.62,z:0.5},serverPosition:{x:0.5,y:65.62,z:0.5},standPosition(){return {x:0,y:64,z:0}},gameMode:'survival',survivalVerified:true,grounded:()=>true,movementVerified:true,
  items:()=>({dirt:5}),inventoryKnown:true,inventory:new Map([[0,{network_id:1,count:1}]]),selectedSlot:0,entityId:'99',entities:new Map(),players:new Map(),drops:new Map(),attributes:{'minecraft:health':20},
  scan:()=>({found:[{x:2,y:64,z:1,name:'dirt'}]}),walkable:p=>p.x<=6&&p.x>=-6&&p.y===64,block:p=>({name:p.x===2?'dirt':'air'}),visible:p=>p.x<7,airAt:p=>p.x!==2
 })
@@ -52,12 +52,12 @@ test('combat strictly targets observed hostiles; never players, creepers or unse
 })
 test('pickup claims success only after observed inventory increase',()=>{
  const w=fakeWorld();w.drops.set('10',{position:{x:.8,y:65.4,z:.5},name:'dirt',count:1})
- const drop=nearestDrop(w);assert.equal(drop.id,'10');assert.equal(pickupPacket(w,drop).actor_runtime_id,99n)
+ const drop=nearestDrop(w);assert.equal(drop.id,'10');assert(withinPickupReach(w,drop))
  const pick=new Pickup(w);assert.equal(pick.begin(drop).accepted,true)
  const output=[];pick.tick(10,{queue:(packet,data)=>output.push([packet,data])});assert.equal(pick.state,'waiting-for-server-inventory')
  pick.tick(20,{queue:()=>{}});assert.equal(pick.state,'waiting-for-server-inventory')
  w.items=()=>({dirt:6});pick.tick(40,{queue:()=>{}});assert.equal(pick.state,'confirmed')
- assert.equal(output[0][0],'take_item_entity')
+ assert.equal(output.length,0,'Pickup never sends a server-only packet')
 })
 test('pickup times out as unverified rather than falsely collected',()=>{
  const w=fakeWorld(),p=new Pickup(w),drop={id:'12',position:{x:.8,y:65.4,z:.5},name:'dirt'}

@@ -33,4 +33,5 @@ public class SupportBundleTest {
  @Test public void appLogAcceptsOnlyEventCodesAndKeepsABoundedHistory()throws Exception{
   for(int i=0;i<210;i++)SupportLog.record(a,i%2==0?"update_check":"update_current");SupportLog.record(a,"PRIVATE-TOKEN");JSONObject saved=SupportBundle.read(SupportLog.file(a),131072);assertEquals(200,saved.getJSONArray("events").length());assertFalse(saved.toString().contains("PRIVATE"));
  }
+ @Test public void inventoryAndPlacementEvidenceIsAvailableInExportWithoutRawItems()throws Exception{JSONObject raw=new JSONObject("{\"events\":[{\"kind\":\"sample\",\"state\":{\"inventoryRevision\":12,\"selectedHotbar\":2,\"heldCount\":8,\"placementConfirmed\":1,\"placementTotal\":4,\"held_item\":{\"token\":\"PRIVATE\"}}}],\"packets\":{\"inventory_content\":2}}");JSONObject t=SupportBundle.trace(raw);JSONObject state=t.getJSONArray("events").getJSONObject(0).getJSONObject("state");assertEquals(12,state.getInt("inventoryRevision"));assertEquals(1,state.getInt("placementConfirmed"));assertEquals(2,t.getJSONObject("packets").getInt("inventory_content"));assertFalse(t.toString().contains("PRIVATE"));}
 }

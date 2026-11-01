@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200015,
+  "issuedAt": 1793499918122,
+  "expiresAt": 1794104718122,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-034-console-review/Realm-AI-Live.apk",
+  "size": 110194841,
+  "sha256": "ce631ed8b2eeedf49beef2f1c1e8f85fed454c46fccd0c57d2b454028fd9b6be",
+  "notes": "Command rail and field console; offline command browsing; inventory evidence and resource pickup fixes. Crafting and chest logistics remain unfinished; placement requires live testing.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

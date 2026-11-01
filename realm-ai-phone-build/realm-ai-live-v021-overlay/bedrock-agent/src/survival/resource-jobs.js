@@ -3,6 +3,11 @@ import {miningAssessment} from './obstacles.js'
 import {bestAxeSlot,axeDurability,chestCheckpoint,storageForTree,trunkIdentity,provisioningPlan} from './forestry-cycle.js'
 import {makeForestryReturnPlan,returnRouteHints} from './forestry-return.js'
 
+export function expectedResourceDrops(world,target){
+ const names=(world.registry?.blocksByName?.[target?.name]?.drops||[]).map(id=>world.registry?.items?.[id]?.name).filter(Boolean)
+ return [...new Set([...(target?.name?[target.name]:[]),...names])]
+}
+
 const id=p=>`${p.x},${p.y},${p.z}`
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)
 
@@ -15,15 +20,15 @@ export class ResourceJobs {
  get world(){return this.controller.world}
  get navigation(){return this.controller.navigation}
  report(text){this.controller.report?.(text)}
- snapshot(){return this.active?{kind:this.active.goal.kind,state:this.active.state,confirmedBreaks:this.active.breaks,confirmedPickups:this.active.pickups,trees:this.active.trunks.length,checkpointAt:this.active.checkpoints.map(x=>({...x})),axes:this.active.axeCount,lastMessage:this.active.reason,waitingCapabilities:this.active.waitingCapabilities,returnPlan:this.active.returnPlan||null}:this.last||{state:'idle'}}
+ snapshot(){return this.active?{kind:this.active.goal.kind,state:this.active.state,confirmedBreaks:this.active.breaks,confirmedPickups:this.active.pickups,trees:0,registeredTrunks:this.active.trunks.length,checkpointAt:this.active.checkpoints.map(x=>({...x})),axes:this.active.axeCount,lastMessage:this.active.reason,waitingCapabilities:this.active.waitingCapabilities,returnPlan:this.active.returnPlan||null}:this.last||{state:'idle'}}
  cancel(reason='Resource task stopped; resources already collected remain in inventory.'){
   if(!this.active)return
-  this.last={state:'interrupted',reason,confirmedBreaks:this.active.breaks,confirmedPickups:this.active.pickups,trees:this.active.trunks.length,checkpoints:this.active.checkpoints,returnPlan:this.active.returnPlan||null}
+  this.last={state:'interrupted',reason,confirmedBreaks:this.active.breaks,confirmedPickups:this.active.pickups,trees:0,registeredTrunks:this.active.trunks.length,checkpoints:this.active.checkpoints,returnPlan:this.active.returnPlan||null}
   this.active=null
  }
  finish(reason,state='blocked'){
   if(!this.active)return
-  this.last={state,reason,confirmedBreaks:this.active.breaks,confirmedPickups:this.active.pickups,trees:this.active.trunks.length,checkpoints:this.active.checkpoints,returnPlan:this.active.returnPlan||null}
+  this.last={state,reason,confirmedBreaks:this.active.breaks,confirmedPickups:this.active.pickups,trees:0,registeredTrunks:this.active.trunks.length,checkpoints:this.active.checkpoints,returnPlan:this.active.returnPlan||null}
   this.active=null
   this.report(reason)
  }
@@ -70,7 +75,7 @@ export class ResourceJobs {
    if(n.job&&['blocked','failed','stopped'].includes(n.state)){
     n.stop('',false);a.state='return-paused';a.reason='Home route stopped: '+(n.reason||'server route failure')+'; no chest actions attempted.';return
    }
-   if(leg&&pose&&(w.lastPoseAt||0)>a.returnLegPoseAt&&distance(pose,{x:leg.x+.5,y:leg.y+1.62,z:leg.z+.5})<.75){
+   if(leg&&pose&&(n.lastPoseAt||0)>a.returnLegPoseAt&&distance(pose,{x:leg.x+.5,y:leg.y+1.62,z:leg.z+.5})<.75){
     n.stop('',false);a.state='returning-home';a.returnIndex++;a.reason='Server confirmed one leg back toward home.';return
    }
    if(now-a.returnLegStartedAt>21000){n.stop('',false);a.state='return-paused';a.reason='Homeward walking timed out without server position confirmation.'}
@@ -83,7 +88,7 @@ export class ResourceJobs {
   while(a.returnIndex<route.length-1&&pose&&distance(pose,{x:route[a.returnIndex].x+.5,y:route[a.returnIndex].y+1.62,z:route[a.returnIndex].z+.5})<6)a.returnIndex++
   const mark=route[Math.min(a.returnIndex,route.length-1)]||home
   const approach=this.chooseMemoryApproach(mark)
-  if(approach){const result=n.walk(approach,{allowMining:false});if(result?.accepted){a.state='return-walking';a.returnLeg=approach;a.returnLegPoseAt=w.lastPoseAt||0;a.returnLegStartedAt=now;a.reason='Walking toward remembered tree checkpoint; waiting for server-confirmed position.';return}}
+  if(approach){const result=n.walk(approach,{allowMining:false});if(result?.accepted){a.state='return-walking';a.returnLeg=approach;a.returnLegPoseAt=n.lastPoseAt||0;a.returnLegStartedAt=now;a.reason='Walking toward remembered tree checkpoint; waiting for server-confirmed position.';return}}
   try{w.requestNearby?.(n.client)}catch{}
   if(now-a.returnLastReportAt>12000){a.returnLastReportAt=now;this.report('Returning with wood is paused: path to tree-two chest is not yet visible and safe. No mining or chest edits will be attempted. Use Stop to cancel.')}
   a.reason='Waiting for safe observed terrain to route home.'
@@ -145,13 +150,13 @@ export class ResourceJobs {
    // Scheduling a chest doesn't mean a chest was made, placed, or filled.
    const c={tree:count,position:{...anchor},state:'awaiting-real-crafting-and-container-transactions',confirmed:false}
    a.checkpoints.push(c)
-   this.report(`Tree ${count}: chest checkpoint scheduled at ${anchor.x},${anchor.y},${anchor.z}. Placement and storage must be confirmed by the Realm before being counted.`)
+   this.report(`Observed trunk ${count}: unconfirmed chest checkpoint scheduled at ${anchor.x},${anchor.y},${anchor.z}. Placement and storage must be confirmed by the Realm before being counted.`)
   }
   if(count>2){
    const at=storageForTree(count)
    if(at&&count!==at&&now-a.lastReportAt>12000){
     a.lastReportAt=now
-    this.report(`Tree ${count}: saved wood is intended for tree-${at} storage. Chest deposits are pending actual container transaction support; inventory has not been discarded.`)
+    this.report(`Observed trunk ${count}: saved wood is intended for tree-${at} storage. Chest deposits are pending actual container transaction support; inventory has not been discarded.`)
    }
   }
  }
@@ -169,7 +174,7 @@ export class ResourceJobs {
    const plan=n.routeTo(goal,feet,{allowDirt:false,maxNodes:900})
    if(!plan?.ok||plan.path.length<2)continue
    const result=n.walk(goal,{allowMining:false})
-   if(result.accepted){a.scoutGoal=goal;a.scoutPoseAt=w.lastPoseAt||0;a.state='scouting';a.scoutStarted=now;a.reason='Searching another safely observed section for trees; continuing until Stop.';return}
+   if(result.accepted){a.scoutGoal=goal;a.scoutPoseAt=n.lastPoseAt||0;a.state='scouting';a.scoutStarted=now;a.reason='Searching another safely observed section for trees; continuing until Stop.';return}
   }
   try{w.requestNearby?.(n.client)}catch{}
   a.scoutAttempts++;a.nextScoutAt=now+2000
@@ -222,7 +227,7 @@ export class ResourceJobs {
       a.triedTrees.add(tId)
       if(distance(w.position,{x:tree.x+.5,y:tree.y+1.62,z:tree.z+.5})>8){
        const approach=this.chooseMemoryApproach(tree)
-       if(approach){const result=n.walk(approach);if(result.accepted){a.state='approaching-memory';a.rememberedTarget=tree;a.movementObservedAt=n.lastPoseAt||0;a.movementGoal=approach;a.reason=`Returning toward remembered tree at ${tree.x},${tree.y},${tree.z}; will verify it still exists.`;return}}
+       if(approach){const result=n.walk(approach);if(result.accepted){a.state='approaching-memory';a.rememberedTarget=tree;a.movementObservedAt=n.lastPoseAt||0;a.movementGoal=approach;a.movementStartedAt=now;a.reason=`Returning toward remembered tree at ${tree.x},${tree.y},${tree.z}; will verify it still exists.`;return}}
       }else{
        const current=w.block({x:tree.x,y:tree.y,z:tree.z})
        if(current&&current.name!==tree.name)this.controller.landmarks?.forgetTree(tree,w.dimension)
@@ -240,7 +245,7 @@ export class ResourceJobs {
    if(assessment.ok){const result=n.mine(pos);if(result.accepted){a.state='mining';a.reason='Mining a visible '+target.name+'; waiting for server block update.';return}}
    // If out of reach, navigate physically to a known safe cell, not through a block.
    const far=w.position&&distance(w.position,{x:target.x+.5,y:target.y+.5,z:target.z+.5})>4
-   if(far){const approach=this.chooseApproach(target);if(approach){const p=n.walk(approach);if(p.accepted){a.state='approaching';a.movementObservedAt=w.lastPoseAt||0;a.reason='Walking to visible '+target.name+'; movement not yet server-confirmed.';return}}}
+   if(far){const approach=this.chooseApproach(target);if(approach){const p=n.walk(approach);if(p.accepted){a.state='approaching';a.movementGoal=approach;a.movementStartedAt=now;a.movementObservedAt=n.lastPoseAt||0;a.reason='Walking to visible '+target.name+'; movement not yet server-confirmed.';return}}}
    a.visited.add(id(target));a.reason='Skipping unsafe or unreachable '+target.name+'.';return
   }
   if(a.state==='scouting'){
@@ -253,6 +258,7 @@ export class ResourceJobs {
    return
   }
   if(a.state==='approaching-memory'){
+   if(now-a.movementStartedAt>21000){n.stop('',false);this.finish('Remembered-tree approach timed out without server confirmation.');return}
    if(n.state==='stopped'||['blocked','failed'].includes(n.state)){this.finish('Route to remembered tree stopped: '+(n.reason||'movement interrupted'));return}
    const p=w.serverPosition,g=a.movementGoal
    if(p&&g&&n.lastPoseAt>a.movementObservedAt&&distance(p,{x:g.x+.5,y:g.y+1.62,z:g.z+.5})<.75){
@@ -264,8 +270,10 @@ export class ResourceJobs {
    return
   }
   if(a.state==='approaching'){
+   if(['blocked','stopped','failed'].includes(n.state)){this.finish(n.reason||'Resource approach interrupted.');return}
+   if(now-a.movementStartedAt>21000){n.stop('',false);this.finish('Resource approach timed out without server confirmation.');return}
    if(n.job&&n.state!=='arrived-predicted'){if(['blocked','stopped','failed'].includes(n.state))this.finish(n.reason||'Route failed.');return}
-   const p=w.serverPosition,goal=n.job?.goal
+   const p=w.serverPosition,goal=a.movementGoal
    if(!p||!goal||n.lastPoseAt<=a.movementObservedAt)return
    if(distance(p,{x:goal.x+.5,y:goal.y+1.62,z:goal.z+.5})>.75)return
    n.stop('',false);a.state='search';a.reason='Server confirmed approach; checking reach again.';return
@@ -286,10 +294,10 @@ export class ResourceJobs {
    if(now-a.pickupStarted<600)return
    if(n.job)return
    const before=a.inventoryBefore,after=w.items()
-   const growth=Object.entries(after).some(([name,num])=>num>(before[name]||0))
+   const expected=expectedResourceDrops(w,a.target);const growth=expected.some(name=>(after[name]||0)>(before[name]||0))
    if(growth){a.pickups++;a.state='search';a.reason='Inventory increased after a confirmed break; looking for the next target.';return}
-   const drop=[...(w.drops?.values?.()||[])].filter(d=>distance(d.position,w.position)<8).sort((x,y)=>distance(x.position,w.position)-distance(y.position,w.position))[0]
-   if(drop){const result=n.collectNearby();if(result?.accepted){a.state='pickup-active';a.reason='Collecting server-observed drop and waiting for inventory confirmation.';return}}
+   const drop=[...(w.drops?.values?.()||[])].filter(d=>expected.includes(d.name)&&distance(d.position,w.position)<8).sort((x,y)=>distance(x.position,w.position)-distance(y.position,w.position))[0]
+   if(drop){const result=n.collectNearby({names:expected});if(result?.accepted){a.state='pickup-active';a.reason='Collecting server-observed drop and waiting for inventory confirmation.';return}}
    if(now-a.pickupStarted>2500){a.state='search';a.reason='Break confirmed; no item received. Never counted as collected.'}
   }
   if(a.state==='pickup-active'){

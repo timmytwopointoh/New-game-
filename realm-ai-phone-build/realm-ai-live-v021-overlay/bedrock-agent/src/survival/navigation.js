@@ -126,11 +126,11 @@ export class Navigation{
   if(result.accepted){this.progress.reset();this.job={kind:'build',allowMining:false,gameMode:this.world.gameMode};this.state='building'}
   return result
  }
- collectNearby(){
+ collectNearby({names=null}={}){
   if(this.job)return {accepted:false,queued:false,message:'Finish or Stop the current job before collecting.'}
   const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
   if(!this.world.inventoryKnown)return {accepted:false,queued:false,message:'Waiting for server inventory.'}
-  const drop=nearestDrop(this.world,{range:9});if(!drop)return {accepted:false,queued:false,message:'No identifiable dropped item observed within nine blocks.'}
+  const drop=nearestDrop(this.world,{range:9,names});if(!drop)return {accepted:false,queued:false,message:'No identifiable dropped item observed within nine blocks.'}
   const p={x:Math.floor(drop.position.x),y:Math.floor(drop.position.y),z:Math.floor(drop.position.z)}
   const goals=[p,{...p,y:p.y+1},{...p,y:p.y-1}].filter(q=>this.world.walkable(q))
   const route=goals.map(q=>this.routeTo(q,this.world.standPosition(),{allowDirt:false})).find(x=>x.ok)

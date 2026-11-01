@@ -27,3 +27,8 @@ test('malformed persisted history is bounded and cannot prevent a clean recordin
  assert.doesNotThrow(()=>cleanTrace(null));assert.equal(cleanTrace({events:{bad:true},issues:'invalid'}).events.length,0)
  const f=fixture();try{fs.writeFileSync(f.file,'{broken');const restored=new RuntimeTrace(f.file);assert(restored.flush());assert.equal(JSON.parse(fs.readFileSync(f.file)).events[0].kind,'session_start')}finally{f.close()}
 })
+
+test('inventory evidence and placement counters survive report sanitizing without exposing item payloads',()=>{
+ const data=cleanTrace({events:[{kind:'sample',state:{inventoryRevision:12,selectedHotbar:2,heldCount:8,placementConfirmed:1,placementTotal:4,held_item:{token:'PRIVATE'}}}],packets:{inventory_content:2,item_stack_response:3}})
+ const state=data.events[0].state;assert.equal(state.inventoryRevision,12);assert.equal(state.selectedHotbar,2);assert.equal(state.placementConfirmed,1);assert.equal(data.packets.item_stack_response,3);assert(!JSON.stringify(data).includes('PRIVATE'))
+})

@@ -1,4 +1,8 @@
-# Realm AI Live v0.26 — jumping, respawn and bug reports
+# Realm AI Live v0.34 — console review
+
+Current source: package `com.veilforge.realmagent.live`, versionCode **200015**. See [review and remaining work](REVIEW-v0.34.md) and [release notes](UPDATE-NOTES-v0.34.md). The historical v021 directory is the canonical Live app.
+
+# Historical v0.26 background
 
 Current complete source for package `com.veilforge.realmagent.live`, versionCode 200007 (`0.26-climb-recovery`). The directory name retains v021 for the permanent baseline; this is the canonical source for future Live work. Source from the separate `com.veilforge.realmagent` app has been merged here. Keep Live’s updater, identity and permanent key.
 

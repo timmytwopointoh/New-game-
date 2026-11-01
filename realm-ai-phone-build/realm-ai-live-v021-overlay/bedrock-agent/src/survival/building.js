@@ -70,7 +70,7 @@ export class Building{
    if(version>p.version&&block&&!air(block)&&block.name!==j.material){this.cancel('Server changed the target to another block; placement not confirmed.');return {}}
    if(version>p.version&&block?.name===j.material){
     p.blockConfirmed=true
-    if(p.creative||stack?.network_id===p.heldId&&stack.count===p.count-1||(p.count===1&&(!stack?.network_id||stack.count===0))){
+    if(p.creative||(w.inventoryProtocol?w.inventoryProtocol.consumed(p.slot,p.inventoryBefore):stack?.network_id===p.heldId&&stack.count===p.count-1||(p.count===1&&(!stack?.network_id||stack.count===0)))){
      j.confirmed.add(key(p.target));j.remaining=j.remaining.filter(q=>key(q)!==key(p.target));j.pending=null;j.lastProgress=now;j.approachAttempts=0;this.placed++;this.report(p.creative?`Server confirms ${this.placed}/${this.total} placed ${j.material} in Creative; held block was not consumed.`:`Server confirms ${this.placed}/${this.total} placed ${j.material}; inventory decreased by one.`)
      if(!j.remaining.length){this.state='confirmed';this.reason=p.creative?`Server confirms all ${this.total} ${j.material} Creative placements.`:`Server confirms all ${this.total} ${j.material} placements and inventory consumption.`;this.job=null;this.report(this.reason)}
      return {}
@@ -91,7 +91,7 @@ export class Building{
    const [slot,held]=slots.find(([slot])=>slot===w.selectedSlot)||slots[0]
    if(w.selectedSlot!==slot){return {selectSlot:slot}}
    if(j.equipWaitUntil&&now<j.equipWaitUntil)return {}
-   j.pending={target:{...target},slot,count:held.count,heldId:held.network_id,creative:w.gameMode==='creative',version:w.blockVersion(target),sentAt:now,blockConfirmed:false};this.state='waiting-for-placement'
+   j.pending={target:{...target},slot,inventoryBefore:w.inventoryProtocol?.baseline(slot),count:held.count,heldId:held.network_id,creative:w.gameMode==='creative',version:w.blockVersion(target),sentAt:now,blockConfirmed:false};this.state='waiting-for-placement'
    return {aim:anchor.hit,placement:{legacy:{legacy_request_id:0,legacy_transactions:null},transaction_type:'item_use',actions:[],transaction_data:{action_type:'click_block',trigger_type:'player_input',block_position:anchor.position,face:anchor.face,hotbar_slot:slot,hand:'main_hand',held_item:held,player_pos:{...w.position,y:w.position.y-1.62},click_pos:anchor.click,block_runtime_id:w.runtimeIdAt(anchor.position)>>>0,client_prediction:'success',client_cooldown_state:'off'}}}
   }
   if(routeTo&&j.approachAttempts<3){

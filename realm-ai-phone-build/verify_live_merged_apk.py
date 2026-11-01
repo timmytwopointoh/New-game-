@@ -8,6 +8,9 @@ with zipfile.ZipFile(apk) as z,zipfile.ZipFile(baseline) as old:
  expected={}
  for file in (source/'bedrock-agent/src').rglob('*'):
   if file.is_file():expected['assets/nodejs-project/src/'+str(file.relative_to(source/'bedrock-agent/src'))]=file
+ for folder in ['tools','pack-template']:
+  for file in (source/'bedrock-agent'/folder).rglob('*'):
+   if file.is_file():expected['assets/nodejs-project/'+str(file.relative_to(source/'bedrock-agent'))]=file
  for name,file in expected.items():assert z.read(name)==file.read_bytes(),f'Shipped source mismatch: {name}'
  unexpected={n for n in z.namelist() if n.startswith('assets/nodejs-project/src/') and not n.endswith('/')} - set(expected)
  assert not unexpected,unexpected
@@ -26,6 +29,9 @@ with zipfile.ZipFile(apk) as z,zipfile.ZipFile(baseline) as old:
  dex=z.read('classes2.dex')
  for token in [b'https://www.microsoft.com/link',b'Copy sign-in code',b'Share one file',b'Language and learning',b'Copy diagnostics',b'Check companion updates',b'Lcom/veilforge/realmagent/AppUpdater;',b'Lcom/veilforge/realmagent/ConnectionDiagnostics;',b'markControllerAvailable',b'Nintendo Switch',b'Bug reports',b'Export ZIP',b'Lcom/veilforge/realmagent/SupportBundle;',b'Lcom/veilforge/realmagent/SupportLog;']:
   assert token in dex,token
+ if (source/'bedrock-agent/src/survival/inventory-protocol.js').exists():
+  for token in [b'Lcom/veilforge/realmagent/CommandDeck;',b'Lcom/veilforge/realmagent/CommandRail;',b'COMMAND RAIL',b'FIELD CONSOLE']:
+   assert token in dex,token
  for name in ['runtime-trace.js','survival/climbing.js','survival/respawn.js']:
   assert 'assets/nodejs-project/src/'+name in expected,name
-print(json.dumps({'package':'com.veilforge.realmagent.live','sourceFilesChecked':len(expected),'bundledWords':5000,'nativeAndDependencies':'byte-identical to Live v0.21','controls':'Microsoft link/copy, sharing, learning, diagnostics and Live updater present','apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest()},indent=2))
+print(json.dumps({'package':'com.veilforge.realmagent.live','sourceFilesChecked':len(expected),'bundledWords':5000,'nativeAndDependencies':'byte-identical to supplied verified baseline','controls':'Microsoft link/copy, sharing, learning, diagnostics and Live updater present','apkSha256':hashlib.sha256(apk.read_bytes()).hexdigest()},indent=2))

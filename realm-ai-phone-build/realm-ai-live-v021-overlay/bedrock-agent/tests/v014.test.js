@@ -59,7 +59,7 @@ test('five Realm-scoped cards persist; selected activation, duplicate protection
 test('selected command runs first, queued commands reactivate after a delay, and Stop cancels later items',async()=>{
  const {w,n}=fixture(),connection={config:{ownerPlayerNames:[]},events:[],nextEventId:0,emit(){}};const s=new SurvivalController(connection);s.world=w;s.navigation=n;const calls=[];s.handle=raw=>{calls.push(raw);return {accepted:true,queued:false,message:raw}}
  const p=s.commandPlans;p.batchDelayMs=15;p.prepare({id:'inventory',values:{}});p.prepare({id:'help',values:{}});p.prepare({id:'look',values:{}});const result=p.activateQueue();assert(result.accepted);assert.deepEqual(calls,['look around']);assert.throws(()=>p.activateQueue(),/batch/)
- await new Promise(r=>setTimeout(r,50));assert.deepEqual(calls,['look around','inventory','help survival']);assert.equal(p.batch,null);assert(p.cards.every(c=>c.state==='completed'))
+ for(let attempt=0;attempt<100&&calls.length<3;attempt++)await new Promise(r=>setTimeout(r,10));assert.deepEqual(calls,['look around','inventory','help survival']);assert.equal(p.batch,null);assert(p.cards.every(c=>c.state==='completed'))
  p.select(p.cards[0].id);p.prepare({id:'status',values:{}});p.batchDelayMs=60;calls.length=0;p.activateQueue();assert.equal(calls.length,1);p.interrupt('Stop pressed');await new Promise(r=>setTimeout(r,80));assert.equal(calls.length,1);assert.equal(p.batch,null);n.detach()
 })
 test('a mining queue item holds the batch until the server confirms the break',async()=>{

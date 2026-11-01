@@ -1,0 +1,1 @@
+Owner requested reviewed v0.34 signed test APK. Publish already compiled, locally signed public bytes only.
