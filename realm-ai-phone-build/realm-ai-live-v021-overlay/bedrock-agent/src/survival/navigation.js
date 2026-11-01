@@ -370,15 +370,21 @@ export class Navigation{
   const standaloneActions=legacyBreaking?mining.actions:[]
   const standaloneTransaction=legacyBreaking&&mining.transaction?{legacy:mining.transaction.legacy,transaction_type:'item_use',actions:mining.transaction.actions,transaction_data:mining.transaction.data}:null
   if(legacyBreaking){mining.actions=[];mining.transaction=null}
+  // Placement follows inventory authority, independently of the mining protocol.
+  // Carry the use-item click in this tick's input on modern servers, exactly once.
+  const embeddedPlacement=construction.placement&&this.world.serverAuthoritativeInventory!==false
+  const placementTransaction=embeddedPlacement?{legacy:construction.placement.legacy,actions:construction.placement.actions,data:construction.placement.transaction_data}:null
+  if(placementTransaction&&mining.transaction){this.stop('Conflicting mining and placement controls; no placement sent.');return}
+  const inputTransaction=placementTransaction||mining.transaction
   if(mining.actions.length)flags.push('block_action')
-  if(mining.transaction)flags.push('item_interact')
+  if(inputTransaction)flags.push('item_interact')
   if(this.job?.kind==='mine'&&!this.mining.job){this.state=this.mining.result;this.reason=this.mining.reason;this.job=null}
   if(this.job?.kind==='solo'&&this.arrivedAt&&!this.job.pickup&&now-this.arrivedAt>10000){this.job=null;this.report('Route inputs finished. No further movement queued.')}
   try{
-   this.client.queue('player_auth_input',{pitch:this.pitch||0,yaw:this.yaw||0,position:{...this.world.position},move_vector:move,head_yaw:this.yaw||0,input_data:[...new Set([...(move.z?['up']:[]),'received_server_data',...flags,...this.pendingFlags.splice(0)])],input_mode:'touch',play_mode:'normal',interaction_model:'crosshair',interact_rotation:{x:this.pitch||0,z:this.yaw||0},tick:++this.tick,delta,transaction:mining.transaction,item_stack_request:null,block_action:mining.actions.length?mining.actions:null,vehicle_rotation:null,predicted_vehicle:null,analogue_move_vector:move,camera_orientation:{x:-Math.sin((this.yaw||0)*Math.PI/180)*Math.cos((this.pitch||0)*Math.PI/180),y:-Math.sin((this.pitch||0)*Math.PI/180),z:Math.cos((this.yaw||0)*Math.PI/180)*Math.cos((this.pitch||0)*Math.PI/180)},raw_move_vector:move})
+   this.client.queue('player_auth_input',{pitch:this.pitch||0,yaw:this.yaw||0,position:{...this.world.position},move_vector:move,head_yaw:this.yaw||0,input_data:[...new Set([...(move.z?['up']:[]),'received_server_data',...flags,...this.pendingFlags.splice(0)])],input_mode:'touch',play_mode:'normal',interaction_model:'crosshair',interact_rotation:{x:this.pitch||0,z:this.yaw||0},tick:++this.tick,delta,transaction:inputTransaction,item_stack_request:null,block_action:mining.actions.length?mining.actions:null,vehicle_rotation:null,predicted_vehicle:null,analogue_move_vector:move,camera_orientation:{x:-Math.sin((this.yaw||0)*Math.PI/180)*Math.cos((this.pitch||0)*Math.PI/180),y:-Math.sin((this.pitch||0)*Math.PI/180),z:Math.cos((this.yaw||0)*Math.PI/180)*Math.cos((this.pitch||0)*Math.PI/180)},raw_move_vector:move})
    for(const a of standaloneActions)this.client.queue('player_action',{runtime_entity_id:BigInt(this.world.entityId),action:a.action,position:a.position,result_position:a.position,face:a.face})
    if(standaloneTransaction)this.client.queue('inventory_transaction',{transaction:standaloneTransaction})
-   if(construction.placement)this.client.queue('inventory_transaction',{transaction:construction.placement})
+   if(construction.placement&&!embeddedPlacement)this.client.queue('inventory_transaction',{transaction:construction.placement})
    if(now-this.lastRequestAt>5000){this.lastRequestAt=now;this.world.requestNearby(this.client)}
   }catch(e){this.stop('Input packet failed: '+String(e.message||e).slice(0,100));this.detach()}
   try{this.onResourceTick?.(now)}catch(e){this.reportRuntimeError?.(e);this.stop('Internal resource task error.');this.onResourceError?.(e)}

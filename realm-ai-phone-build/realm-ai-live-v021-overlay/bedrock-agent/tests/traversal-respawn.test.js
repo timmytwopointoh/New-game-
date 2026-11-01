@@ -52,7 +52,7 @@ test('dirt climbing waits for block AND inventory confirmation, then physically 
   if(f.n.state==='arrived-predicted')break
  }
  assert(confirms>=3);assert(f.w.position.x>3.9);assert(f.w.grounded());assert(Math.abs(f.w.position.y-68.62)<.003)
- assert.equal(f.sent.filter(([name])=>name==='inventory_transaction').length,confirms)
+ assert.equal(f.sent.filter(([name,p])=>name==='player_auth_input'&&p.transaction?.data.action_type==='click_block').length,confirms)
  assert(f.sent.filter(([name,p])=>name==='player_auth_input'&&p.input_data.includes('start_jumping')).length>=3)
  }finally{f.close()}
 })

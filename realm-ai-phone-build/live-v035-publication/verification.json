@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200016,
+  "issuedAt": 1793500342981,
+  "expiresAt": 1794105142981,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-035-block-placement/Realm-AI-Live.apk",
+  "size": 110194841,
+  "sha256": "e390034273d1dcb8a87596f624921cbdb7f09cd792488a852872c860c00bd219",
+  "notes": "Single-block placement input fix: authoritative tick clicks, Survival predicted slot decrement, Creative non-consumption, correct hotbar selection, server-confirmed results. Phone test required.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

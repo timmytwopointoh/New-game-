@@ -1,0 +1,1 @@
+Owner requested actual block placement. Publish locally compiled and same-key signed test APK only; no hosted compilation or private key uploads.

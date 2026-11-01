@@ -10,7 +10,7 @@ import {parseDescriptor,renderDescriptor,validateDescriptor} from '../src/surviv
 const require=createRequire(import.meta.url),{createSerializer}=require('bedrock-protocol/src/transforms/serializer')
 const empty={network_id:0,count:0,metadata:0,has_stack_id:false,stack_id:0,block_runtime_id:0,extra:{has_nbt:false,can_place_on:[],can_destroy:[]}}
 function fixture(authoritative=false){
- const w=new WorldView();w.initialize({server_authoritative_block_breaking:authoritative,player_gamemode:'survival',entity_id:42n,player_position:{x:.5,y:65.62,z:.5},runtime_entity_id:1n,dimension:0});w.abilityState={known:true,effective:{mine:true,build:true},active:[],loading:false}
+ const w=new WorldView();w.initialize({server_authoritative_block_breaking:authoritative,server_authoritative_inventory:authoritative,player_gamemode:'survival',entity_id:42n,player_position:{x:.5,y:65.62,z:.5},runtime_entity_id:1n,dimension:0});w.abilityState={known:true,effective:{mine:true,build:true},active:[],loading:false}
  const ids={};for(const [id,b] of Object.entries(w.registry.blocksByRuntimeId))if(b.stateId===w.registry.blocksByName[b.name]?.defaultState)ids[b.name]=Number(id)
  const set=(p,name)=>{for(const layer of [0,1])w.update({position:p,block_runtime_id:layer?ids.air:ids[name],layer})}
  for(let x=-3;x<=8;x++)for(let z=-3;z<=8;z++)for(let y=62;y<=75;y++)set({x,y,z},y===63?'stone':'air')
@@ -117,4 +117,51 @@ test('complete floor and 96-block shelter execute with observed approach feedbac
 test('legacy mining also keeps holding after its single completion request and releases immediately on Stop',()=>{
  const f=fixture(false),target={x:1,y:64,z:0},now=Date.now();f.set(target,'dirt');assert(f.n.mine(target).accepted);f.n.mining.job.started=now;const duration=f.n.mining.job.duration;for(let t=0;t<=duration+150;t+=50)f.n.step(now+t)
  assert(f.n.mining.snapshot().holding);assert.equal(f.sent.filter(([name])=>name==='inventory_transaction').length,1);assert(f.sent.some(([name,p])=>name==='player_action'&&p.action==='continue_break'));const before=f.sent.length;f.n.stop();assert(f.sent.slice(before).some(([name,p])=>name==='player_action'&&p.action==='abort_break'));assert(!f.n.mining.snapshot().holding);f.n.detach()
+})
+
+test('placement uses inventory authority independently of mining and sends exactly one use-item click',()=>{
+ for(const authority of [true,false,null])for(const breaking of [true,false]){
+  const f=fixture(breaking),now=Date.now();try{
+   f.w.serverAuthoritativeInventory=authority;assert(f.n.build(design()).accepted);f.n.step(now);f.n.step(now+50)
+   const embedded=f.sent.filter(([name,p])=>name==='player_auth_input'&&p.transaction?.data.action_type==='click_block')
+   const standalone=f.sent.filter(([name])=>name==='inventory_transaction')
+   assert.equal(embedded.length,authority===false?0:1);assert.equal(standalone.length,authority===false?1:0)
+   const tx=embedded[0]?.[1].transaction||standalone[0][1].transaction,data=tx.data||tx.transaction_data
+   if(embedded.length)assert(embedded[0][1].input_data.includes('item_interact'))
+   assert.equal(data.face,1);assert.deepEqual(data.block_position,{x:2,y:63,z:0});assert.equal(data.block_runtime_id,f.ids.stone)
+   assert.equal(tx.actions.length,1);const a=tx.actions[0];assert.equal(a.source_type,'container');assert.equal(a.window_id,0);assert.equal(a.slot,0);assert.equal(a.old_item.count,64);assert.equal(a.new_item.count,63)
+   assert.equal(f.w.inventory.get(0).count,64);assert.equal(f.w.block(design().origin).name,'air')
+   f.n.stop();f.n.step(now+100);assert.equal(f.n.building.placed,0)
+  }finally{f.n.detach()}
+ }
+})
+test('last held Survival block predicts an empty slot but requires real block and inventory receipts',()=>{
+ const f=fixture(true),now=Date.now();try{
+  const held={...f.w.inventory.get(0),count:1,has_stack_id:true,stack_id:57,metadata:3};f.c.emit('inventory_slot',{window_id:0,slot:0,item:held})
+  assert(f.n.build(design()).accepted);f.n.step(now)
+  const tx=f.sent.find(([name,p])=>name==='player_auth_input'&&p.transaction)[1].transaction
+  assert.equal(tx.actions[0].old_item.stack_id,57);assert.equal(tx.actions[0].old_item.metadata,3);assert.equal(tx.actions[0].new_item.network_id,0);assert.equal(tx.actions[0].new_item.count,0);assert.equal(f.w.inventory.get(0).count,1)
+  f.c.emit('inventory_slot',{window_id:0,slot:0,item:empty});f.n.step(now+50);assert.equal(f.n.building.placed,0)
+  f.c.emit('update_block',{position:design().origin,block_runtime_id:f.ids.dirt,layer:0});f.n.step(now+100)
+  assert.equal(f.n.building.placed,1);assert.equal(f.n.building.state,'confirmed')
+ }finally{f.n.detach()}
+})
+test('Creative placement sends the real held block without a fake inventory decrement',()=>{
+ const f=fixture(true),now=Date.now();try{
+  f.w.gameMode='creative';f.w.abilityState.effective.instant_build=true;f.w.abilityState.active=['instant_build'];assert(f.n.build(design()).accepted);f.n.step(now)
+  const tx=f.sent.find(([name,p])=>name==='player_auth_input'&&p.transaction)[1].transaction
+  assert.deepEqual(tx.actions,[]);assert.equal(tx.data.held_item.network_id,f.w.registry.itemsByName.dirt.id)
+  f.c.emit('update_block',{position:design().origin,block_runtime_id:f.ids.dirt,layer:0});f.n.step(now+50);assert.equal(f.n.building.placed,1);assert.equal(f.w.inventory.get(0).count,64)
+ }finally{f.n.detach()}
+})
+test('placement equips an actual matching stack before clicking and waits for server receipts',()=>{
+ const f=fixture(true),now=Date.now();try{
+  f.c.emit('inventory_slot',{window_id:0,slot:0,item:empty});f.w.selectedSlot=0;assert(f.n.build(design()).accepted);f.n.step(now)
+  assert(f.sent.some(([name,p])=>name==='mob_equipment'&&p.selected_slot===1));assert(!f.sent.some(([name,p])=>name==='player_auth_input'&&p.transaction))
+  f.n.step(now+50);assert(!f.sent.some(([name,p])=>name==='player_auth_input'&&p.transaction))
+  f.n.step(now+150);const tx=f.sent.find(([name,p])=>name==='player_auth_input'&&p.transaction)[1].transaction
+  assert.equal(tx.data.hotbar_slot,1);assert.equal(tx.actions[0].slot,1)
+  f.c.emit('update_block',{position:design().origin,block_runtime_id:f.ids.dirt,layer:0});f.n.step(now+200);assert.equal(f.n.building.placed,0);for(let t=250;t<=5200;t+=50)f.n.step(now+t)
+  assert.match(f.n.building.reason,/inventory consumption was not confirmed/);assert.equal(f.w.block(design().origin).name,'dirt')
+ }finally{f.n.detach()}
 })

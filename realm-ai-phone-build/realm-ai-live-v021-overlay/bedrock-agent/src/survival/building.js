@@ -3,6 +3,12 @@ import {placementEvidence} from './obstacles.js'
 const key=p=>`${p.x},${p.y},${p.z}`
 const air=b=>b&&['air','cave_air','void_air'].includes(b.name)
 const directions=[{x:0,y:-1,z:0,face:1},{x:0,y:1,z:0,face:0},{x:0,y:0,z:1,face:2},{x:0,y:0,z:-1,face:3},{x:1,y:0,z:0,face:4},{x:-1,y:0,z:0,face:5}]
+// These are wire predictions only. Never write predicted stacks into WorldView.
+export function placementActions(slot,held,creative){
+ if(creative)return []
+ const next=held.count>1?{...held,count:held.count-1}:{network_id:0,count:0,metadata:0,has_stack_id:false,stack_id:0,block_runtime_id:0,extra:{has_nbt:false,can_place_on:[],can_destroy:[]}}
+ return [{source_type:'container',window_id:0,flags:null,slot,old_item:{...held},new_item:next}]
+}
 const full=b=>b?.shapes?.some(q=>q.every((v,i)=>v===(i<3?0:1)))
 const functional=/water|lava|sand$|gravel|powder|anvil|concrete_powder|chest|barrel|furnace|crafting_table|hopper|dispenser|dropper|bedrock|portal|command|structure|spawner|tnt|piston|observer|redstone|bed$|shulker|beehive|bee_nest|farmland|path$|ice|glass|leaves|copper_chest/
 export function blueprint({shape,origin,width=1,height=1,material}){
@@ -91,8 +97,8 @@ export class Building{
    const [slot,held]=slots.find(([slot])=>slot===w.selectedSlot)||slots[0]
    if(w.selectedSlot!==slot){return {selectSlot:slot}}
    if(j.equipWaitUntil&&now<j.equipWaitUntil)return {}
-   j.pending={target:{...target},slot,inventoryBefore:w.inventoryProtocol?.baseline(slot),count:held.count,heldId:held.network_id,creative:w.gameMode==='creative',version:w.blockVersion(target),sentAt:now,blockConfirmed:false};this.state='waiting-for-placement'
-   return {aim:anchor.hit,placement:{legacy:{legacy_request_id:0,legacy_transactions:null},transaction_type:'item_use',actions:[],transaction_data:{action_type:'click_block',trigger_type:'player_input',block_position:anchor.position,face:anchor.face,hotbar_slot:slot,hand:'main_hand',held_item:held,player_pos:{...w.position,y:w.position.y-1.62},click_pos:anchor.click,block_runtime_id:w.runtimeIdAt(anchor.position)>>>0,client_prediction:'success',client_cooldown_state:'off'}}}
+   j.pending={target:{...target},anchor:{...anchor.position},face:anchor.face,protocol:w.serverAuthoritativeInventory===false?'legacy-inventory-transaction':'auth-input-item-interact',slot,inventoryBefore:w.inventoryProtocol?.baseline(slot),count:held.count,heldId:held.network_id,creative:w.gameMode==='creative',version:w.blockVersion(target),sentAt:now,blockConfirmed:false};this.state='waiting-for-placement';this.reason=`Requesting ${j.material} at ${key(target)} using hotbar slot ${slot+1}; waiting for server confirmation.`;this.report(this.reason)
+   return {aim:anchor.hit,placement:{legacy:{legacy_request_id:0,legacy_transactions:null},transaction_type:'item_use',actions:placementActions(slot,held,w.gameMode==='creative'),transaction_data:{action_type:'click_block',trigger_type:'player_input',block_position:anchor.position,face:anchor.face,hotbar_slot:slot,hand:'main_hand',held_item:held,player_pos:{...w.position,y:w.position.y-1.62},click_pos:anchor.click,block_runtime_id:w.runtimeIdAt(anchor.position)>>>0,client_prediction:'success',client_cooldown_state:'off'}}}
   }
   if(routeTo&&j.approachAttempts<3){
    const target=targets.find(p=>directions.some(d=>full(w.block({x:p.x+d.x,y:p.y+d.y,z:p.z+d.z}))))
@@ -110,5 +116,5 @@ export class Building{
   }
   this.cancel('No safe observed placement face or approach route. Move closer to the footprint, then reactivate the plan.');return {}
  }
- snapshot(){return {state:this.state,reason:this.reason,placed:this.placed,total:this.total,target:this.job?.pending?.target||null}}
+ snapshot(){return {state:this.state,reason:this.reason,placed:this.placed,total:this.total,target:this.job?.pending?.target||null,anchor:this.job?.pending?.anchor||null,hotbarSlot:this.job?.pending?this.job.pending.slot+1:null,protocol:this.job?.pending?.protocol||null}}
 }
