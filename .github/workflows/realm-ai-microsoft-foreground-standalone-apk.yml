@@ -1,0 +1,80 @@
+name: Realm AI Microsoft Code UI - Installable TEST APK
+on:
+  push:
+    branches: [feature/realm-ai-0391-microsoft-code-frontmost-20261101]
+    paths: ['.github/workflows/realm-ai-microsoft-foreground-standalone-apk.yml']
+permissions:
+  contents: write
+jobs:
+  signed-standalone-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Preserve Microsoft/Realm code and prepare separate test install
+        run: |
+          set -euo pipefail
+          ORIGINAL=0d8e347686a20f40686c211c6bec24675f3320f9
+          ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
+          git diff --exit-code "$ORIGINAL" HEAD -- "$ROOT/bedrock-agent" "$ROOT/android-app/app/src/main/AndroidManifest.xml" "$ROOT/android-app/app/src/main/java/com/veilforge/realmagent/BotService.java"
+          cd "$ROOT/bedrock-agent"
+          npm ci --omit=dev --no-audit --no-fund
+          cd ..
+          python3 tools/fetch_native_runtime.py
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path('android-app/app')
+          p=app/'build.gradle'
+          s=p.read_text()
+          assert "applicationId 'com.veilforge.realmagent.live'" in s
+          assert 'versionCode 200020' in s
+          s=s.replace("applicationId 'com.veilforge.realmagent.live'","applicationId 'com.veilforge.realmagent.live.signintest'")
+          s=s.replace('versionCode 200020','versionCode 1')
+          s=s.replace("versionName '0.39.1-jump-recovery'","versionName '0.39.1-login-visible-test'")
+          p.write_text(s)
+          m=app/'src/main/AndroidManifest.xml'
+          content=m.read_text()
+          assert 'android:label="Realm AI Live"' in content
+          m.write_text(content.replace('android:label="Realm AI Live"','android:label="Realm AI LOGIN TEST"'))
+          PY
+      - name: Run Android Microsoft code tests and compile standalone Android APK
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
+          test -s app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Sign, verify and package standalone test APK
+        run: |
+          set -euo pipefail
+          export VF_TEST_PASS="$(openssl rand -hex 24)"
+          KEY="$RUNNER_TEMP/login-test-only.p12"
+          keytool -genkeypair -noprompt -alias test -keyalg RSA -keysize 3072 -validity 90 -storetype PKCS12 -keystore "$KEY" -storepass "$VF_TEST_PASS" -keypass "$VF_TEST_PASS" -dname 'CN=Realm AI Microsoft Code UI Test,OU=Nonproduction,O=VEILFORGE,C=US'
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$BT/apksigner" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+          INPUT='realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk'
+          "$BT/zipalign" -P 16 -f 4 "$INPUT" "$RUNNER_TEMP/login-test-aligned.apk"
+          "$BT/apksigner" sign --ks "$KEY" --ks-type PKCS12 --ks-key-alias test --ks-pass env:VF_TEST_PASS --key-pass env:VF_TEST_PASS --out Realm-AI-Microsoft-Code-VISIBLE-TEST.apk "$RUNNER_TEMP/login-test-aligned.apk"
+          "$BT/apksigner" verify --print-certs --verbose Realm-AI-Microsoft-Code-VISIBLE-TEST.apk > certificate-report.txt
+          "$BT/zipalign" -c -P 16 4 Realm-AI-Microsoft-Code-VISIBLE-TEST.apk
+          "$BT/aapt" dump badging Realm-AI-Microsoft-Code-VISIBLE-TEST.apk > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent.live.signintest' versionCode='1'" package-report.txt
+          sha256sum Realm-AI-Microsoft-Code-VISIBLE-TEST.apk > SHA256SUMS.txt
+          rm -f "$KEY"
+      - name: Release installable test APK for phone test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create realm-ai-microsoft-code-visible-test-20261101 Realm-AI-Microsoft-Code-VISIBLE-TEST.apk SHA256SUMS.txt certificate-report.txt package-report.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Realm AI Microsoft code visibility - INSTALLABLE TEST APK' --notes 'ANDROID TEST APP named Realm AI LOGIN TEST. Unique package com.veilforge.realmagent.live.signintest. Installs ALONGSIDE the existing v0.38; does not overwrite it or access its Microsoft session. This build changes only the device-code visibility UI and adds tests; Minecraft/Realm auth transport and bot logic are unchanged. When a sign-in code arrives it pops above Settings, can be copied, and Open Microsoft launches https://www.microsoft.com/link. If no code is issued, a visible status message appears. This is a test signer and cannot update the production v0.38 APK.'
