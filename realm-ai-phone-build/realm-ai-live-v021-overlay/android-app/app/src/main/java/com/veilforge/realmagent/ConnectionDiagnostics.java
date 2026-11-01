@@ -7,7 +7,7 @@ import org.json.*;
 
 /** Whitelisted connection observations only; never copy raw status/auth objects. */
 final class ConnectionDiagnostics {
-    private static final Set<String> PHASES=new HashSet<>(Arrays.asList(("starting realm-discovery minecraft-authentication microsoft-device-code microsoft-token-refresh microsoft-session xbox-authentication xbox-user-token xbox-device-token xbox-title-token xbox-security-token xbox-sisu-authentication sign-in-required realm-selecting realm-selected realm-join-retry authenticated transport-connected bedrock-login-accepted minecraft-login-ok world-started spawned error disconnected connecting closed not-started unavailable unknown not-reached negotiating-packs pack-request downloading-packs pack-cached packs-ready pack-error").split(" ")));
+    private static final Set<String> PHASES=new HashSet<>(Arrays.asList(("starting realm-discovery minecraft-authentication microsoft-device-code microsoft-token-refresh microsoft-session xbox-authentication xbox-user-token xbox-device-token xbox-title-token xbox-security-token xbox-sisu-authentication sign-in-required realm-selecting realm-selected realm-join-retry authenticated transport-connected bedrock-login-accepted minecraft-login-ok world-started spawned error disconnected connecting closed not-started unavailable unknown not-reached negotiating-packs pack-request pack-storage pack-retry downloading-packs pack-cached packs-ready pack-error").split(" ")));
     static String phase(String value){return PHASES.contains(value)?value:"unknown";}
     static long nonnegative(JSONObject object,String key){Object value=object.opt(key);return value instanceof Number&&((Number)value).longValue()>=0?((Number)value).longValue():0;}
     private static JSONObject failure(JSONObject value)throws JSONException {
@@ -24,6 +24,11 @@ final class ConnectionDiagnostics {
             result.put("schema",1);result.put("phase",phase(input.optString("phase","not-started")));result.put("authState",phase(input.optString("authState","not-started")));
             for(String field:new String[]{"connected","joined","spawned","deviceCodePending","titleTokenRecoveryAttempted"})result.put(field,Boolean.TRUE.equals(input.opt(field)));
             result.put("packStage",phase(input.optString("packStage","not-reached")));
+            String reason=input.optString("packReason","none");
+            Set<String> reasons=new HashSet<>(Arrays.asList("none","storage-low","storage-unknown","pack-size-limit","cdn-access-denied","cdn-missing","cdn-unavailable","network-interrupted","pack-integrity","pack-transfer-failed"));
+            result.put("packReason",reasons.contains(reason)?reason:"none");
+            result.put("packFreeMB",nonnegative(input,"packFreeMB"));result.put("packNeededMB",nonnegative(input,"packNeededMB"));
+            result.put("packRetryable",Boolean.TRUE.equals(input.opt("packRetryable")));
             for(String field:new String[]{"packHeaders","packChunks","recordedAt"})result.put(field,nonnegative(input,field));
             result.put("failure",failure(input.optJSONObject("failure")));result.put("lastFailure",failure(input.optJSONObject("lastFailure")));
             String state=input.optString("processState");result.put("processState",Arrays.asList("running","stopped","crashed").contains(state)?state:"unknown");
