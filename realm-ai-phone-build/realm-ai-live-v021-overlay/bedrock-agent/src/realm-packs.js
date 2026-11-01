@@ -6,9 +6,12 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import {downloadRealmCdn,checkCdnUrl} from './cdn-download.js'
 
-const MAX_PACKS = 16
-const MAX_PACK_BYTES = 192 * 1024 * 1024
-const MAX_TOTAL_BYTES = 512 * 1024 * 1024
+const MAX_PACKS = 32
+const MAX_PACK_BYTES = 512 * 1024 * 1024
+const MAX_TOTAL_BYTES = 1536 * 1024 * 1024
+const FREE_SPACE_RESERVE = 256 * 1024 * 1024
+const MAX_CDN_ATTEMPTS = 3
+const MiB = 1024 * 1024
 const MAX_CHUNK_BYTES = 2 * 1024 * 1024
 
 function packKey(p) {
@@ -27,13 +30,45 @@ function packHash(v) {
   if (!b || b.length!==32) throw Error('Pack hash missing or unsupported; refusing unverified content')
   return b.toString('hex')
 }
-export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadCdn=downloadRealmCdn} = {}) {
+export function explainPackFailure(error){
+ const code=String(error?.code||'')
+ const raw=String(error?.message||'')
+ if(code==='ENOSPC'||code==='EDQUOT'||code==='PACK_STORAGE_LOW')return {reason:'storage-low',retryable:false,message:'Not enough free phone storage for Realm packs. Free space, then rejoin; existing verified packs are kept.'}
+ if(code==='PACK_STORAGE_UNKNOWN')return {reason:'storage-unknown',retryable:false,message:'Cannot determine available phone storage for the required Realm packs.'}
+ if(code==='PACK_LIMIT'||/exceeds (?:the )?(?:permitted|download|pack)|too many Realm packs/i.test(raw))return {reason:'pack-size-limit',retryable:false,message:'This Realm requires more pack data than the bounded download limit allows.'}
+ if(code==='CDN_HTTP_401'||code==='CDN_HTTP_403')return {reason:'cdn-access-denied',retryable:false,message:'Realm pack CDN access was denied or its download link expired. Rejoin to request a fresh URL.'}
+ if(code==='CDN_HTTP_404'||code==='CDN_HTTP_410')return {reason:'cdn-missing',retryable:false,message:'A requested Realm resource pack is no longer at its CDN address.'}
+ if(/^CDN_HTTP_(429|5\d\d)$/.test(code))return {reason:'cdn-unavailable',retryable:true,message:'Realm pack CDN is busy or unavailable; download can be retried.'}
+ if(['ETIMEDOUT','ECONNRESET','ECONNABORTED','EPIPE','EAI_AGAIN','ENETUNREACH','ENOTFOUND','EHOSTUNREACH','ECONNREFUSED','ERR_STREAM_PREMATURE_CLOSE','CDN_IDLE_TIMEOUT','PACK_INCOMPLETE','PACK_CANCELLED'].includes(code))return {reason:'network-interrupted',retryable:true,message:'Realm pack download was interrupted by the network or stalled; the partial CDN file can resume.'}
+ if(['PACK_SIZE_MISMATCH','CDN_LENGTH_MISMATCH','CDN_RANGE_MISMATCH','PACK_PARTIAL_INVALID','CDN_BAD_RESPONSE','PACK_INTEGRITY_FAILED'].includes(code)||/SHA-256|hash|chunk layout|offset mismatch/i.test(raw))return {reason:'pack-integrity',retryable:false,message:'Realm pack bytes failed the expected size, range or integrity checks. Corrupt files will not be used.'}
+ return {reason:'pack-transfer-failed',retryable:false,message:'Realm resource pack transfer failed; export the connection report for the download stage.'}
+}
+export function checkPackStorage(cacheDir,requiredBytes,{statfs=fs.statfsSync,reserveBytes=FREE_SPACE_RESERVE}={}){
+ try{
+  const disk=statfs(cacheDir)
+  const available=BigInt(disk.bavail)*BigInt(disk.bsize)
+  const needed=BigInt(Math.max(0,requiredBytes)),reserve=BigInt(reserveBytes)
+  const info={freeMB:Number(available/BigInt(MiB)),neededMB:Number((needed+BigInt(MiB)-1n)/BigInt(MiB)),reserveMB:Math.ceil(reserveBytes/MiB)}
+  if(available<needed+reserve){const e=Error('Phone storage below Realm pack reservation');e.code='PACK_STORAGE_LOW';e.storage=info;throw e}
+  return info
+ }catch(e){if(e.code==='PACK_STORAGE_LOW')throw e;const failure=Error('Phone free space not available');failure.code='PACK_STORAGE_UNKNOWN';throw failure}
+}
+async function hashStoredFile(filename){
+ const hash=crypto.createHash('sha256')
+ for await(const part of fs.createReadStream(filename))hash.update(part)
+ return hash.digest('hex')
+}
+export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadCdn=downloadRealmCdn,checkStorage=checkPackStorage} = {}) {
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false
   let totalBytes=0
   const cancellation = new AbortController()
-  const emit = (stage, message, done=0, total=packs.size) => report({stage,message,done,total})
+  let storageState={}
+  const emit = (stage, message, done=0, total=packs.size,extra={}) => {
+    if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
+    report({stage,message,done,total,...storageState,...extra})
+  }
   const response = (name,ids=[]) => {
     client.write('resource_pack_client_response', {
       response_status:name,
@@ -48,12 +83,12 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     if(failed) return
     failed=true
     cancellation.abort()
+    const detail=explainPackFailure(err)
     for(const p of packs.values()){
       if(p.fd!==undefined){try{fs.closeSync(p.fd)}catch{}}
-      if(p.tmp){try{fs.rmSync(p.tmp,{force:true})}catch{}}
+      if(p.tmp&&(!p.cdn||detail.reason==='pack-integrity')){try{fs.rmSync(p.tmp,{force:true})}catch{}}
     }
-    const msg=String(err?.message||err).slice(0,180)
-    emit('pack-error',msg)
+    emit('pack-error',detail.message,0,packs.size,{reason:detail.reason,retryable:detail.retryable,...(err?.storage||{})})
   }
   function progress(){
     if(failed || finished)return
@@ -73,39 +108,66 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     emit('packs-ready',`Realm pack handshake completed (${packs.size} packs)`,packs.size)
   }
   async function startCdn(p){
+    p.file=path.join(cacheDir,p.basename);p.tmp=p.file+'.download'
+    const marker=p.file+'.sha256'
     try{
-      p.file=path.join(cacheDir,p.basename);p.tmp=p.file+'.download'
-      const marker=p.file+'.sha256'
       if(fs.existsSync(p.file)&&fs.existsSync(marker)){
         const digest=fs.readFileSync(marker,'utf8').trim()
-        if(fs.statSync(p.file).size===p.size&&/^[a-f0-9]{64}$/.test(digest)&&crypto.createHash('sha256').update(fs.readFileSync(p.file)).digest('hex')===digest){
-          p.ready=true;emit('pack-cached','Realm CDN pack previously downloaded',0,packs.size);progress();return
+        if(fs.statSync(p.file).size===p.size&&/^[a-f0-9]{64}$/.test(digest)&&await hashStoredFile(p.file)===digest){
+          p.ready=true;emit('pack-cached','Previously downloaded CDN pack passed local cache verification');progress();return
         }
       }
-      emit('downloading-packs','Downloading Realm pack from secure CDN',0,packs.size)
-      const done=await downloadCdn({url:p.cdn,dest:p.tmp,maxBytes:MAX_PACK_BYTES,expectedBytes:p.size,signal:cancellation.signal,onProgress:bytes=>{
-        if(!failed)emit('downloading-packs','Receiving Realm pack: '+Math.floor(bytes/1048576)+' MB',0,packs.size)
-      }})
-      if(failed||cancellation.signal.aborted)return
-      if(done.bytes!==p.size||!/^[a-f0-9]{64}$/.test(done.sha256))throw Error('CDN response size or local digest invalid')
-      // The digest is local-cache integrity, NOT an authenticated Mojang-supplied hash.
-      fs.renameSync(p.tmp,p.file);p.tmp=null
-      fs.writeFileSync(marker,done.sha256,{mode:0o600})
-      p.ready=true;emit('pack-cached','CDN archive stored in private app cache',0,packs.size);progress()
+      let lastError
+      for(let attempt=1;attempt<=MAX_CDN_ATTEMPTS;attempt++){
+        if(cancellation.signal.aborted)return
+        try{
+          const partialSize=fs.existsSync(p.tmp)?fs.statSync(p.tmp).size:0
+          const remaining=p.size-(partialSize>0&&partialSize<p.size?partialSize:0)
+          const storage=checkStorage(cacheDir,remaining)
+          if(attempt>1)emit('pack-retry','Retrying interrupted CDN pack ('+attempt+'/'+MAX_CDN_ATTEMPTS+'); keeping downloaded bytes',0,packs.size,{attempt,maxAttempts:MAX_CDN_ATTEMPTS,...storage})
+          let lastReportAt=0,lastReportMB=-1
+          const done=await downloadCdn({url:p.cdn,dest:p.tmp,maxBytes:MAX_PACK_BYTES,expectedBytes:p.size,signal:cancellation.signal,onProgress:bytes=>{
+            const mb=Math.floor(bytes/MiB),now=Date.now()
+            if(!failed&&(mb!==lastReportMB||now-lastReportAt>5000)){
+              lastReportMB=mb;lastReportAt=now
+              emit('downloading-packs','Receiving Realm CDN pack '+mb+'/'+Math.ceil(p.size/MiB)+' MB',0,packs.size,{receivedMB:mb,totalMB:Math.ceil(p.size/MiB),attempt})
+            }
+          }})
+          if(failed||cancellation.signal.aborted)return
+          if(done.bytes!==p.size||!/^[a-f0-9]{64}$/.test(done.sha256)){
+            const error=Error('Realm CDN result failed size or integrity checks');error.code='PACK_INTEGRITY_FAILED';throw error
+          }
+          // Local-cache SHA-256 is NOT a Mojang-authenticated source hash.
+          fs.renameSync(p.tmp,p.file);p.tmp=null
+          fs.writeFileSync(marker,done.sha256,{mode:0o600})
+          p.ready=true
+          emit('pack-cached',done.resumed?'Interrupted CDN download resumed and cached':'CDN archive stored in private app cache')
+          progress();return
+        }catch(e){
+          lastError=e
+          const detail=explainPackFailure(e)
+          if(cancellation.signal.aborted)return
+          if(!detail.retryable||attempt===MAX_CDN_ATTEMPTS)break
+          await new Promise(resolve=>setTimeout(resolve,attempt*1000))
+        }
+      }
+      failure(lastError)
     }catch(e){failure(e)}
   }
   client.on('resource_packs_info',packet=>{
     try{
       if(packs.size || finished || failed)return
-      const incoming=packet.texture_packs||[]
-      if(!Array.isArray(incoming) || incoming.length>MAX_PACKS)throw Error('Too many Realm packs requested')
+      const textures=packet.texture_packs||[],behaviors=packet.behavior_packs||[]
+      if(!Array.isArray(textures)||!Array.isArray(behaviors))throw Error('Invalid Realm pack list')
+      const incoming=[...textures,...behaviors]
+      if(incoming.length>MAX_PACKS)throw Error('Too many Realm packs requested')
       totalBytes=0
       for(const meta of incoming){
         const key=packKey(meta)
         if(packs.has(key))throw Error('Duplicate Realm pack')
         const size=safeNumber(meta.size,MAX_PACK_BYTES)
         totalBytes+=size
-        if(totalBytes>MAX_TOTAL_BYTES)throw Error('Realm packs exceed 512MB download limit')
+        if(totalBytes>MAX_TOTAL_BYTES){const e=Error('Realm packs exceed 1536MB bounded total');e.code='PACK_LIMIT';throw e}
         const uuid=String(meta.uuid||meta.pack_id||meta.id)
         const basename=crypto.createHash('sha256').update(key).digest('hex')+'.mcpack'
         const cdn=String(meta.cdn_url||'').trim()
@@ -119,7 +181,19 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
         emit('packs-none','No Realm download packs required',0,0)
       }else{
         fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
-        emit('pack-request',`Requesting ${packs.size} required Realm pack(s)`,0,packs.size)
+        let required=0
+        for(const p of packs.values()){
+          const file=path.join(cacheDir,p.basename),partial=file+'.download'
+          const cached=fs.existsSync(file)&&fs.statSync(file).size===p.size&&(p.cdn?fs.existsSync(file+'.sha256'):true)
+          if(!cached){
+            const partialSize=p.cdn&&fs.existsSync(partial)?fs.statSync(partial).size:0
+            const partialBytes=partialSize>0&&partialSize<p.size?partialSize:0
+            required+=p.size-partialBytes
+          }
+        }
+        const storage=checkStorage(cacheDir,required)
+        emit('pack-storage','Realm packs need '+storage.neededMB+' MB; '+storage.freeMB+' MB available with '+storage.reserveMB+' MB reserved',0,packs.size,storage)
+        emit('pack-request','Requesting '+packs.size+' required Realm pack(s)',0,packs.size)
         response('send_packs',[...packs.keys()])
         for(const p of packs.values())if(p.cdn)void startCdn(p)
       }
@@ -148,6 +222,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
           p.ready=true;emit('pack-cached','Verified previously downloaded Realm pack');progress();return
         }
       }
+      checkStorage(cacheDir,p.expected)
       p.fd=fs.openSync(p.tmp,'w',0o600)
       p.hashContext=crypto.createHash('sha256')
       p.next=0;p.written=0;p.requested=true
@@ -168,7 +243,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
       p.written+=data.length;p.next++
       if(p.next<p.count){client.write('resource_pack_chunk_request',{pack_id:p.uuid,chunk_index:p.next});return}
       fs.closeSync(p.fd);p.fd=undefined
-      if(p.written!==p.expected || p.hashContext.digest('hex')!==p.hash)throw Error('Downloaded Realm pack failed SHA-256 verification')
+      if(p.written!==p.expected || p.hashContext.digest('hex')!==p.hash){const e=Error('Downloaded Realm pack failed SHA-256 verification');e.code='PACK_INTEGRITY_FAILED';throw e}
       fs.renameSync(p.tmp,p.file);p.tmp=null;p.ready=true
       progress()
     }catch(e){failure(e)}
@@ -184,7 +259,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     cancellation.abort()
     for(const p of packs.values()){
       if(p.fd!==undefined){try{fs.closeSync(p.fd)}catch{}}
-      if(p.tmp){try{fs.rmSync(p.tmp,{force:true})}catch{}}
+      if(p.tmp&&!p.cdn){try{fs.rmSync(p.tmp,{force:true})}catch{}}
     }
   }}
 }
