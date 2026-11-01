@@ -1,4 +1,5 @@
 name: Realm AI Microsoft Code UI - Installable TEST APK
+# Re-run after correcting all Android Robolectric dialog tests.
 on:
   push:
     branches: [feature/realm-ai-0391-microsoft-code-frontmost-20261101]
