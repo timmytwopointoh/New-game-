@@ -28,7 +28,7 @@ public class MainActivity extends Activity {
     final ExecutorService urgent = Executors.newSingleThreadExecutor();
     volatile long commandEpoch=System.currentTimeMillis(); int selectedPlan=0;
     EditText botField,ownerField,realmField,input;
-    LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton;String displayedAuthCode="";
+    LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton,retryButton;String displayedAuthCode="";
     String token="",lastProgressText=""; long cursor=0,serviceRevision=0,lastApiSuccessAt=0,serviceStateSince=0; boolean active=false,serviceStarted=false,apiConnected=false;
     final int PORT=8765;
     int d(int v){return (int)(v*getResources().getDisplayMetrics().density);}
@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
         View headerSpacer=new View(this);header.addView(headerSpacer,new LinearLayout.LayoutParams(0,d(44),1));
         Button settings=button("⚙",this::showSettings);settings.setContentDescription("Settings");settings.setPadding(0,0,0,0);header.addView(settings,new LinearLayout.LayoutParams(d(42),d(44)));
         connection=txt("Not running",12,MUTED);connection.setMaxLines(4);connection.setPadding(d(12),d(9),d(12),d(9));connection.setBackground(shape(PANEL));connection.setVisibility(View.VISIBLE);root.addView(connection,space(2));
+        retryButton=button("Try Again",this::retryBlocked);retryButton.setContentDescription("Retry a blocked task after checking terrain, without adding a duplicate");retryButton.setVisibility(View.GONE);root.addView(retryButton,space(3));
         authCodeLabel=txt("",16,WHITE);authCodeLabel.setTextIsSelectable(false);authCodeLabel.setAutoLinkMask(Linkify.WEB_URLS);authCodeLabel.setLinksClickable(true);authCodeLabel.setLinkTextColor(PURPLE);authCodeLabel.setMovementMethod(LinkMovementMethod.getInstance());authCodeLabel.setContentDescription("Microsoft device sign-in code and clickable link; shown while sign-in is pending.");authCodeLabel.setVisibility(View.GONE);
         copyAuthCode=button("Copy sign-in code",()->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Microsoft code",displayedAuthCode));});copyAuthCode.setVisibility(View.GONE);
         copyAuthCode.setContentDescription("Copy the visible Microsoft device sign-in code");root.addView(authCodeLabel,space(2));root.addView(copyAuthCode,space(2));
@@ -219,6 +220,14 @@ public class MainActivity extends Activity {
     void showPlans(){io.submit(()->{try{JSONObject r=request("GET","/plans",null);ui.post(()->{syncPlans(r.optJSONObject("plans"));final JSONArray shownCards=cards;String[] names=new String[shownCards.length()];for(int i=0;i<names.length;i++){JSONObject c=shownCards.optJSONObject(i),desc=c.optJSONObject("descriptor");names[i]="#"+c.optInt("id")+(c.optInt("id")==selectedPlan?" (selected)":"")+" · "+c.optString("label")+" · "+c.optString("state");}
         savedPlanList=new ListView(this);savedPlanList.setDivider(null);savedPlanList.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,names){@Override public View getView(int p,View reused,ViewGroup parent){TextView v=(TextView)super.getView(p,reused,parent);v.setTextColor(WHITE);v.setTextSize(16);v.setPadding(d(14),d(16),d(14),d(16));v.setBackground(shape(PANEL));return v;}});final AlertDialog[] deck=new AlertDialog[1];savedPlanList.setOnItemClickListener((parent,row,n,id)->{JSONObject c=shownCards.optJSONObject(n);new AlertDialog.Builder(this).setTitle("Plan #"+c.optInt("id")).setMessage(c.optString("command")+"\n"+c.optString("note")+"\n"+c.optString("result")+"\nReuse returns this card to the waiting queue. The green button runs waiting cards in order, selected first. Plans never resume automatically.").setPositiveButton("Reuse",(a,b)->{try{planAction("select",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNeutralButton("Delete",(a,b)->{try{planAction("delete",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNegativeButton("Close",null).show();});
         deck[0]=new AlertDialog.Builder(this).setTitle("Saved plans ("+cards.length()+"/5)").setView(savedPlanList).setPositiveButton("Activate waiting",(a,b)->activateQueuedPlans()).setNeutralButton("STOP",(a,b)->stopNow()).setNegativeButton("Close",null).create();deck[0].show();CommandDeck.style(this,deck[0],.65f);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Plans unavailable: "+e.getMessage(),false));}});}
+    void retryBlocked(){
+        final long epoch=commandEpoch;JSONObject survival=lastStatus==null?null:lastStatus.optJSONObject("survival");JSONObject nav=survival==null?null:survival.optJSONObject("navigation");
+        boolean follow=nav!=null&&"follow".equals(nav.optString("mode"))&&("blocked".equals(nav.optString("state"))||"waiting-for-terrain".equals(nav.optString("state")));
+        io.submit(()->{if(epoch!=commandEpoch)return;try{
+            JSONObject r=request("POST",follow?"/navigation/retry?epoch="+epoch:"/plans/retry",new JSONObject().put("epoch",epoch));
+            ui.post(()->{if(epoch!=commandEpoch)return;syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message","No retry response."),false);if(!r.optBoolean("accepted"))retryButton.setVisibility(View.VISIBLE);});
+        }catch(Exception e){ui.post(()->{if(epoch==commandEpoch)bubble("VEILFORGE","Retry could not check terrain: "+e.getMessage(),false);});}});
+    }
     void stopNow(){SupportLog.record(this,"stop_sent");commandEpoch++;bubble("YOU","STOP",true);urgent.submit(()->{try{JSONObject r=request("POST","/stop?epoch="+commandEpoch,new JSONObject());ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message"),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Stop not confirmed: "+e.getMessage(),false));}});}
     JSONObject lastStatus=null;
     void showAuth(){if(token.isEmpty()){bubble("Progress","Start the bot and wait for the local controller before requesting its Microsoft sign-in code.",false);return;}io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showAuth(status);});}catch(Exception e){ui.post(()->bubble("Progress","Could not check Microsoft sign-in status: "+e.getMessage(),false));}});}
@@ -285,6 +294,10 @@ public class MainActivity extends Activity {
     void update(){final long revision=serviceRevision;io.submit(()->{try{JSONObject r=request("GET","/updates?after="+cursor,null);ui.post(()->{if(revision!=serviceRevision)return;
         markControllerAvailable();rememberDiagnostics(r.optJSONObject("diagnostics"));lastStatus=r;
         JSONObject survival=r.optJSONObject("survival");if(survival!=null)syncPlans(survival.optJSONObject("plans"));
+        JSONObject navState=survival==null?null:survival.optJSONObject("navigation");
+        boolean blockedFollow=navState!=null&&"follow".equals(navState.optString("mode"))&&Arrays.asList("blocked","waiting-for-terrain").contains(navState.optString("state"));
+        boolean retryablePlans=survival!=null&&survival.optJSONObject("plans")!=null&&survival.optJSONObject("plans").optBoolean("retryable");
+        retryButton.setVisibility(blockedFollow||retryablePlans?View.VISIBLE:View.GONE);
         JSONObject plan=r.optJSONObject("planner");
         String phase=r.optString("authState","starting");
         String err=r.optString("lastError","").trim();
