@@ -128,7 +128,19 @@ export class Navigation{
   if(candidates.length&&this.recoveryAttempts<3&&this.recover('No open route to the followed player.',now))return
   this.route=null;const detail=this.lastClearanceBlock;const terrainKnown=this.world.terrainKnown({x:target.x,y:target.y,z:target.z});this.state=terrainKnown?'blocked':'waiting-for-terrain';this.reason=terrainKnown?'No safe jump, dirt route or permitted mining route is available; waiting for terrain or player movement.':'Terrain near the player is unknown; requesting terrain before planning a route.';if(detail)this.reason+=' '+detail;if(!terrainKnown)try{this.world.requestNearby(this.client)}catch{}
  }
- mine(position,options={}){
+ // Replan the same continuous Follow task, preserving the single active job.
+ retryBlockedFollow(){
+  if(this.job?.kind!=='follow'||!['blocked','waiting-for-terrain'].includes(this.state))return {accepted:false,queued:false,message:'No blocked Follow job is available. Do not start a duplicate Follow.'}
+  if(!this.client||!this.spawned||!this.world.position)return {accepted:false,queued:false,message:'Realm spawn/position unavailable.'}
+  try{this.world.requestNearby(this.client)}catch(e){return {accepted:false,queued:false,message:'Terrain refresh could not be requested: '+String(e.message||e)}}
+  if(!this.world.terrainKnown())return {accepted:false,queued:false,message:'Requested missing nearby terrain. Try Again when the server sends those chunks; original Follow stays active.'}
+  const gate=this.movementBlock();if(gate)return {accepted:false,queued:false,message:'Still blocked: '+gate}
+  this.blocked.clear();this.progress.reset();this.recoveryAttempts=0;this.lastClearanceBlock=null;this.lastFollowGoal=null;this.lastFollowPlan=0
+  this.updateFollow(Date.now(),true)
+  const blocked=['blocked','waiting-for-terrain'].includes(this.state)
+  return {accepted:!blocked,queued:!blocked,message:blocked?`Follow remains blocked after refreshing terrain: ${this.reason}`:`Following ${this.job.name}: route recalculated using current server terrain. The original Follow job was preserved.`,navigation:this.snapshot()}
+ }
+  mine(position,options={}){
   if(this.world.attributes['minecraft:health']===0||this.isRespawning?.())return {accepted:false,queued:false,message:'Respawn must be confirmed before mining.'}
   if(!this.world.editModeVerified)return {accepted:false,queued:false,message:'This player’s Survival or grounded Creative mode and abilities are not verified; mining is paused.'}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn first.'}
