@@ -84,7 +84,7 @@ public class MicrosoftCodeFrontmostTest {
     a.showAuth(new JSONObject("{}"));
     AlertDialog notice=ShadowAlertDialog.getLatestAlertDialog();
     assertTrue(notice.isShowing());
-    assertTrue(notice.getMessage().toString().contains("No Microsoft sign-in code"));
+    assertTrue(Shadows.shadowOf(notice).getMessage().toString().contains("No Microsoft sign-in code"));
     assertTrue(a.settingsDialog.isShowing());
   }
 }
