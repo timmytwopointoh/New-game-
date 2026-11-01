@@ -1,0 +1,95 @@
+name: Realm AI Large Packs and Storage - Installable TEST APK
+# Preserve current startup and Microsoft login work; validate large Realm pack storage and HTTPS resume.
+on:
+  push:
+    branches: [feature/realm-ai-large-pack-storage-resume-20261101]
+    paths: ['.github/workflows/realm-ai-large-packs-standalone-test.yml']
+permissions:
+  contents: write
+jobs:
+  signed-standalone-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Preserve Microsoft/Realm code and prepare separate test install
+        run: |
+          set -euo pipefail
+          ORIGINAL=0d8e347686a20f40686c211c6bec24675f3320f9
+          ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
+          git diff --exit-code "$ORIGINAL" HEAD -- "$ROOT/bedrock-agent" "$ROOT/android-app/app/src/main/AndroidManifest.xml"
+          cd "$ROOT/bedrock-agent"
+          npm ci --omit=dev --no-audit --no-fund
+          cd ..
+          python3 tools/fetch_native_runtime.py
+      - name: Test all Node.js Realm pack download, storage and auth protocols
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --test tests/*.test.js
+      - name: Test code and Microsoft UI using ORIGINAL Android app identity
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:testDebugUnitTest
+      - name: Prepare isolated app identity AFTER tests, without touching app source
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path('android-app/app')
+          p=app/'build.gradle'
+          s=p.read_text()
+          assert "applicationId 'com.veilforge.realmagent.live'" in s
+          assert 'versionCode 200020' in s
+          s=s.replace("applicationId 'com.veilforge.realmagent.live'","applicationId 'com.veilforge.realmagent.live.largepacktest'")
+          s=s.replace('versionCode 200020','versionCode 1')
+          s=s.replace("versionName '0.39.1-jump-recovery'","versionName '0.39.1-large-packs-test'")
+          p.write_text(s)
+          m=app/'src/main/AndroidManifest.xml'
+          content=m.read_text()
+          assert 'android:label="Realm AI Live"' in content
+          m.write_text(content.replace('android:label="Realm AI Live"','android:label="Realm AI PACK TEST"'))
+          PY
+      - name: Compile standalone test Android APK
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleRelease
+          test -s app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Sign, verify and package standalone test APK
+        run: |
+          set -euo pipefail
+          export VF_TEST_PASS="$(openssl rand -hex 24)"
+          KEY="$RUNNER_TEMP/large-pack-test-only.p12"
+          keytool -genkeypair -noprompt -alias test -keyalg RSA -keysize 3072 -validity 90 -storetype PKCS12 -keystore "$KEY" -storepass "$VF_TEST_PASS" -keypass "$VF_TEST_PASS" -dname 'CN=Realm AI Large Packs Storage Test,OU=Nonproduction,O=VEILFORGE,C=US'
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$BT/apksigner" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+          INPUT='realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk'
+          "$BT/zipalign" -P 16 -f 4 "$INPUT" "$RUNNER_TEMP/large-pack-test-aligned.apk"
+          "$BT/apksigner" sign --ks "$KEY" --ks-type PKCS12 --ks-key-alias test --ks-pass env:VF_TEST_PASS --key-pass env:VF_TEST_PASS --out Realm-AI-LARGE-PACKS-TEST.apk "$RUNNER_TEMP/large-pack-test-aligned.apk"
+          "$BT/apksigner" verify --print-certs --verbose Realm-AI-LARGE-PACKS-TEST.apk > certificate-report.txt
+          "$BT/zipalign" -c -P 16 4 Realm-AI-LARGE-PACKS-TEST.apk
+          "$BT/aapt" dump badging Realm-AI-LARGE-PACKS-TEST.apk > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent.live.largepacktest' versionCode='1'" package-report.txt
+          sha256sum Realm-AI-LARGE-PACKS-TEST.apk > SHA256SUMS.txt
+          rm -f "$KEY"
+      - name: Release installable test APK for phone test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create realm-ai-large-packs-test-20261101 Realm-AI-LARGE-PACKS-TEST.apk SHA256SUMS.txt certificate-report.txt package-report.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Realm AI large pack resume and storage - INSTALLABLE TEST APK' --notes 'ANDROID TEST APP named Realm AI PACK TEST. Unique package com.veilforge.realmagent.live.largepacktest. Installs ALONGSIDE the existing v0.38; does not overwrite it or access its Microsoft session. This isolated test build preserves the previously tested startup and Microsoft-code UI, and adds a free-storage preflight (256 MiB reserved), supports up to 512 MiB per pack/1536 MiB total, retains partial CDN downloads across reconnects, validates HTTP Range responses, retries transient CDN failures up to 3 attempts, tracks storage/progress in phone UI and exports sanitized failure categories. No original private signing key is used. Test ONLY; does not replace installed Realm AI Live. When a sign-in code arrives it pops above Settings, can be copied, and Open Microsoft launches https://www.microsoft.com/link. If no code is issued, a visible status message appears. Export a bug report after one Start to include startup.json (safe stage + timestamp). This is a test signer and cannot update the production v0.38 APK.'
