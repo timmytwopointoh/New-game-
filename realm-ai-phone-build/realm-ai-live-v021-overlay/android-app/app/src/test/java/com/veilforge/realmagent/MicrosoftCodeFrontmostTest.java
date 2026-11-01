@@ -45,7 +45,7 @@ public class MicrosoftCodeFrontmostTest {
     assertNotSame(settings,code);
     assertFalse("Settings must not hide the Microsoft code",settings.isShowing());
     assertTrue(code.isShowing());
-    assertTrue(code.getMessage().toString().contains("NEW123"));
+    assertTrue(Shadows.shadowOf(code).getMessage().toString().contains("NEW123"));
     assertEquals("NEW123",a.displayedAuthCode);
     assertEquals(View.VISIBLE,a.authCodeLabel.getVisibility());
     assertEquals(View.VISIBLE,a.copyAuthCode.getVisibility());
@@ -77,7 +77,7 @@ public class MicrosoftCodeFrontmostTest {
     a.showAuth();
     AlertDialog notice=ShadowAlertDialog.getLatestAlertDialog();
     assertTrue(notice.isShowing());
-    assertTrue(notice.getMessage().toString().contains("Start the bot first"));
+    assertTrue(Shadows.shadowOf(notice).getMessage().toString().contains("Start the bot first"));
   }
   @Test public void noCodeShowsVisibleExplanationInsteadOfHiddenChatBubble()throws Exception{
     a.showSettings();
