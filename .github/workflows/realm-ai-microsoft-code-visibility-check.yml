@@ -1,4 +1,5 @@
 name: Realm AI Microsoft code foreground UI validation
+# Re-run with Robolectric dialog assertions corrected, no changes to bot logic.
 on:
   push:
     branches: [feature/realm-ai-0391-microsoft-code-frontmost-20261101]
