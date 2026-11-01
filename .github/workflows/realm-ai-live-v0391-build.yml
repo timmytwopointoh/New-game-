@@ -1,4 +1,5 @@
-name: Realm AI Live v0.39.1 one-shot Android build and signing verification
+name: Realm AI Live v0.39.1 corrected Android build
+# One-shot retry includes Gradle fix: dependency sample/test assets excluded.
 on:
   push:
     branches: [feature/realm-ai-live-v039-retry-knowledge-20261101]
