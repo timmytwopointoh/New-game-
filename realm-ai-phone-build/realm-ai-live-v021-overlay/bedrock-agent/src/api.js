@@ -11,6 +11,7 @@ import {Planner} from './planner.js'
 import {runAutonomous} from './autonomous-intent.js'
 import {researchRouting,unsupportedResearchResponse} from './agent-lookup-router.js'
 import {offlineMinecraftResponse,offlineKnowledgeStats} from './offline-minecraft-brain.js'
+import {blockCatalog,entityCatalog,blockReference,blockAllTools,mobReference} from './knowledge/bedrock-reference.js'
 import {OpenDictionaryResearch} from './web-dictionary.js'
 import {extractGooglePlan} from './research-action-plan.js'
 import {AutomaticGoogleResearch,PrivateResearchKey,validateObservedPlan} from './automatic-google-research.js'
@@ -211,6 +212,20 @@ export function createApi(config,connection,log=console.log){
    const pathname=new URL(req.url||'/','http://127.0.0.1').pathname
    if(req.method==='POST'&&pathname==='/navigation/retry'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch<stopEpoch)return send(200,{accepted:false,message:'Stop cancelled this retry.'});const nav=connection.survival?.navigation;return send(200,nav?nav.retryBlockedFollow():{accepted:false,message:'Join the Realm first.'})}
     if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,message('stop'))}
+   if(req.method==='GET'&&(pathname==='/knowledge/blocks'||pathname==='/knowledge/entities')){
+     const q=new URL(req.url,'http://127.0.0.1').searchParams
+     const offset=Number(q.get('offset')||0),limit=Number(q.get('limit')||20)
+     if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>30)return send(400,{error:'offset must be nonnegative and limit 1–30'})
+     const all=pathname==='/knowledge/blocks'?blockCatalog():entityCatalog(),field=pathname==='/knowledge/blocks'?'blocks':'entities'
+     return send(200,{version:offlineKnowledgeStats.version,offset,limit,total:all.length,[field]:all.slice(offset,offset+limit),nextOffset:offset+limit<all.length?offset+limit:null})
+   }
+   if(req.method==='GET'&&pathname==='/knowledge/block'){
+     const q=new URL(req.url,'http://127.0.0.1').searchParams
+     const conditions={tool:q.get('tool')||'hand',efficiency:Number(q.get('efficiency')||0),haste:Number(q.get('haste')||0),conduitPower:Number(q.get('conduitPower')||0),miningFatigue:Number(q.get('miningFatigue')||0),underwater:q.get('underwater')==='true',airborne:q.get('airborne')==='true',aquaAffinity:q.get('aquaAffinity')==='true',creative:q.get('creative')==='true',world:connection.survival?.world}
+     const facts=q.get('allTools')==='true'?blockAllTools(q.get('name'),conditions):blockReference(q.get('name'),conditions)
+     return facts?send(200,{block:facts}):send(404,{error:'Unknown Bedrock block'})
+   }
+   if(req.method==='GET'&&pathname==='/knowledge/mob'){const q=new URL(req.url,'http://127.0.0.1').searchParams,entity=mobReference(q.get('name'));return entity?send(200,{entity}):send(404,{error:'Unknown Bedrock entity'})}
    if(req.method==='GET'&&pathname==='/knowledge/offline')return send(200,{knowledge:offlineKnowledgeStats,requiresGoogleKey:false})
   if(req.method==='GET'&&pathname==='/research/google-status')return send(200,{configured:google.configured(),active:!!googleAbort})
    if(req.method==='POST'&&pathname==='/research/google-key'){
