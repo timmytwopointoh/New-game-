@@ -1,0 +1,92 @@
+name: Realm AI Live v0.39 isolated preview APK
+on:
+  push:
+    branches: [feature/realm-ai-live-v039-retry-knowledge-20261101]
+    paths: ['realm-ai-phone-build/v039-build-requests/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android build tools and verify source
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
+          grep -q 'versionCode 200020' "$ROOT/android-app/app/build.gradle"
+          grep -q "applicationId 'com.veilforge.realmagent.live'" "$ROOT/android-app/app/build.gradle"
+          node --check "$ROOT/bedrock-agent/src/survival/world.js"
+          node --check "$ROOT/bedrock-agent/src/survival/pathfinder.js"
+          node --check "$ROOT/bedrock-agent/src/survival/navigation.js"
+          node --check "$ROOT/bedrock-agent/src/knowledge/bedrock-reference.js"
+          node --check "$ROOT/bedrock-agent/src/api.js"
+          node --check "$ROOT/bedrock-agent/src/offline-minecraft-brain.js"
+          (cd "$ROOT/bedrock-agent" && node --test tests/v039-water-risk.test.js)
+      - name: Recover verified pre-existing Android ARM64 runtime, never a signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
+          curl -fLsS --retry 2 --retry-delay 3 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-038-follow-clearance/Realm-AI-Live.apk' -o /tmp/live-v038.apk
+          unzip -t /tmp/live-v038.apk | tail -1
+          LIB="$ROOT/android-app/app/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$LIB"
+          unzip -p /tmp/live-v038.apk lib/arm64-v8a/libnode.so > "$LIB/libnode.so"
+          unzip -p /tmp/live-v038.apk lib/arm64-v8a/libveilforge_bridge.so > "$LIB/libveilforge_bridge.so"
+          test -s "$LIB/libnode.so"
+          test -s "$LIB/libveilforge_bridge.so"
+      - name: Install bot dependencies and prepare isolated preview identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
+          (cd "$ROOT/bedrock-agent" && npm ci --omit=dev --no-audit --no-fund)
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build.gradle')
+          src=p.read_text()
+          assert "debug { signingConfig = null }" in src
+          p.write_text(src.replace("debug { signingConfig = null }", 'debug { applicationIdSuffix ".preview" }'))
+          PY
+          echo 'The preview has a distinct package ID and debug signing identity. It cannot replace v0.38.'
+      - name: Compile actual Android preview APK
+        shell: bash
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: |
+          gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Check the produced Android package and bundled bot runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify --verbose "$APK"
+          "$TOOLS/aapt" dump badging "$APK" | tee /tmp/package-info.txt
+          grep -q "name='com.veilforge.realmagent.live.preview'" /tmp/package-info.txt
+          grep -q "versionCode='200020'" /tmp/package-info.txt
+          unzip -l "$APK" | grep 'assets/nodejs-project/src/survival/navigation.js'
+          unzip -l "$APK" | grep 'assets/nodejs-project/src/knowledge/bedrock-reference.js'
+          unzip -l "$APK" | grep 'lib/arm64-v8a/libveilforge_bridge.so'
+          cp "$APK" Realm-AI-v039-ISOLATED-PREVIEW.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Realm-AI-v039-ISOLATED-PREVIEW
+          path: Realm-AI-v039-ISOLATED-PREVIEW.apk
+          retention-days: 1
+          if-no-files-found: error
