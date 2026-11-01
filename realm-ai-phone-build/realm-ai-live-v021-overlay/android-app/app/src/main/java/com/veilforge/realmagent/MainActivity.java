@@ -314,8 +314,8 @@ public class MainActivity extends Activity {
         else if(r.optBoolean("spawned")){JSONObject verify=survival==null?null:survival.optJSONObject("verification");connection.setText("In Realm as "+r.optString("username")+" · "+(verify==null?"mode unverified":verify.optString("mode","unknown")+" · "+verify.optString("reason","")));}
         else if("pack-request".equals(packStage))
             connection.setText("Requested Realm packs • waiting "+r.optInt("packWaitSeconds",0)+"s for server data");
-        else if("downloading-packs".equals(packStage)||"pack-cached".equals(packStage))
-            connection.setText("Realm resource packs: "+pack.optInt("done")+"/"+pack.optInt("total")+" verified");
+        else if("downloading-packs".equals(packStage)||"pack-cached".equals(packStage)||"pack-retry".equals(packStage)||"pack-storage".equals(packStage))
+            connection.setText("Realm resource packs: "+pack.optString("message","Checking download and storage")+" · "+pack.optInt("done")+"/"+pack.optInt("total")+" verified");
         else if("packs-ready".equals(packStage))connection.setText("Realm packs ready • waiting to spawn");
         else if("negotiating-packs".equals(phase))connection.setText("Minecraft handshake • checking required packs");
         else if(r.optBoolean("joined"))connection.setText("Joined Realm • waiting to spawn");
