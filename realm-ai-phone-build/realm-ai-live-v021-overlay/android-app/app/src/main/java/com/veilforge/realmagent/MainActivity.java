@@ -28,7 +28,7 @@ public class MainActivity extends Activity {
     final ExecutorService urgent = Executors.newSingleThreadExecutor();
     volatile long commandEpoch=System.currentTimeMillis(); int selectedPlan=0;
     EditText botField,ownerField,realmField,input;
-    LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton;String displayedAuthCode="";
+    LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton,retryButton;String displayedAuthCode="",lastPresentedMicrosoftCode="";AlertDialog settingsDialog;
     String token="",lastProgressText=""; long cursor=0,serviceRevision=0,lastApiSuccessAt=0,serviceStateSince=0; boolean active=false,serviceStarted=false,apiConnected=false;
     final int PORT=8765;
     int d(int v){return (int)(v*getResources().getDisplayMetrics().density);}
@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
         View headerSpacer=new View(this);header.addView(headerSpacer,new LinearLayout.LayoutParams(0,d(44),1));
         Button settings=button("⚙",this::showSettings);settings.setContentDescription("Settings");settings.setPadding(0,0,0,0);header.addView(settings,new LinearLayout.LayoutParams(d(42),d(44)));
         connection=txt("Not running",12,MUTED);connection.setMaxLines(4);connection.setPadding(d(12),d(9),d(12),d(9));connection.setBackground(shape(PANEL));connection.setVisibility(View.VISIBLE);root.addView(connection,space(2));
+        retryButton=button("Try Again",this::retryBlocked);retryButton.setContentDescription("Retry a blocked task after checking terrain, without adding a duplicate");retryButton.setVisibility(View.GONE);root.addView(retryButton,space(3));
         authCodeLabel=txt("",16,WHITE);authCodeLabel.setTextIsSelectable(false);authCodeLabel.setAutoLinkMask(Linkify.WEB_URLS);authCodeLabel.setLinksClickable(true);authCodeLabel.setLinkTextColor(PURPLE);authCodeLabel.setMovementMethod(LinkMovementMethod.getInstance());authCodeLabel.setContentDescription("Microsoft device sign-in code and clickable link; shown while sign-in is pending.");authCodeLabel.setVisibility(View.GONE);
         copyAuthCode=button("Copy sign-in code",()->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Microsoft code",displayedAuthCode));});copyAuthCode.setVisibility(View.GONE);
         copyAuthCode.setContentDescription("Copy the visible Microsoft device sign-in code");root.addView(authCodeLabel,space(2));root.addView(copyAuthCode,space(2));
@@ -76,7 +77,7 @@ public class MainActivity extends Activity {
         body.addView(button("Saved plans",this::showPlans),space(7));body.addView(button("Stop bot service",this::stopServiceNow),space(7));
         body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("Bug reports",this::showBugReports),space(7));body.addView(button("Connection diagnostics",this::showDiagnostics),space(7));body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
         body.addView(txt("Share only a file you choose in Android's picker.",12,MUTED),space(14));Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(5));
-        AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();dialog.setOnDismissListener(x->{for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();settingsDialog=dialog;dialog.setOnDismissListener(x->{if(settingsDialog==dialog)settingsDialog=null;for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
     }
     TextView sectionLabel(String label){TextView v=txt(label,11,PURPLE);v.setLetterSpacing(.12f);return v;}
     void showLearning(){
@@ -111,7 +112,7 @@ public class MainActivity extends Activity {
     }
     String diagnosticText(JSONObject report,String source,boolean reachable){
         JSONObject safe=ConnectionDiagnostics.sanitize(report);
-        try{safe.put("reportSource",source);safe.put("localApiReachable",reachable);safe.put("serviceRequested",serviceStarted);safe.put("applicationId",getPackageName());safe.put("configuredLoginPlatform","Nintendo Switch");safe.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);safe.put("copiedAt",System.currentTimeMillis());safe.put("reportAvailable",report!=null);return safe.toString(2);}catch(Exception ignored){return "Connection diagnostics are unavailable. Saved login has not been changed.";}
+        try{safe.put("reportSource",source);safe.put("localApiReachable",reachable);safe.put("serviceRequested",serviceStarted);safe.put("startup",SupportBundle.startup(this));safe.put("applicationId",getPackageName());safe.put("configuredLoginPlatform","Nintendo Switch");safe.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);safe.put("copiedAt",System.currentTimeMillis());safe.put("reportAvailable",report!=null);return safe.toString(2);}catch(Exception ignored){return "Connection diagnostics are unavailable. Saved login has not been changed.";}
     }
     void showChatDiagnostics(){
         if(!serviceStarted&&!apiConnected){new AlertDialog.Builder(this).setTitle("Realm chat diagnostics").setMessage("Start the bot first. Then send !ai ping in Realm chat.").setPositiveButton("Close",null).show();return;}
@@ -219,13 +220,27 @@ public class MainActivity extends Activity {
     void showPlans(){io.submit(()->{try{JSONObject r=request("GET","/plans",null);ui.post(()->{syncPlans(r.optJSONObject("plans"));final JSONArray shownCards=cards;String[] names=new String[shownCards.length()];for(int i=0;i<names.length;i++){JSONObject c=shownCards.optJSONObject(i),desc=c.optJSONObject("descriptor");names[i]="#"+c.optInt("id")+(c.optInt("id")==selectedPlan?" (selected)":"")+" · "+c.optString("label")+" · "+c.optString("state");}
         savedPlanList=new ListView(this);savedPlanList.setDivider(null);savedPlanList.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,names){@Override public View getView(int p,View reused,ViewGroup parent){TextView v=(TextView)super.getView(p,reused,parent);v.setTextColor(WHITE);v.setTextSize(16);v.setPadding(d(14),d(16),d(14),d(16));v.setBackground(shape(PANEL));return v;}});final AlertDialog[] deck=new AlertDialog[1];savedPlanList.setOnItemClickListener((parent,row,n,id)->{JSONObject c=shownCards.optJSONObject(n);new AlertDialog.Builder(this).setTitle("Plan #"+c.optInt("id")).setMessage(c.optString("command")+"\n"+c.optString("note")+"\n"+c.optString("result")+"\nReuse returns this card to the waiting queue. The green button runs waiting cards in order, selected first. Plans never resume automatically.").setPositiveButton("Reuse",(a,b)->{try{planAction("select",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNeutralButton("Delete",(a,b)->{try{planAction("delete",new JSONObject().put("id",c.optInt("id")));}catch(Exception ignored){}}).setNegativeButton("Close",null).show();});
         deck[0]=new AlertDialog.Builder(this).setTitle("Saved plans ("+cards.length()+"/5)").setView(savedPlanList).setPositiveButton("Activate waiting",(a,b)->activateQueuedPlans()).setNeutralButton("STOP",(a,b)->stopNow()).setNegativeButton("Close",null).create();deck[0].show();CommandDeck.style(this,deck[0],.65f);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Plans unavailable: "+e.getMessage(),false));}});}
+    void retryBlocked(){
+        final long epoch=commandEpoch;JSONObject survival=lastStatus==null?null:lastStatus.optJSONObject("survival");JSONObject nav=survival==null?null:survival.optJSONObject("navigation");
+        boolean follow=nav!=null&&"follow".equals(nav.optString("mode"))&&("blocked".equals(nav.optString("state"))||"waiting-for-terrain".equals(nav.optString("state")));
+        io.submit(()->{if(epoch!=commandEpoch)return;try{
+            JSONObject r=request("POST",follow?"/navigation/retry?epoch="+epoch:"/plans/retry",new JSONObject().put("epoch",epoch));
+            ui.post(()->{if(epoch!=commandEpoch)return;syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message","No retry response."),false);if(!r.optBoolean("accepted"))retryButton.setVisibility(View.VISIBLE);});
+        }catch(Exception e){ui.post(()->{if(epoch==commandEpoch)bubble("VEILFORGE","Retry could not check terrain: "+e.getMessage(),false);});}});
+    }
     void stopNow(){SupportLog.record(this,"stop_sent");commandEpoch++;bubble("YOU","STOP",true);urgent.submit(()->{try{JSONObject r=request("POST","/stop?epoch="+commandEpoch,new JSONObject());ui.post(()->{syncPlans(r.optJSONObject("plans"));bubble("VEILFORGE",r.optString("message"),false);});}catch(Exception e){ui.post(()->bubble("VEILFORGE","Stop not confirmed: "+e.getMessage(),false));}});}
     JSONObject lastStatus=null;
-    void showAuth(){if(token.isEmpty()){bubble("Progress","Start the bot and wait for the local controller before requesting its Microsoft sign-in code.",false);return;}io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showAuth(status);});}catch(Exception e){ui.post(()->bubble("Progress","Could not check Microsoft sign-in status: "+e.getMessage(),false));}});}
+    void showAuth(){if(token.isEmpty()){new AlertDialog.Builder(this).setTitle("Microsoft sign-in").setMessage("Start the bot first. Its Microsoft device code will be shown here automatically when Microsoft requests one.").setPositiveButton("OK",null).show();return;}io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showAuth(status);});}catch(Exception e){ui.post(()->new AlertDialog.Builder(this).setTitle("Microsoft sign-in unavailable").setMessage("Could not retrieve the sign-in code from the on-device bot: "+e.getMessage()).setPositiveButton("OK",null).show());}});}
     void showAuth(JSONObject status){JSONObject info=status!=null?status.optJSONObject("authChallenge"):null;
         if(info==null||info.optString("userCode").isEmpty()){
-            bubble("Progress","No Microsoft sign-in code is pending, so there is nothing to copy. The latest connection error is shown above. When Microsoft requests a new code, it and the clickable link will appear here.",false);return;}
+            // A chat bubble is behind Settings; use a visible dialog for missing-code feedback.
+            new AlertDialog.Builder(this).setTitle("Microsoft sign-in")
+              .setMessage("No Microsoft sign-in code has been issued yet. Start the bot, then check the connection status. When Microsoft issues a code, it will appear here automatically.")
+              .setPositiveButton("OK",null).show();return;}
         String code=info.optString("userCode");
+        lastPresentedMicrosoftCode=code;
+        // Settings is another Android window; close it so the code and Copy action are never hidden behind it.
+        if(settingsDialog!=null&&settingsDialog.isShowing())settingsDialog.dismiss();
         displayedAuthCode=code;authCodeLabel.setText("Microsoft sign-in code: " + code + "\nOpen https://www.microsoft.com/link and enter it");
         authCodeLabel.setVisibility(View.VISIBLE);copyAuthCode.setVisibility(View.VISIBLE);
         new AlertDialog.Builder(this).setTitle("Sign in to your bot Xbox account")
@@ -285,6 +300,10 @@ public class MainActivity extends Activity {
     void update(){final long revision=serviceRevision;io.submit(()->{try{JSONObject r=request("GET","/updates?after="+cursor,null);ui.post(()->{if(revision!=serviceRevision)return;
         markControllerAvailable();rememberDiagnostics(r.optJSONObject("diagnostics"));lastStatus=r;
         JSONObject survival=r.optJSONObject("survival");if(survival!=null)syncPlans(survival.optJSONObject("plans"));
+        JSONObject navState=survival==null?null:survival.optJSONObject("navigation");
+        boolean blockedFollow=navState!=null&&"follow".equals(navState.optString("mode"))&&Arrays.asList("blocked","waiting-for-terrain").contains(navState.optString("state"));
+        boolean retryablePlans=survival!=null&&survival.optJSONObject("plans")!=null&&survival.optJSONObject("plans").optBoolean("retryable");
+        retryButton.setVisibility(blockedFollow||retryablePlans?View.VISIBLE:View.GONE);
         JSONObject plan=r.optJSONObject("planner");
         String phase=r.optString("authState","starting");
         String err=r.optString("lastError","").trim();
@@ -323,11 +342,13 @@ public class MainActivity extends Activity {
             displayedAuthCode=code;
             authCodeLabel.setText("MICROSOFT CODE: "+code+"\nOpen https://www.microsoft.com/link and enter it.");
             authCodeLabel.setVisibility(View.VISIBLE);copyAuthCode.setVisibility(View.VISIBLE);
+            if(!code.equals(lastPresentedMicrosoftCode))showAuth(r);
         }else{
             displayedAuthCode="";authCodeLabel.setVisibility(View.GONE);copyAuthCode.setVisibility(View.GONE);
+            if(!"sign-in-required".equals(phase))lastPresentedMicrosoftCode="";
         }
         JSONArray updates=r.optJSONArray("updates");if(updates!=null)for(int i=0;i<updates.length();i++){JSONObject e=updates.optJSONObject(i);if(e==null||e.optLong("id")<=cursor)continue;cursor=e.optLong("id");bubble(e.optString("source","Realm"),e.optString("message"),false);}
-        });}catch(Exception ex){ui.post(()->{if(revision!=serviceRevision)return;apiConnected=false;long reference=Math.max(lastApiSuccessAt,serviceStateSince);if(serviceStarted&&reference>0&&System.currentTimeMillis()-reference>=15000){serviceStarted=false;serviceStateSince=0;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();bubble("Progress","The bot service stopped responding. Your saved login and plans remain; tap the power button to start it again.",false);}renderPowerButton();connection.setText("Waiting for local bot…");File f=new File(getFilesDir(),"boot-status.txt");if(f.exists())try(FileInputStream in=new FileInputStream(f)){byte[] buf=new byte[512];int n=in.read(buf);if(n>0)connection.setText(new String(buf,0,n,StandardCharsets.UTF_8));}catch(Exception ignored){}});}});}
+        });}catch(Exception ex){ui.post(()->{if(revision!=serviceRevision)return;apiConnected=false;long reference=Math.max(lastApiSuccessAt,serviceStateSince);if(serviceStarted&&reference>0&&System.currentTimeMillis()-reference>=180000){serviceStarted=false;serviceStateSince=0;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();bubble("Progress","The bot controller did not become reachable after startup. Export Bug reports for the startup stage before retrying; the Microsoft login cache is untouched.",false);}renderPowerButton();connection.setText(serviceStarted?"Preparing embedded bot; the first launch can take over a minute…":"Waiting for local bot…");File f=new File(getFilesDir(),"boot-status.txt");if(f.exists())try(FileInputStream in=new FileInputStream(f)){byte[] buf=new byte[512];int n=in.read(buf);if(n>0)connection.setText(new String(buf,0,n,StandardCharsets.UTF_8));}catch(Exception ignored){}});}});}
     protected JSONObject request(String verb,String path,JSONObject payload)throws Exception{
         final long revision=serviceRevision;
         HttpURLConnection c=(HttpURLConnection)new URL("http://127.0.0.1:"+PORT+path).openConnection();try{

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200021,
+  "issuedAt": 1793519408865,
+  "expiresAt": 1794124208865,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0392-startup-dictionary/Realm-AI-Live.apk",
+  "size": 110245234,
+  "sha256": "55e74b9144dfcc1cb2251a95cbf3e0196dbccf10b4e26a801fa8921f3bf35157",
+  "notes": "Fix startup dictionary loading for both Android-expanded JSON and gzip assets; preserve v0.39.1 features and saved Switch login.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

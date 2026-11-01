@@ -6,8 +6,8 @@ android {
         applicationId 'com.veilforge.realmagent.live'
         minSdk 28
         targetSdk 35
-        versionCode 200019
-        versionName '0.38-follow-clearance'
+        versionCode 200021
+        versionName '0.39.2-startup-dictionary'
         ndk { abiFilters 'arm64-v8a' }
     }
     sourceSets.main.assets.srcDir "$buildDir/generated/node-assets"
@@ -21,7 +21,7 @@ android {
 tasks.register('stageBotAssets', Sync) {
     def src = project.file('../../bedrock-agent')
     from(src) {
-        exclude 'private/**', 'config.json', 'tests/**', '*.bat', 'node_modules/.cache/**'
+        exclude 'private/**', 'config.json', 'tests/**', '*.bat', 'node_modules/.cache/**', 'node_modules/**/sample/**', 'node_modules/**/samples/**', 'node_modules/**/test/**', 'node_modules/**/tests/**'
         include 'src/**', 'tools/**', 'pack-template/**', 'node_modules/**', 'package.json'
     }
     into "$buildDir/generated/node-assets/nodejs-project"

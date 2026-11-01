@@ -50,7 +50,23 @@ export class ExplorationJobs{
    return this.finish(`Exploration completed: ${a.progress}/30 blocks of confirmed directional progress. Remembered ${this.memory.snapshot().trees} tree location(s) and ${this.memory.snapshot().ores} ore location(s) in this Realm.`,`completed`)
   }
   if(a.state==='walking'){
-   if(n.state==='stopped'||['failed','blocked'].includes(n.state))return this.finish('Roaming stopped: '+(n.reason||'movement interrupted')+'.')
+   if(n.state==='landing-for-replan'){
+    a.reason='Jump clearance changed; landing and rerouting the same exploration segment.'
+    a.walkStartedAt=now
+    return
+   }
+   if(n.state==='blocked'){
+    if(!a.blockedSince)a.blockedSince=now
+    if(now-a.blockedSince>6500)return this.finish('Roaming paused: no observed detour around the blocked jump. '+n.reason,'partial')
+    if(w.terrainKnown()&&now-(a.lastRetryAt||0)>1200){
+     a.lastRetryAt=now
+     const plan=n.routeTo(a.goal,w.standPosition(),{allowDirt:false,maxNodes:800})
+     if(plan.ok){n.assignRoute(plan);a.blockedSince=0;a.walkStartedAt=now;return}
+    }
+    a.reason='Waiting for observed terrain or a short detour around the blocked jump.'
+    return
+   }
+   if(n.state==='stopped'||n.state==='failed')return this.finish('Roaming stopped: '+(n.reason||'movement interrupted')+'.')
    const p=w.serverPosition
    if(p&&n.lastPoseAt>a.poseAt&&horizontal(p,{x:a.goal.x+.5,z:a.goal.z+.5})<.55&&Math.abs(p.y-1.62-a.goal.y)<.6){
     a.progress=Math.min(30,Math.max(a.progress,Math.round((a.goal.x-a.start.x)*a.heading.x+(a.goal.z-a.start.z)*a.heading.z)))

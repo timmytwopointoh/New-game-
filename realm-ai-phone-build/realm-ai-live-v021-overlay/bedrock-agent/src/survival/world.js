@@ -6,6 +6,7 @@ import {Reader,decodeSection,decodeBiomeStores,blockIndex} from './chunks.js'
 const dimensionNumber=d=>typeof d==='number'?d:({overworld:0,nether:1,end:2}[d]??0)
 const dangerous=/^(?:flowing_)?(?:lava|water)$|fire|campfire|cactus|magma|powder_snow|sweet_berry|wither_rose|portal|web/
 const airNames=new Set(['air','cave_air','void_air'])
+const isWater=name=>/^(?:flowing_)?water$/.test(name||'')
 export class WorldView{
  constructor(){this.reset()}
  reset(){this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
@@ -171,11 +172,23 @@ export class WorldView{
   if(h!==null&&Math.abs(h-feet)<.002&&(at===null||Math.abs(at-feet)>.002))return above
   return p
  }
- walkable(p,{avoidHostiles=true}={}){
-  const height=this.supportHeight(p)
-  if(height===null||!this.clearBody({x:p.x+.5,y:height+1.62,z:p.z+.5}))return false
+ // Ordinary water is not lava. Wading is allowed only across observed
+ // single-block-deep water with solid support and air around the player's head.
+ shallowWater(p){
+  if(!p||![p.x,p.y,p.z].every(Number.isSafeInteger))return false
+  const foot=[this.block(p),this.block(p,1)],head=[this.block({...p,y:p.y+1}),this.block({...p,y:p.y+1},1)]
+  if(foot.some(b=>!b)||head.some(b=>!b)||!foot.some(b=>isWater(b.name)))return false
+  if(!head.every(b=>airNames.has(b.name)))return false
+  const floor=this.block({...p,y:p.y-1}),floorOverlay=this.block({...p,y:p.y-1},1)
+  if(!floor||!floorOverlay||dangerous.test(floor.name)||(!airNames.has(floorOverlay.name)&&!isWater(floorOverlay.name)))return false
+  if(!floor.shapes?.some(q=>q[0]===0&&q[2]===0&&q[3]===1&&q[5]===1&&q[4]>=1))return false
+  return this.clearBody({x:p.x+.5,y:p.y+1.62,z:p.z+.5},{allowWater:true})
+ }
+ walkable(p,{avoidHostiles=true,allowWater=false}={}){
+  const height=this.supportHeight(p),shallow=allowWater&&this.shallowWater(p)
+  if(!shallow&&(height===null||!this.clearBody({x:p.x+.5,y:height+1.62,z:p.z+.5})))return false
   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
-   const n=this.block({x:p.x+dx,y:p.y,z:p.z+dz});if(n&&dangerous.test(n.name))return false
+   const n=this.block({x:p.x+dx,y:p.y,z:p.z+dz});if(n&&dangerous.test(n.name)&&!(allowWater&&isWater(n.name)))return false
   }
   if(avoidHostiles)for(const e of this.entities.values())if(/zombie|skeleton|creeper|spider|warden|witch|pillager|enderman/.test(e.type)&&Math.hypot(e.position.x-p.x,e.position.z-p.z)<3)return false
   return true

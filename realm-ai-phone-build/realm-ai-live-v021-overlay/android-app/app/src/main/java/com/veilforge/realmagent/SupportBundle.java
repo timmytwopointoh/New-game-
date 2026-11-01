@@ -14,6 +14,14 @@ final class SupportBundle {
  static Set<String> set(String s){return new HashSet<>(Arrays.asList(s.split(" ")));}
  static JSONObject read(File file,int limit){try{if(!file.isFile()||file.length()>limit)return new JSONObject();try(InputStream in=new FileInputStream(file);ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>limit)return new JSONObject();out.write(b,0,n);}return new JSONObject(out.toString("UTF-8"));}}catch(Exception e){return new JSONObject();}}
  static long count(JSONObject o,String key){return Math.max(0,o.optLong(key));}
+ /** Whitelisted startup stages only; this file cannot carry auth or device details. */
+ static JSONObject startup(Context c){
+  JSONObject raw=read(new File(c.getFilesDir(),"startup-status.json"),4096);
+  String stage=raw.optString("stage","not-recorded");
+  if(!set("not-recorded service-started copying-assets assets-ready loading-native node-started node-exited startup-failed").contains(stage))stage="unknown";
+  JSONObject out=new JSONObject();try{out.put("schema",1).put("stage",stage).put("at",count(raw,"at"));}catch(JSONException ignored){}
+  return out;
+ }
  static JSONObject state(JSONObject s)throws JSONException{
   JSONObject out=new JSONObject();if(s==null)return out;out.put("life",set("alive dead waiting-for-server server-ready waiting-for-health respawned blocked").contains(s.optString("life"))?s.optString("life"):"unknown");
   for(String k:new String[]{"spawned","loading","flying","mayFly","invulnerable","instantBuild","noClip","grounded","serverGrounded","terrainKnown","bodyClear","modePending","moveLocked","jumpLocked"})if(s.opt(k) instanceof Boolean)out.put(k,s.getBoolean(k));
@@ -44,7 +52,7 @@ final class SupportBundle {
   JSONArray appEvents=new JSONArray(),source=read(SupportLog.file(c),131072).optJSONArray("events");if(source!=null)for(int i=Math.max(0,source.length()-200);i<source.length();i++){JSONObject e=source.optJSONObject(i);if(e!=null&&SupportLog.CODES.contains(e.optString("code")))appEvents.put(new JSONObject().put("at",count(e,"at")).put("code",e.optString("code")));}
   try(ZipOutputStream zip=new ZipOutputStream(destination)){
    entry(zip,"README.txt","Realm AI Live diagnostic bundle. Recent app events, packet counts and sampled game state; includes in-game coordinates. No passwords, Microsoft codes/tokens, account names, chat, private signing material, raw packets or arbitrary phone files. Collected issues are symptoms. Attach this ZIP to the development chat; it is not uploaded automatically. Fixes arrive as signed APK updates and Android asks before installation.\n");
-   entry(zip,"app.json",metadata.toString(2));entry(zip,"app-events.json",new JSONObject().put("events",appEvents).toString(2));
+   entry(zip,"app.json",metadata.toString(2));entry(zip,"app-events.json",new JSONObject().put("events",appEvents).toString(2));entry(zip,"startup.json",startup(c).toString(2));
    entry(zip,"connection.json",ConnectionDiagnostics.sanitize(read(new File(c.getFilesDir(),"nodejs-project/private/diagnostics/connection.json"),32768)).toString(2));
    entry(zip,"runtime.json",trace(read(new File(c.getFilesDir(),"nodejs-project/private/diagnostics/runtime.json"),524288)).toString(2));
   }

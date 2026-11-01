@@ -74,7 +74,7 @@ export class CommandPlans{
   if(this.file&&fs.existsSync(this.file)){try{const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(!Array.isArray(data.cards)||data.cards.length>5)throw Error();this.cards=data.cards.map((c,i)=>({id:i+1,descriptor:validateDescriptor(c.descriptor),state:'waiting',result:'',activationLocked:false}));this.sequence=this.cards.length;const selected=Number.isSafeInteger(data.selected)?data.selected:null;this.selected=this.cards.some(c=>c.id===selected)?selected:null}catch{this.loadError='Saved plans could not be read; original file preserved.';this.readOnly=true}}
  }
  persist(){if(this.readOnly)throw Error(this.loadError);if(!this.file)return;fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});fs.writeFileSync(this.file+'.tmp',JSON.stringify({cards:this.cards.map(c=>({descriptor:c.descriptor})),selected:this.selected}),{mode:0o600});fs.renameSync(this.file+'.tmp',this.file)}
- snapshot(){this.reconcile();return {scopeKnown:!!this.scope,cards:this.cards.map(c=>({...copy(c),command:renderDescriptor(c.descriptor),label:commandCatalog.find(d=>d.id===c.descriptor.id)?.label,note:commandCatalog.find(d=>d.id===c.descriptor.id)?.note})),selected:this.selected,running:this.running,batch:this.batch?{remaining:this.batch.ids.length-this.batch.index,total:this.batch.ids.length}:null,pending:this.cards.filter(c=>c.state==='waiting').length,error:this.loadError||'',capacity:5}}
+ snapshot(){this.reconcile();return {retryable:this.running===null&&!this.batch&&this.cards.some(c=>['blocked','failed'].includes(c.state)&&['walk','clear'].includes(c.descriptor.id)),scopeKnown:!!this.scope,cards:this.cards.map(c=>({...copy(c),command:renderDescriptor(c.descriptor),label:commandCatalog.find(d=>d.id===c.descriptor.id)?.label,note:commandCatalog.find(d=>d.id===c.descriptor.id)?.note})),selected:this.selected,running:this.running,batch:this.batch?{remaining:this.batch.ids.length-this.batch.index,total:this.batch.ids.length}:null,pending:this.cards.filter(c=>c.state==='waiting').length,error:this.loadError||'',capacity:5}}
  prepare(descriptor){
   if(this.directory&&!this.scope)throw Error('Join and identify the Realm before saving a Realm-scoped plan.')
   if(this.cards.length>=5)throw Error('Five plans are saved. Delete a card before preparing another.')
@@ -130,7 +130,29 @@ export class CommandPlans{
    this.startPoll();return result
   }catch(e){this.controller.learning?.record(card.descriptor,'blocked',e.message);card.state='failed';card.result=e.message;this.running=null;this.finishBatch(`Queue stopped: ${e.message}`);return {accepted:false,queued:false,message:e.message}}
  }
- startPoll(){if(this.batchPoll)return;this.batchPoll=setInterval(()=>this.pollBatch(),200);this.batchPoll.unref?.()}
+ // Re-run the same failed walking card after checking the server terrain.
+ // Never duplicate cards or blindly replay partly completed world edits.
+ retryBlocked(id=null){
+  this.reconcile()
+  if(this.batch||this.running!==null||this.controller.navigation?.job)return {accepted:false,queued:false,message:'Stop or finish the current task before retrying.',plans:this.snapshot()}
+  const eligible=this.cards.filter(c=>['blocked','failed'].includes(c.state)&&['walk','clear'].includes(c.descriptor.id))
+  const card=id===null?eligible.at(-1):eligible.find(c=>c.id===id)
+  if(!card)return {accepted:false,queued:false,message:'No blocked walking task can be retried safely. Building, mining and item actions need inspection before another attempt.',plans:this.snapshot()}
+  const nav=this.controller.navigation,w=this.controller.world
+  if(!this.controller.connection?.spawned||!nav?.client||!w?.position)return {accepted:false,queued:false,message:'Wait for the bot to spawn and receive its position before retrying.',plans:this.snapshot()}
+  const oldResult=card.result
+  try{
+   w.requestNearby(nav.client)
+   if(!w.terrainKnown())return {accepted:false,queued:false,message:'Nearby terrain is still unknown; requested fresh sections. Try Again after the chunks arrive. '+oldResult,plans:this.snapshot()}
+   const gate=nav.movementBlock();if(gate)return {accepted:false,queued:false,message:'Still blocked: '+gate,plans:this.snapshot()}
+   nav.blocked.clear();nav.progress.reset();nav.recoveryAttempts=0;nav.lastClearanceBlock=null
+   card.state='waiting';card.activationLocked=false;card.result='Retrying original command after terrain recheck. Previous failure: '+oldResult
+   this.batch={ids:[card.id],index:0}
+   const response=this.launchBatchItem()
+   return {...response,plans:this.snapshot(),retriedCardId:card.id}
+  }catch(e){if(this.batch)this.finishBatch('Retry could not start.');card.state='blocked';card.result=oldResult;return {accepted:false,queued:false,message:'Retry refused: '+String(e.message||e),plans:this.snapshot()}}
+ }
+  startPoll(){if(this.batchPoll)return;this.batchPoll=setInterval(()=>this.pollBatch(),200);this.batchPoll.unref?.()}
  pollBatch(){
   if(!this.batch||this.running===null)return
   const card=this.cards.find(c=>c.id===this.running);if(!card){this.finishBatch('Queue lost its active card.');return}

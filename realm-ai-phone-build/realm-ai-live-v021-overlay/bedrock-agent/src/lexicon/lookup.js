@@ -2,7 +2,12 @@ import fs from 'node:fs'
 import {gunzipSync} from 'node:zlib'
 import {resolveMaterial} from '../survival/catalog.js'
 
-const payload=JSON.parse(gunzipSync(fs.readFileSync(new URL('./english-5000.json.gz',import.meta.url))).toString('utf8'))
+// AAPT transparently expands .gz assets and removes their suffix in Gradle APKs.
+// Reconstruction APKs retain .gz; accept both without dropping vocabulary.
+const compressedDictionary=new URL('./english-5000.json.gz',import.meta.url)
+const payload=JSON.parse(fs.existsSync(compressedDictionary)
+ ?gunzipSync(fs.readFileSync(compressedDictionary)).toString('utf8')
+ :fs.readFileSync(new URL('./english-5000.json',import.meta.url),'utf8'))
 const entries=new Map(payload.words.map(item=>[item.w,item]))
 const minecraftTerms=JSON.parse(fs.readFileSync(new URL('./minecraft-context.json',import.meta.url),'utf8'))
 for(const [word,senses] of Object.entries(minecraftTerms))if(!entries.has(word))entries.set(word,{w:word,r:null,s:senses})

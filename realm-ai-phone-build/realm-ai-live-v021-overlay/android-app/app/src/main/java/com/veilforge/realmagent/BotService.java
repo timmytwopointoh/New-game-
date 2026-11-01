@@ -30,6 +30,7 @@ public final class BotService extends Service {
             SupportLog.record(this,"service_stop");AppUpdater.stopMonitor(); stopForeground(true); stopSelf(); Process.killProcess(Process.myPid());
             return START_NOT_STICKY;
         }
+        writeStage("service-started");
         AppUpdater.startMonitor(this);
         NotificationManager nm = getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel(CHANNEL, "VEILFORGE Realm Player", NotificationManager.IMPORTANCE_LOW));
@@ -47,6 +48,7 @@ public final class BotService extends Service {
             launched = true;
             new Thread(() -> {
                 try {
+                    writeStage("copying-assets");
                     File root = new File(getFilesDir(), "nodejs-project");
                     // Refresh bundled code once per installed APK version.
                     // Config, Xbox session and Realm packs are not part of the bundled asset tree.
@@ -55,14 +57,19 @@ public final class BotService extends Service {
                     boolean refresh = prefs.getInt("asset_bundle_version",-1) != code;
                     copyAssetTree(getAssets(), "nodejs-project", root, refresh);
                     if(refresh) prefs.edit().putInt("asset_bundle_version",code).commit();
+                    writeStage("assets-ready");
                     File entry = new File(root, "src/mobile.js");
                     if (!entry.isFile()) throw new IOException("Embedded bot entry is missing");
                     // This function blocks on Node's event loop. Never run on Android's UI thread.
+                    writeStage("loading-native");
                     System.loadLibrary("node");
                     System.loadLibrary("veilforge_bridge");
+                    writeStage("node-started");
                     SupportLog.record(this,"runtime_start");int exit = startNodeWithArguments(new String[]{"node", entry.getAbsolutePath()});
+                    writeStage("node-exited");
                     SupportLog.record(this,"runtime_exit");writeState("Node stopped (code " + exit + ")");
                 } catch (Throwable error) {
+                    writeStage("startup-failed");
                     SupportLog.record(this,"runtime_failed");
                     writeState("On-device bot could not start: " + error.getClass().getSimpleName() + " (check runtime and dependencies)");
                 } finally { stopSelf(); }
@@ -71,6 +78,17 @@ public final class BotService extends Service {
         return START_NOT_STICKY;
     }
     @Override public void onDestroy(){AppUpdater.stopMonitor();super.onDestroy();}
+    // Only a fixed stage name and timestamp are recorded; never expose account details or tokens.
+    private void writeStage(String stage) {
+        try {
+            File file = new File(getFilesDir(), "startup-status.json");
+            org.json.JSONObject safe = new org.json.JSONObject().put("schema",1)
+                .put("stage",stage).put("at",System.currentTimeMillis());
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                out.write(safe.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } catch (Exception ignored) { }
+    }
     private void writeState(String message) {
         try (FileOutputStream out = new FileOutputStream(new File(getFilesDir(), "boot-status.txt"))) {
             out.write(message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
