@@ -66,7 +66,7 @@ export class OpenDictionaryResearch {
    if(!meanings.length)throw Error('Dictionary did not return a usable definition.')
    const best=meanings.find(m=>m.partOfSpeech==='verb')||meanings[0]
    const action=guessSupportedAction(word,meanings)
-   return {word,definition:best.definitions[0],partOfSpeech:best.partOfSpeech,category:action||'other',action,verified:!!action,sourceCount:1,source:'Free Dictionary API',sourceUrl:'https://dictionaryapi.dev/',reason:action?'The dictionary meaning and a matching supported-action synonym agree.':'Definition found. It does not identify one unambiguous, currently executable Minecraft action.'}
+   return {word,meanings,definition:best.definitions[0],partOfSpeech:best.partOfSpeech,category:action||'other',action,verified:!!action,sourceCount:1,source:'Free Dictionary API',sourceUrl:'https://dictionaryapi.dev/',reason:action?'The dictionary meaning and a matching supported-action synonym agree.':'Definition found. It does not identify one unambiguous, currently executable Minecraft action.'}
   }finally{clearTimeout(timeout)}
  }
 }

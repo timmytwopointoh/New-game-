@@ -11,6 +11,7 @@ const actionTargets=new Set(commandCatalog.filter(d=>d.fields.length||['status',
 const actionAliases={
  dig:['mine','break','excavate','chip','dig up','mine block'], walk:['move','go','head','travel','navigate','move to','go to','travel to'], find:['locate','search','search for','look for','seek'],
  look:['scan','survey','inspect','observe','view'], follow:['track','trail','accompany','go with'], status:['status','check status'], inventory:['items','check inventory'],
+ hotbar:['switch slots','switch slot items','change slots','change selected slot','change the selected hotbar slot','select a tool','equip a tool'],
  build_wall:['construct wall'], build_floor:['construct floor']
 }
 const targetPrefix=id=>{
@@ -25,7 +26,7 @@ const wordPattern=word=>word.split(' ').map(escapeRegex).join('[ _-]+')
 export class CommandVocabulary{
  constructor({directory=null,scope=null}={}){this.directory=directory;this.setScope(scope)}
  setScope(scope){
-  this.scope=scope||null;this.actions=Object.create(null);this.materials=Object.create(null);this.readOnly=false;this.error=''
+  this.scope=scope||null;this.actions=Object.create(null);this.materials=Object.create(null);this.definitions=Object.create(null);this.readOnly=false;this.error=''
   this.file=this.directory&&scope?path.join(this.directory,crypto.createHash('sha256').update(String(scope)).digest('hex')+'.json'):null
   if(!this.file||!fs.existsSync(this.file))return
   try{
@@ -35,6 +36,7 @@ export class CommandVocabulary{
    for(const [word,id] of Object.entries(data.actions)){if(!this.validWord(word)||word!==normalize(word)||!actionTargets.has(id)||this.conflicts('action',word,id))throw Error();actions[word]=id}
    for(const [word,name] of Object.entries(data.materials)){if(!this.validWord(word)||word!==normalize(word)||typeof name!=='string'||resolveMaterial(name)!==name||this.conflicts('material',word,name))throw Error();materials[word]=name}
    this.actions=actions;this.materials=materials
+   if(isRecord(data.definitions))for(const [word,value] of Object.entries(data.definitions).slice(-50)){const clean=this.cleanDefinition(word,value);if(clean)this.definitions[word]=clean}
   }catch{this.error='Saved vocabulary could not be read; original file preserved. No saved mappings were loaded.';this.readOnly=true}
  }
  validWord(word){return typeof word==='string'&&word.trim().length>=2&&word.trim().length<=48&&!/[\r\n\x00-\x1f{}=]/.test(word)&&!['__proto__','constructor','prototype'].includes(word.trim().toLowerCase())}
@@ -48,7 +50,21 @@ export class CommandVocabulary{
   const material=resolveMaterial(word)
   return !!(material&&material!==target)
  }
- persist(actions=this.actions,materials=this.materials){if(this.readOnly)throw Error(this.error);writePrivateJson(this.file,{actions,materials})}
+ persist(actions=this.actions,materials=this.materials){if(this.readOnly)throw Error(this.error);writePrivateJson(this.file,{actions,materials,definitions:this.definitions})}
+ cleanDefinition(word,result){
+  if(!/^[a-z][a-z-]{1,29}$/.test(word)||!isRecord(result)||typeof result.definition!=='string'||!result.definition.trim())return null
+  const clean=value=>String(value||'').replace(/[\x00-\x1f\x7f]/g,' ').slice(0,200)
+  return {definition:clean(result.definition),source:clean(result.source||'dictionary').slice(0,60),sourceCount:Number.isSafeInteger(result.sourceCount)?Math.max(1,Math.min(10,result.sourceCount)):1,meanings:(Array.isArray(result.meanings)?result.meanings:[]).slice(0,3).map(m=>({partOfSpeech:clean(m.partOfSpeech).slice(0,24),definitions:(Array.isArray(m.definitions)?m.definitions:[]).slice(0,2).map(clean)}))}
+ }
+ definitionFor(word){return this.definitions[normalize(word)]?copy(this.definitions[normalize(word)]):null}
+ rememberDefinition(word,result){
+  if(this.readOnly||this.directory&&!this.scope)return false
+  const key=normalize(word),clean=this.cleanDefinition(key,result);if(!clean)return false
+  const previous=this.definitions;this.definitions=Object.assign(Object.create(null),previous);delete this.definitions[key];this.definitions[key]=clean
+  while(Object.keys(this.definitions).length>50)delete this.definitions[Object.keys(this.definitions)[0]]
+  try{this.persist()}catch(e){this.definitions=previous;throw e}
+  return true
+ }
  teach(kind,word,target){
   if(this.directory&&!this.scope)throw Error('Join and identify the Realm before saving Realm-specific vocabulary.')
   const key=normalize(word),value=normalize(target)
@@ -102,7 +118,7 @@ export function suggestAction(raw,vocabulary){
  return best
 }
 export function resolveActionTarget(raw){
- const value=normalize(raw).replace(/^(?:i mean |it means |i meant |that means |use )/,'')
+ const value=normalize(raw).replace(/^(?:i mean |it means |i meant |that means |use |to )/,'')
  const def=commandCatalog.find(d=>d.id===value||normalize(d.label)===value||normalize(d.template.split(/[ {]/)[0])===value)
  if(def&&actionTargets.has(def.id))return def.id
  for(const [id,words] of Object.entries(actionAliases))if(words.some(word=>normalize(word)===value))return id

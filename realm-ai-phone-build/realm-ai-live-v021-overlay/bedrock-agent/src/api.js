@@ -1,7 +1,8 @@
+import {resolveToolInstruction} from './tool-language.js'
 import {isForestryReturnCommand} from './survival/forestry-return.js'
 import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
 import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/command-vocabulary.js'
-import {respondToConversation} from './conversation.js'
+import {respondToConversation,isConversationQuestion} from './conversation.js'
 import {bundledEnglishWordCount} from './lexicon/lookup.js'
 import http from 'node:http'
 import crypto from 'node:crypto'
@@ -72,18 +73,27 @@ export function createApi(config,connection,log=console.log){
   const survival=connection.survival,scope=survival?.commandVocabulary?.scope,epoch=researchEpoch
   const builtIn=offlineMinecraftResponse('what is '+word,{world:survival?.world})
   if(builtIn)return builtIn
+  const remembered=survival?.commandVocabulary?.definitionFor?.(word)
+  if(remembered)return {accepted:true,queued:false,message:`I remember “${word}”: ${remembered.definition} (${remembered.source}; ${remembered.sourceCount} source). This is a saved definition, not permission to execute an action. Tell me the Minecraft object or tool you mean.`}
   if(researching)return {accepted:false,queued:false,message:'A word lookup is already running.'}
   if(!dictionaryResearch.configured())return {accepted:false,queued:false,message:'The phone HTTPS dictionary lookup is unavailable; offline vocabulary still works.'}
   researching=true
   dictionaryResearch.study(word).then(result=>{
    if(epoch!==researchEpoch||survival!==connection.survival||scope!==survival?.commandVocabulary?.scope)return
+   let definitionSaved=false
+   try{definitionSaved=survival.commandVocabulary.rememberDefinition?.(word,result)===true}catch{}
    let info=`Online dictionary: ${word} means ${result.definition} (${result.source}). ${result.reason}`
-   if(result.action){
+   if(definitionSaved)info+=' Definitions saved for this Realm; a definition alone is not an executable action.'
+   if(result.action&&result.verified&&result.sourceCount>=2){
     try{
      survival.commandVocabulary.teach('action',word,result.action)
      info+=` Saved as ${result.action}.`
      if(original){const direct=runAutonomous(original,survival);info+=` ${direct?.message||'Instruction was not executable.'}`}
     }catch(e){info+=' Meaning not saved: '+String(e.message||e).slice(0,90)}
+   }
+   if(result.action&&result.sourceCount<2){
+    if(original){pendingInterpretation={kind:'action',word,input:original,scope,learn:true,target:result.action,createdAt:Date.now()};info+=` One source suggests ${result.action}. Did you mean that Minecraft action? Reply yes to remember it and prepare the request, or no. Nothing has started.`}
+    else info+=' One external source is not enough to learn an executable action automatically.'
    }
    survival.report(info)
   }).catch(e=>{if(epoch===researchEpoch)survival?.report('Online dictionary lookup failed: '+String(e.message||e).slice(0,105))}).finally(()=>{researching=false})
@@ -120,11 +130,12 @@ export function createApi(config,connection,log=console.log){
       const v=vocabulary.list(),learned=connection.survival.learning?.snapshot()
       output={accepted:true,queued:false,message:`I use an offline ${bundledEnglishWordCount}-word English glossary PLUS Bedrock block/item/entity/biome/recipe data, supported command rules, and optional HTTPS lookups—not a neural language model. No Google key is necessary for Minecraft knowledge. I remember ${v.count} owner-confirmed word mappings for this Realm. ${learned?.confirmed||0} task successes were server-confirmed; ${learned?.blocked||0} attempts were blocked and ${learned?.interrupted||0} interrupted. I learn from your corrections and confirmed task outcomes; questions and jokes do not become actions. Use “command vocabulary” to review words or “command forget action <word>” to remove one.`+(v.error?' '+v.error:'')+(learned?.error?' '+learned.error:''),vocabulary:v,learning:learned,plans:plans.snapshot()}
      }
+     else if((m=text.match(/^(?:by )?([a-z][a-z -]{1,35}?) (?:means|i mean|means to) (.{2,80})[.!]?$/i))&&resolveActionTarget(m[2])){pendingInterpretation=null;output=vocabulary.teach('action',m[1].trim(),resolveActionTarget(m[2]))}
      else if(/^command\s+vocabulary$/i.test(text)){const v=vocabulary.list();output={accepted:true,queued:false,message:`Learned action words: ${Object.keys(v.actions).join(', ')||'none'}. Learned material words: ${Object.keys(v.materials).join(', ')||'none'}. Forget one with “command forget action <word>” or “command forget material <word>”. Teach one with “command teach action <word> = dig” or “command teach material <word> = stone”.`,vocabulary:v}}
      else if(pendingInterpretation?.kind==='unknown-action'&&pendingInterpretation.scope!==vocabulary?.scope){pendingInterpretation=null;output={accepted:false,queued:false,message:'Realm changed. Nothing was learned or queued.',plans:plans.snapshot()}}
      else if(pendingInterpretation?.kind==='unknown-action'){
       const target=resolveActionTarget(text)
-      if(target){const pending=pendingInterpretation;pendingInterpretation=null;try{vocabulary.teach('action',pending.word,target);const intent=parseCommandRequest(vocabulary.expand(pending.input).text);output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}catch(e){output={accepted:false,queued:false,showCatalog:true,message:e.message+' The correction was learned; nothing was activated.',plans:plans.snapshot()}}}
+      if(target){const pending=pendingInterpretation;pendingInterpretation=null;try{vocabulary.teach('action',pending.word,target);const intent=resolveToolInstruction(pending.input,connection.survival?.world)||parseCommandRequest(vocabulary.expand(pending.input).text);output=intent.clarification?{accepted:false,queued:false,message:intent.clarification,plans:plans.snapshot()}:plans.prepare(intent.descriptor)}catch(e){output={accepted:false,queued:false,showCatalog:true,message:e.message+' The correction was learned; nothing was activated.',plans:plans.snapshot()}}}
       else if(no){pendingInterpretation=null;output={accepted:true,queued:false,message:'Okay, cancelled. Nothing was learned or queued.',plans:plans.snapshot()}}
       else output={accepted:false,queued:false,message:'Tell me which supported action you meant, such as dig, walk, find, follow, look, or status. Or say no to cancel. Nothing is saved or queued yet.',plans:plans.snapshot()}
      }
@@ -144,6 +155,10 @@ export function createApi(config,connection,log=console.log){
      else if(text==='saved plans')output={accepted:true,message:'Saved plan cards.',plans:plans.snapshot()}
      else if(/^(?:command|commands)$/i.test(text))output={accepted:true,queued:false,showCatalog:true,message:'Supported commands: '+commandCatalog.map(d=>d.label).join('; '),catalog:commandCatalog.map(d=>({id:d.id,label:d.label,fields:d.fields,note:d.note})),plans:plans.snapshot()}
      else if(/^command\s+(?:roam|explore)\b/i.test(text)){pendingInterpretation=null;output=connection.survival.handle(text.replace(/^command\s+/i,''))}
+     else if(/^command\s+/i.test(text)&&resolveToolInstruction(text,connection.survival?.world)){
+      pendingInterpretation=null;const equipment=resolveToolInstruction(text,connection.survival?.world)
+      output=equipment.error?{accepted:false,queued:false,message:equipment.error,plans:plans.snapshot()}:plans.prepare(equipment.descriptor)
+     }
      else if(/^command\s+/i.test(text)){
       pendingInterpretation=null
       const request=text.slice(text.search(/\s/)+1),expanded=vocabulary.expand(request).text
@@ -169,6 +184,11 @@ export function createApi(config,connection,log=console.log){
         output={accepted:false,queued:false,showCatalog:true,message:`I don't recognize “${first}” as an action. What did you mean? Reply with a supported action such as dig, walk, find, follow or look. I’ll remember the correction for this Realm. Nothing has been saved or queued yet.`,plans:plans.snapshot()}
        }else output={accepted:false,queued:false,showCatalog:true,message:e.message+' Choose an option to open its required fields. Nothing was saved or queued.',plans:plans.snapshot()}
       }
+     }else if(isConversationQuestion(text)){
+      const reply=respondToConversation(text,{vocabulary,world:connection.survival?.world,navigation:connection.survival?.navigation})
+      const offline=offlineMinecraftResponse(text,{world:connection.survival?.world})
+      let descriptor=null;try{descriptor=parseDescriptor(reply)}catch{}
+      output=offline||(descriptor&&['status','movement','inventory','about','recipe'].includes(descriptor.id)?connection.survival.handle(renderDescriptor(descriptor)):{accepted:true,queued:false,message:reply,plans:plans.snapshot()})
      }else{
       const candidate=vocabulary.expandMaterials(text.replace(/[.!?]+$/,'').trim()).text;let descriptor=null
       try{descriptor=parseDescriptor(candidate)}catch{}

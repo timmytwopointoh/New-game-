@@ -44,7 +44,7 @@ test('bad pack hash fails closed and does not send ready',t=>{
 })
 test('too many Realm packs fail without requesting downloads',t=>{
  const h=harness();t.after(h.done)
- h.client.emit('resource_packs_info',{texture_packs:Array.from({length:17},(_,i)=>meta('p'+i))})
+ h.client.emit('resource_packs_info',{texture_packs:Array.from({length:65},(_,i)=>meta('p'+i))})
  assert.equal(h.handler.snapshot().failed,true)
  assert.equal(h.sent.length,0)
 })
@@ -52,4 +52,18 @@ test('oversized Realm pack rejected',t=>{
  const h=harness();t.after(h.done)
  h.client.emit('resource_packs_info',{texture_packs:[{uuid:'a',version:'1.0.0',size:1000000000}]})
  assert.equal(h.handler.snapshot().failed,true)
+})
+test('required-only policy skips optional cosmetics without canceling the Realm join',t=>{
+ const h=harness();t.after(h.done);h.client.emit('resource_packs_info',{texture_packs:[meta('optional')],must_accept:false})
+ assert.equal(h.sent[0][1].response_status,'have_all_packs');assert.equal(h.handler.snapshot().requested,0);assert.equal(h.handler.snapshot().skippedOptional,1)
+ h.client.emit('resource_pack_stack',{resource_packs:[meta('optional')]});assert(h.handler.snapshot().finished)
+})
+test('addon dependencies are retained and an early stack waits for their completed download',t=>{
+ const h=harness();t.after(h.done);h.client.emit('resource_packs_info',{texture_packs:[meta('cosmetic'),{...meta('needed'),addon_pack:true}],must_accept:false})
+ assert.deepEqual(h.sent[0][1].resourcepackids,['needed_1.0.0']);assert.equal(h.handler.snapshot().skippedOptional,1)
+ h.client.emit('resource_pack_stack',{resource_packs:[meta('needed')]});assert.equal(h.handler.snapshot().finished,false)
+})
+test('more than sixteen required packs are supported within the total byte limit',t=>{
+ const h=harness();t.after(h.done);h.client.emit('resource_packs_info',{texture_packs:Array.from({length:20},(_,i)=>meta('pack'+i)),must_accept:true})
+ assert.equal(h.handler.snapshot().failed,false);assert.equal(h.handler.snapshot().requested,20)
 })

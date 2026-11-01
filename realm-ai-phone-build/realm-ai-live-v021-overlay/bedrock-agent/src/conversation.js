@@ -1,3 +1,5 @@
+import {resolveMaterial} from './survival/catalog.js'
+import {resolveToolInstruction} from './tool-language.js'
 import {answerWordQuestion} from './lexicon/lookup.js'
 
 const clean=s=>String(s||'').trim().replace(/[.!?]+$/,'').toLowerCase().replace(/\s+/g,' ')
@@ -23,7 +25,28 @@ export function classifyConversation(raw){
  return {kind:'chat'}
 }
 
-export function respondToConversation(raw,{vocabulary=null}={}){
+export function isConversationQuestion(raw){return !/^command(?:\s|$)/i.test(String(raw).trim())&&['question','about','recipe','status','inventory','movement','capabilities','identity'].includes(classifyConversation(raw).kind)}
+export function respondToConversation(raw,{vocabulary=null,world=null,navigation=null}={}){
+ const text=clean(raw)
+ if(/^(?:why|what).*(?:stuck|not moving|not walking|aren't you moving|won't you move)/.test(text))return navigation?.reason||navigation?.movementBlock?.()||'No movement task is active. Select Follow or a walking destination to start one.'
+ if(/^(?:what|which).*(?:holding|in your hand|tool are you using)/.test(text)){
+  const item=world?.inventory?.get(world?.selectedSlot),name=world?.registry?.items?.[item?.network_id]?.name
+  return !world?.inventoryKnown||world?.selectedSlot===null?'The server has not confirmed my held item yet.':item?.count>0&&name?'I am holding '+name.replace(/_/g,' ')+'.':'My selected hotbar slot is empty.'
+ }
+ if(/^(?:can|could|would) you (?:switch|select|equip|hold|use)\b/.test(text)){
+  const tool=resolveToolInstruction(text,world)
+  return tool?.descriptor?'Yes. That tool/slot is in the received hotbar. Say “command '+String(raw).replace(/^(?:can|could|would) you /i,'').replace(/[?!]+$/,'')+'” to prepare it; asking this question has not changed equipment.':tool?.error||'I can select a known hotbar slot or a named tool in it. Which slot or tool do you mean?'
+ }
+ if(/^(?:what does switch mean|what is switching|how (?:do|can) (?:you|i) switch(?: tools| items| slots)?)$/.test(text))return 'For held Minecraft items, switch means select a different hotbar slot or tool: for example, “switch to slot 3” or “switch to the pickaxe”. It can also mean other things, so the object matters.'
+
+ const inventoryQuestion=text.match(/^(?:how (?:many|much) (.+?) (?:do you have|have you got)|do you have (?:a |an |any |some )?(.+?))$/)
+ if(inventoryQuestion){
+  if(!world?.inventoryKnown)return 'The server inventory has not arrived yet, so I cannot confirm what I have.'
+  const asked=inventoryQuestion[1]||inventoryQuestion[2],name=resolveMaterial(asked),items=world.items?.()||{}
+  if(name)return `I have ${items[name]||0} ${name.replace(/_/g,' ')} in the server-reported inventory.`
+  if(/^(?:pickaxe|axe|shovel|sword|hoe)s?$/.test(asked)){const type=asked.replace(/s$/,''),found=Object.entries(items).filter(([n])=>n.endsWith('_'+type));return found.length?'I have '+found.map(([n,c])=>c+' '+n.replace(/_/g,' ')).join(', ')+'.':'No '+type+' is present in the server-reported inventory.'}
+  return 'Which exact Minecraft item do you mean? I can count received inventory items, not infer supplies.'
+ }
  const intent=classifyConversation(raw)
  switch(intent.kind){
   case 'greeting':return "Hey! I’m here. Ask me about the Realm or Minecraft, or tell me a supported action directly."
@@ -39,13 +62,15 @@ export function respondToConversation(raw,{vocabulary=null}={}){
    const learned=vocabulary?.meaning(intent.query)
    if(learned?.kind==='material')return `about ${learned.target}`
    if(learned?.kind==='action')return `You taught me that “${intent.query}” means ${learned.label||learned.target} in this Realm. You can give a complete direct instruction, or prepare a saved command card.`
+   const remembered=vocabulary?.definitionFor?.(intent.query)
+   if(remembered)return `I remember “${intent.query}”: ${remembered.definition} (${remembered.source}). That definition alone does not specify a Minecraft action.`
    const answer=answerWordQuestion(intent.query)
    if(answer.kind==='material')return `about ${answer.material}`
    if(answer.kind==='definition')return answer.message
    return `I don't have a reliable offline definition for “${answer.query}”. What context did you see it in? Try “look up ${answer.query}” to check an online dictionary. I will not guess or start an unsupported action.`
   }
   case 'recipe':return `recipe ${intent.query}`
-  case 'question':return "I’m not sure what you mean yet. I can answer Realm status and Minecraft material or recipe questions. Try a supported direct instruction such as “walk to 3 64 2”."
+  case 'question':return "I don’t have a reliable answer to that question yet. Tell me the specific Minecraft block, tool, mob, recipe, or bot status you’re asking about so I can check the available information."
   default:return "Got it. I’ll treat that as chat, not an action. Ask me a question, or tell me a supported action directly."
  }
 }

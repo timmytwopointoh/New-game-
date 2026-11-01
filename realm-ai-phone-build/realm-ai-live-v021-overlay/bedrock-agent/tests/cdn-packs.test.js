@@ -78,3 +78,11 @@ test('CDN ignores chunk header without SHA and continues HTTPS download',async t
  assert.equal(h.h.snapshot().failed,false)
  release();await tick(()=>h.h.snapshot().verified===1)
 })
+test('large required sets use two CDN transfers at once and wait for every pack before completion',async t=>{
+ const waiting=[];let active=0,peak=0
+ const h=setup(({dest})=>new Promise(resolve=>{active++;peak=Math.max(peak,active);waiting.push(()=>{writeFileSync(dest,archive);active--;resolve({bytes:7,sha256:crypto.createHash('sha256').update(archive).digest('hex')})})}));t.after(()=>h.clear())
+ h.client.emit('resource_packs_info',{must_accept:true,texture_packs:Array.from({length:5},(_,i)=>({...meta,uuid:'required'+i}))})
+ h.client.emit('resource_pack_stack',{});assert.equal(waiting.length,2);assert.equal(h.h.snapshot().finished,false)
+ for(let i=1;i<=5;i++){await tick(()=>waiting.length>0);waiting.shift()();await tick(()=>h.h.snapshot().verified>=i);if(i<5)assert.equal(h.h.snapshot().finished,false)}
+ assert.equal(peak,2);assert(h.h.snapshot().finished)
+})

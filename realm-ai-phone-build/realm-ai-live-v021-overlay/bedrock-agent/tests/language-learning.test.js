@@ -110,3 +110,36 @@ test('authenticated status polling exposes learning without queuing a task',asyn
   assert.equal(data.survival.language.bundledWords,5000);assert.equal(data.survival.language.neuralModel,false);assert.equal(data.survival.learning.confirmed,0);assert.equal(data.survival.plans.pending,0)
  }finally{await new Promise(r=>api.close(r))}
 })
+test('tool context prepares a real slot plan without research or execution; missing tools stay a local error',()=>{
+ const {s,calls,message}=fixture();s.world.inventoryKnown=true;s.world.registry={items:{17:{name:'stone_pickaxe'}}};s.world.inventory.set(2,{network_id:17,count:1})
+ const prepared=message('command switch to the pickaxe')
+ assert(prepared.accepted);assert.equal(calls.length,0);assert.equal(s.commandPlans.cards[0].descriptor.id,'hotbar');assert.equal(s.commandPlans.cards[0].descriptor.values.slot,3)
+ const missing=message('command switch to a shovel');assert.equal(missing.accepted,false);assert.match(missing.message,/No shovel/);assert(!/what did you mean|looking up/i.test(missing.message));assert.equal(s.commandPlans.cards.length,1)
+ const direct=message('switch to their pickaxe so they could get stone');assert(direct.accepted);assert.equal(calls.at(-1),'select slot 3')
+})
+test('a saved ambiguous definition answers a later lookup without launching research',()=>{
+ const {s,message}=fixture();s.commandVocabulary.rememberDefinition('florp',{definition:'a test word with two senses',source:'test dictionary',sourceCount:1,meanings:[]})
+ const answer=message('learn word florp');assert.match(answer.message,/I remember/);assert.equal(answer.queued,false);assert.equal(s.commandVocabulary.actions.florp,undefined)
+})
+test('ordinary questions answer from actual state and never execute a tool command',()=>{
+ const {s,calls,message}=fixture();s.world.inventoryKnown=true;s.world.registry={items:{17:{name:'stone_pickaxe'}}};s.world.inventory.set(2,{network_id:17,count:1});s.world.selectedSlot=2;s.navigation.reason='Waiting for a known route around water.'
+ assert.match(message('what tool are you holding?').message,/holding stone pickaxe/)
+ assert.match(message('why are you not moving?').message,/known route around water/)
+ assert.match(message('can you switch to the pickaxe?').message,/Yes/)
+ assert.match(message('do you have a pickaxe?').message,/stone pickaxe/)
+ assert.equal(calls.length,0);assert.equal(s.commandPlans.cards.length,0)
+})
+test('plain-language slot corrections are saved for the Realm and reused',()=>temporary(dir=>{
+ const {s,message}=fixture(dir);const learned=message('switch means change slots');assert(learned.accepted);assert.equal(s.commandVocabulary.actions.switch,'hotbar')
+ const restored=new CommandVocabulary({directory:s.commandVocabulary.directory,scope:'realm-A'});assert.equal(restored.actions.switch,'hotbar')
+ assert.equal(message('command switch slot items').accepted,false)
+}))
+test('a single internet source saves a definition but cannot teach or execute an action without confirmation',async()=>{
+ const {OpenDictionaryResearch}=await import('../src/web-dictionary.js'),original=OpenDictionaryResearch.prototype.study
+ OpenDictionaryResearch.prototype.study=async()=>({definition:'to move',source:'one dictionary',sourceCount:1,verified:true,action:'walk',reason:'one candidate',meanings:[]})
+ try{
+  const {s,calls,message,c}=fixture();message('florp to 1 64 2');await new Promise(r=>setImmediate(r))
+  assert(s.commandVocabulary.definitionFor('florp'));assert.equal(s.commandVocabulary.actions.florp,undefined);assert.equal(calls.length,0);assert.equal(s.commandPlans.cards.length,0)
+  assert(c.events.some(e=>/Did you mean that Minecraft action/.test(e.message)))
+ }finally{OpenDictionaryResearch.prototype.study=original}
+})

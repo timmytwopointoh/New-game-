@@ -1,3 +1,4 @@
+import {resolveToolInstruction} from './tool-language.js'
 // Bounded owner-intent recognizer. Never treat web text, chat questions or
 // another player's conversation as executable commands.
 import {parseCommandRequest,renderDescriptor} from './survival/command-plans.js'
@@ -24,6 +25,8 @@ export function recognizeAutonomous(raw,{world=null,yaw=null,vocabulary=null}={}
  if(typeof raw!=='string'||raw.length>190||/[\x00-\x1f\x7f]/.test(raw))return null
  const source=raw.trim();if(!source||/\?\s*$/.test(source))return null
  let text=source.replace(CLEAN_PREFIX,'').replace(/[.!]+$/,'').trim()
+ const equipment=resolveToolInstruction(text,world)
+ if(equipment)return equipment.error?equipment:{...equipment,command:renderDescriptor(equipment.descriptor),readOnly:false}
  // Resolve Realm-scoped learned action aliases BEFORE the imperative check.
  // An unfamiliar verb such as "march" can become "walk to" only after a
  // verified dictionary match has been stored, not before.
@@ -47,7 +50,8 @@ export function runAutonomous(text,survival){
  const intent=recognizeAutonomous(text,{world:survival?.world,yaw:n?.yaw,vocabulary:survival?.commandVocabulary})
  if(!intent)return null
  if(intent.error)return {accepted:false,queued:false,message:intent.error}
- if(!intent.readOnly&&(n?.job||plans?.batch||n?.survey||survival?.miningJobs?.active||survival?.acquisition?.active||survival?.resources?.active||survival?.operations?.pending))return {accepted:false,queued:false,message:'A task is already active. Say Stop before starting a different task.'}
+ if(intent.descriptor?.id==='hotbar'&&n?.mining?.job)return {accepted:false,queued:false,message:'Finish the current block break or press Stop before changing the held tool.'}
+ if(!intent.readOnly&&intent.descriptor?.id!=='hotbar'&&(n?.job||plans?.batch||n?.survey||survival?.miningJobs?.active||survival?.acquisition?.active||survival?.resources?.active||survival?.operations?.pending))return {accepted:false,queued:false,message:'A task is already active. Say Stop before starting a different task.'}
  const cmd=intent.command||(intent.descriptor&&renderDescriptor(intent.descriptor))
  const response=survival.handle(cmd)
  return {...response,autonomous:true,message:(response?.accepted?'Handled without an Activate tap. ':'Not started. ')+(response?.message||'Waiting for server feedback; game success is not yet confirmed.')}

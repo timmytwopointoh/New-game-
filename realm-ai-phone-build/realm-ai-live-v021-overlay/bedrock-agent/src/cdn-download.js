@@ -5,7 +5,7 @@ import dns from 'node:dns'
 import net from 'node:net'
 import {promises as fsp} from 'node:fs'
 import crypto from 'node:crypto'
-const MAX_REDIRECTS=3, DEADLINE_MS=45000
+const MAX_REDIRECTS=3, DEADLINE_MS=120000
 function isPublic(ip){
  const kind=net.isIP(ip)
  if(kind===4){

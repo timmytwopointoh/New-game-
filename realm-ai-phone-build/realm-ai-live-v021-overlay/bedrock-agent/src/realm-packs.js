@@ -6,7 +6,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import {downloadRealmCdn,checkCdnUrl} from './cdn-download.js'
 
-const MAX_PACKS = 16
+const MAX_PACKS = 64
 const MAX_PACK_BYTES = 192 * 1024 * 1024
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024
 const MAX_CHUNK_BYTES = 2 * 1024 * 1024
@@ -31,7 +31,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false
-  let totalBytes=0
+  let totalBytes=0, skippedOptional=0, activeCdn=0
+  const cdnQueue=[]
   const cancellation = new AbortController()
   const emit = (stage, message, done=0, total=packs.size) => report({stage,message,done,total})
   const response = (name,ids=[]) => {
@@ -72,6 +73,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     response('completed')
     emit('packs-ready',`Realm pack handshake completed (${packs.size} packs)`,packs.size)
   }
+  function pumpCdn(){
+    while(activeCdn<2&&cdnQueue.length&&!failed&&!cancellation.signal.aborted){const p=cdnQueue.shift();activeCdn++;startCdn(p).finally(()=>{activeCdn--;pumpCdn()})}
+  }
   async function startCdn(p){
     try{
       p.file=path.join(cacheDir,p.basename);p.tmp=p.file+'.download'
@@ -101,6 +105,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
       if(!Array.isArray(incoming) || incoming.length>MAX_PACKS)throw Error('Too many Realm packs requested')
       totalBytes=0
       for(const meta of incoming){
+        // A server-required stack is mandatory. Otherwise retain only packs
+        // flagged as addon/script dependencies; optional cosmetics are skipped.
+        if(packet.must_accept===false&&!meta.addon_pack&&!meta.has_scripts){skippedOptional++;continue}
         const key=packKey(meta)
         if(packs.has(key))throw Error('Duplicate Realm pack')
         const size=safeNumber(meta.size,MAX_PACK_BYTES)
@@ -116,12 +123,13 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
       }
       if(!packs.size){
         response('have_all_packs')
-        emit('packs-none','No Realm download packs required',0,0)
+        emit('packs-none',skippedOptional?'Required-only downloads selected; skipped '+skippedOptional+' optional cosmetic pack(s)':'No Realm download packs required',0,0)
       }else{
         fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
         emit('pack-request',`Requesting ${packs.size} required Realm pack(s)`,0,packs.size)
         response('send_packs',[...packs.keys()])
-        for(const p of packs.values())if(p.cdn)void startCdn(p)
+        for(const p of packs.values())if(p.cdn)cdnQueue.push(p)
+        pumpCdn()
       }
     }catch(e){failure(e)}
   })
@@ -180,7 +188,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>cancellation.abort())
-  return {snapshot:()=>({requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'required-only',skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
     cancellation.abort()
     for(const p of packs.values()){
       if(p.fd!==undefined){try{fs.closeSync(p.fd)}catch{}}

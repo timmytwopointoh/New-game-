@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200023,
+  "issuedAt": 1793524151930,
+  "expiresAt": 1794128951930,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0394-language-and-packs/Realm-AI-Live.apk",
+  "size": 110249518,
+  "sha256": "d3cdbb3bbc2f8e896b08f13a37ac2402f1036a7e908a01023a2da7ad45c6da11",
+  "notes": "Contextual tool and slot selection, remembered definitions, read-only question answers and required-only Realm downloads; same permanent signing key and Switch login.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

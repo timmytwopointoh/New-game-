@@ -1,0 +1,41 @@
+name: Publish owner-requested Realm AI Live v0.39.4 language and pack fixes
+on:
+  push:
+    branches: [sandbox/realm-ai-live-v034-menu-review-20261101]
+    paths: ['realm-ai-phone-build/live-v0394-publish-requests/**']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reconstruct and verify public signed APK
+        run: |
+          set -euo pipefail
+          curl -fL --retry 2 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0393-motion-and-dirt/Realm-AI-Live.apk' -o base.apk
+          python3 realm-ai-phone-build/materialize_live_v0394_apk.py base.apk realm-ai-phone-build/live-v0394-public-recipe.json.xz.b64 Realm-AI-Live.apk
+          echo 'd3cdbb3bbc2f8e896b08f13a37ac2402f1036a7e908a01023a2da7ad45c6da11  Realm-AI-Live.apk' | sha256sum -c -
+          python3 realm-ai-phone-build/verify_live_merged_apk.py Realm-AI-Live.apk realm-ai-phone-build/realm-ai-live-v021-overlay base.apk
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          if [ ! -x "$TOOLS/apksigner" ]; then "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'; fi
+          "$TOOLS/apksigner" verify --verbose --print-certs Realm-AI-Live.apk > certificate-report.txt
+          grep -qi '77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' certificate-report.txt
+          "$TOOLS/zipalign" -c -P 16 4 Realm-AI-Live.apk
+          "$TOOLS/aapt" dump badging Realm-AI-Live.apk > package-report.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200023'" package-report.txt
+      - name: Publish public assets and signed update notice
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view realm-ai-live-0394-language-and-packs >/dev/null 2>&1; then
+            gh release create realm-ai-live-0394-language-and-packs --target "$GITHUB_SHA" --prerelease --title 'Realm AI Live v0.39.4 — Language and required downloads' --notes-file realm-ai-phone-build/realm-ai-live-v021-overlay/UPDATE-NOTES-v0.39.4.md
+          fi
+          gh release upload realm-ai-live-0394-language-and-packs Realm-AI-Live.apk realm-ai-phone-build/live-v0394-publication/release.json realm-ai-phone-build/live-v0394-publication/verification.json certificate-report.txt package-report.txt realm-ai-phone-build/live-v0394-publication/Realm-AI-Live-v0.39.4-source.zip realm-ai-phone-build/live-v0394-publication/SHA256SUMS.txt realm-ai-phone-build/live-v0394-publication/signing-certificate.der realm-ai-phone-build/live-v0394-publication/BUILD-STATUS-v0.39.4.txt --clobber
+          python3 realm-ai-phone-build/realm-ai-live-v021-overlay/release-tooling/publish_channel.py realm-ai-phone-build/live-v0394-publication/release.json
