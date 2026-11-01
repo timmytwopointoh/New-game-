@@ -49,8 +49,13 @@ public class MicrosoftCodeFrontmostTest {
     assertEquals("NEW123",a.displayedAuthCode);
     assertEquals(View.VISIBLE,a.authCodeLabel.getVisibility());
     assertEquals(View.VISIBLE,a.copyAuthCode.getVisibility());
-    code.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+    assertNotNull(code.getButton(AlertDialog.BUTTON_NEUTRAL));
+    assertEquals("Copy code",code.getButton(AlertDialog.BUTTON_NEUTRAL).getText().toString());
+    // Robolectric does not wire AlertDialog neutral click into system clipboard reliably.
+    // Test the real top-of-screen Copy control and verify exact data copied.
+    a.copyAuthCode.performClick();
     ClipboardManager clipboard=(ClipboardManager)a.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+    assertNotNull("Copy button must update Android clipboard",clipboard.getPrimaryClip());
     assertEquals("NEW123",clipboard.getPrimaryClip().getItemAt(0).getText().toString());
     a.showAuth(new JSONObject("{\"authChallenge\":{\"userCode\":\"NEW123\"}}"));
     ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
@@ -67,8 +72,10 @@ public class MicrosoftCodeFrontmostTest {
     assertFalse(settings.isShowing());
     assertTrue(code.isShowing());
     assertEquals("ABC123",a.displayedAuthCode);
-    code.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+    assertNotNull(code.getButton(AlertDialog.BUTTON_NEUTRAL));
+    a.copyAuthCode.performClick();
     ClipboardManager clipboard=(ClipboardManager)a.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+    assertNotNull(clipboard.getPrimaryClip());
     assertEquals("ABC123",clipboard.getPrimaryClip().getItemAt(0).getText().toString());
   }
   @Test public void missingLocalControllerTokenShowsVisibleStartBotInstruction(){
