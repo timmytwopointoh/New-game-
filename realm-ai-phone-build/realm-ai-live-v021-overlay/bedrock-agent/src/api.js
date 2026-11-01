@@ -90,6 +90,11 @@ export function createApi(config,connection,log=console.log){
  }
  const message=raw=>{
    if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
+   if(/^(?:try again|retry blocked|retry task)$/i.test(String(raw).trim())){
+     const nav=connection.survival?.navigation
+     if(nav?.job?.kind==='follow')return nav.retryBlockedFollow()
+     return connection.survival?.commandPlans?.retryBlocked()||{accepted:false,message:'Join the Realm first.'}
+   }
    if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
      researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
    }
@@ -204,7 +209,8 @@ export function createApi(config,connection,log=console.log){
    const header=String(req.headers.authorization||'')
    if(!authorized(header.replace(/^Bearer\s+/i,''),token))return send(401,{error:'invalid token'})
    const pathname=new URL(req.url||'/','http://127.0.0.1').pathname
-   if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,message('stop'))}
+   if(req.method==='POST'&&pathname==='/navigation/retry'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch<stopEpoch)return send(200,{accepted:false,message:'Stop cancelled this retry.'});const nav=connection.survival?.navigation;return send(200,nav?nav.retryBlockedFollow():{accepted:false,message:'Join the Realm first.'})}
+    if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,message('stop'))}
    if(req.method==='GET'&&pathname==='/knowledge/offline')return send(200,{knowledge:offlineKnowledgeStats,requiresGoogleKey:false})
   if(req.method==='GET'&&pathname==='/research/google-status')return send(200,{configured:google.configured(),active:!!googleAbort})
    if(req.method==='POST'&&pathname==='/research/google-key'){
@@ -269,6 +275,7 @@ export function createApi(config,connection,log=console.log){
          else if(pathname==='/plans/delete')result={accepted:true,message:'Plan deleted.',plans:p.delete(data.id)}
          else if(pathname==='/plans/activate')result=p.activate(data.id)
          else if(pathname==='/plans/activate-queue')result=p.activateQueue()
+         else if(pathname==='/plans/retry')result=p.retryBlocked(Number.isSafeInteger(data.id)?data.id:null)
          else return send(404,{error:'Unknown plan action'})
          return send(200,result)
         }catch(e){return send(200,{accepted:false,queued:false,message:e.message,plans:p.snapshot()})}
