@@ -39,12 +39,15 @@ export function mineableKnowledge(block,toolId=null){
 
 export function selectKnownResource(world,goal,excluded=new Set()){
  if(!world?.position||!world?.scan||!goal)return null
- const names=goal.kind==='tree-harvest'||goal.sourceFamily==='logs'?treeTrunks:[...new Set([...(recognizedBlocks.has(goal.target)?[goal.target]:[]),...(world.registry?.blocksArray||[]).filter(b=>(b.drops||[]).some(id=>world.registry.items[id]?.name===goal.target)).map(b=>b.name)])]
+ const names=goal.kind==='tree-harvest'||goal.sourceFamily==='logs'?treeTrunks:[...new Set([...(goal.target==='dirt'?['dirt','grass_block']:recognizedBlocks.has(goal.target)?[goal.target]:[]),...(world.registry?.blocksArray||[]).filter(b=>(b.drops||[]).some(id=>world.registry.items[id]?.name===goal.target)).map(b=>b.name)])]
  const candidates=[]
  for(const name of names){
   for(const p of world.scan(name,{range:Math.min(8,goal.maxDistance||8)})?.found||[]){
    const k=`${p.x},${p.y},${p.z}`
    if(excluded.has(k))continue
+   // The floor under the bot is evidence of a deposit, never the first dig.
+   const feet=world.standPosition?.()
+   if(feet&&p.x===feet.x&&p.z===feet.z&&p.y<feet.y)continue
    if(!Number.isFinite(p.distance)||p.distance>Math.min(goal.maxDistance||8,8))continue
    candidates.push(p)
   }

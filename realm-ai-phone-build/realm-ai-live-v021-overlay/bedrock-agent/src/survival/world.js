@@ -9,9 +9,9 @@ const airNames=new Set(['air','cave_air','void_air'])
 const isWater=name=>/^(?:flowing_)?water$/.test(name||'')
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
+ reset(){this.blockStates=new Map();this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
  initialize(packet,version='1.26.60'){
-  this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
+  this.blockStates.clear();this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.ownedPlacements.clear();this.sections.clear();this.biomeStores.clear();this.biomeNames.clear();this.biomeDecodeErrors=0;this.updates.clear();this.entities.clear();this.players.clear();this.drops.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryProtocol.reset();this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null
@@ -74,7 +74,11 @@ export class WorldView{
   let id=this.updates.get(k)
   if(id===undefined){if(!s)return null;if(!s.layers[layer])return layer?{name:'air',shapes:[]}:null;id=s.layers[layer][blockIndex(p.x,p.y,p.z)]}
   const state=this.runtime(id);if(!state)return null
-  try{return this.Block.fromStateId(state.stateId,0)}catch{return null}
+  // Shapes and tool behavior depend on state, not world coordinates. Reuse them
+  // across collision sweeps and A*; location/update lookup still happens above.
+  let block=this.blockStates.get(state.stateId)
+  if(block)return block
+  try{block=this.Block.fromStateId(state.stateId,0);this.blockStates.set(state.stateId,block);if(this.blockStates.size>2048)this.blockStates.delete(this.blockStates.keys().next().value);return block}catch{return null}
  }
  blockVersion(p,layer=0){return this.blockRevisions.get(`${p.x},${p.y},${p.z},${layer}`)||0}
  runtimeIdAt(p,layer=0){

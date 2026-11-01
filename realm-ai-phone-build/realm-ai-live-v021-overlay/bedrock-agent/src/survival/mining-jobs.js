@@ -56,9 +56,8 @@ export class MiningJobs{
   const a=this.active,c=this.c,w=c.world
   if(a.request.kind==='support'){if((w.items().dirt||0)<(a.request.minimum||1)){if(!this.chooseTool('shovel')&&!this.needs(c.workshop.ensure('wooden_shovel',1,now),now))return;const shovel=this.chooseTool('shovel');if(shovel&&!this.needs(this.equip(shovel,now),now))return;if(!this.needs({state:'need',material:'dirt',quantity:64,reason:'Gathering 64 real dirt before climbing.'},now))return}if(!this.needs(c.workshop.hotbar('dirt',now),now))return;const name=a.request.name;this.last={state:'completed',reason:'Dirt supplies confirmed; resuming the requested follow.'};this.active=null;c.navigation.follow(name);return}
   if(w.gameMode!=='creative'){
-   if(!this.chooseTool('pickaxe')){const r=c.workshop.ensure('stone_pickaxe',1,now);if(!this.needs(r,now))return}
-   if(a.request.kind==='quarry'&&a.request.material==='dirt'&&!this.chooseTool('shovel')){if(!this.needs(c.workshop.ensure('wooden_shovel',1,now),now))return}
-   if((w.items().dirt||0)<64){if(!this.needs({state:'need',material:'dirt',quantity:64,reason:'Gathering a real 64-dirt escape reserve.'},now))return}
+   if(a.request.kind==='strip'&&!this.chooseTool('pickaxe')){const r=c.workshop.ensure('stone_pickaxe',1,now);if(!this.needs(r,now))return}
+   if(a.request.kind!=='quarry'&&(w.items().dirt||0)<64){if(!this.needs({state:'need',material:'dirt',quantity:64,reason:'Gathering a real 64-dirt escape reserve.'},now))return}
   }
   if((w.items().dirt||0)>0&&!this.needs(c.workshop.hotbar('dirt',now),now))return
   if(!a.layout){try{a.layout=a.request.kind==='strip'?stripLayout(w.standPosition(),a.heading,a.request):quarryLayout(w.standPosition(),a.heading)}catch(e){this.block(e.message);return}}
@@ -130,7 +129,7 @@ export class MiningJobs{
     const choices=[...w.inventory.values()].filter(i=>i?.count&&b.canHarvest?.(i.network_id)).map(i=>({name:w.registry.items[i.network_id]?.name,time:b.digTime(i.network_id,false,false,false,[],{})})).filter(x=>x.name&&Number.isFinite(x.time)).sort((a,b)=>a.time-b.time)
     const tool=choices[0]?.name
     if(tool&&!this.needs(this.equip(tool,now),now))return
-    if(!tool){const tiers=['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'],required=tiers.find(name=>b.canHarvest?.(w.registry.itemsByName[name]?.id));if(required){this.needs(c.workshop.ensure(required,1,now),now);return}}
+    if(!tool&&!b.canHarvest?.(null)){const tiers=['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'],required=tiers.find(name=>b.canHarvest?.(w.registry.itemsByName[name]?.id));if(required){this.needs(c.workshop.ensure(required,1,now),now);return}}
    }
    const assessment=miningAssessment(w,p,{explicit:true,allowAbove:true,allowLowerForward:true})
    if(!assessment.ok||w.gameMode==='survival'&&!assessment.canHarvest){if(opportunistic){a.oreVisited.add(`${p.x},${p.y},${p.z}`);a.oreCount++;a.reason='Skipping an ore that cannot currently be reached/collected safely.';return}this.block(assessment.reason||'The real held tool cannot collect this block.');return}

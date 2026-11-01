@@ -64,6 +64,7 @@ export class Connection extends EventEmitter {
         this.log('Realm discovery returned '+(Array.isArray(realms)?realms.length:0)+' joined Realm(s).')
         try{
           const selected=original(realms)
+          this.survival.authorizeRealmClearing(String(selected.id))
           this.survival.commandPlans.setScope(String(selected.id))
           this.survival.learning.setScope(String(selected.id))
           this.survival.commandVocabulary.setScope(String(selected.id))

@@ -22,13 +22,43 @@ export class Navigation{
   this.detach();this.client=client;this.progress.reset();this.blocked.clear();this.decisions=[];this.recoveryAttempts=0
   const on=(e,f)=>{client.on(e,f);this.listeners.push([e,f])}
   on('start_game',p=>{this.tick=BigInt(p.current_tick||0);this.yaw=Number(p.rotation?.z||0);this.pitch=0;this.spawned=false;this.lastPoseAt=Date.now();this.loading={state:'waiting-for-terrain',id:null,dimension:false}})
+  on('set_entity_motion',p=>this.observeMotion(p))
   on('spawn',()=>{this.spawned=true;if(this.timer)clearInterval(this.timer);this.loading??={state:'waiting-for-terrain',id:null,dimension:false};this.timer=setInterval(()=>this.step(),50);this.timer.unref?.()})
   const correction=p=>this.observeServer(p,Date.now())
   on('move_player',p=>{if(String(p.runtime_id)===this.world.entityId)correction(p)})
   on('correct_player_move_prediction',p=>{if(p.prediction_type!=='vehicle'&&p.prediction_type!==1)correction(p)})
   on('move_entity',p=>{if(String(p.runtime_entity_id??p.runtime_id)===this.world.entityId)correction(p)})
-  on('change_dimension',p=>{this.loading={state:'waiting-for-terrain',id:p.loading_screen_id??null,dimension:true};this.stop('Dimension changed; work cancelled.');this.progress.reset();this.blocked.clear();this.lastServerTick=null;this.vy=0})
+  on('change_dimension',p=>{this.externalMotion=null;this.motionTick=undefined;this.loading={state:'waiting-for-terrain',id:p.loading_screen_id??null,dimension:true};this.stop('Dimension changed; work cancelled.');this.progress.reset();this.blocked.clear();this.lastServerTick=null;this.vy=0})
   on('close',()=>this.detach());on('disconnect',()=>this.stop('Disconnected. Rejoin the Realm before moving.'))
+ }
+ // Bedrock supplies actual motion, not a request to teleport or change mode.
+ observeMotion(p,now=Date.now()){
+  if(String(p.runtime_entity_id)!==this.world.entityId||this.world.attributes['minecraft:health']===0)return false
+  const v=p.velocity
+  if(!v||!['x','y','z'].every(k=>Number.isFinite(v[k])&&Math.abs(v[k])<=4))return false
+  const tick=p.tick===undefined?null:BigInt(p.tick)
+  if(tick!==null&&this.motionTick!==undefined&&tick<this.motionTick)return false
+  if(tick!==null)this.motionTick=tick
+  this.externalMotion={x:v.x,z:v.z,started:now};this.vy=v.y
+  this.flight=null;this.afterJumpGoal=null;this.routeAlignment=null
+  this.progress.reset()
+  return true
+ }
+ applyMotion(now){
+  const m=this.externalMotion,delta={x:0,y:0,z:0}
+  if(!m)return delta
+  // Sweep each axis, retaining walls and unknown-terrain collision checks.
+  for(const axis of ['x','z']){
+   let remaining=Math.abs(m[axis]),direction=Math.sign(m[axis])
+   while(remaining>.000001){const d=Math.min(.04,remaining),next={...this.world.position,[axis]:this.world.position[axis]+direction*d}
+    if(!this.world.clearBody(next)){m[axis]=0;break}
+    this.world.position=next;delta[axis]+=direction*d;remaining-=d
+   }
+  }
+  const ground=this.world.grounded()&&this.vy<=0,drag=ground ? .546 : .91
+  m.x*=drag;m.z*=drag
+  if(ground&&Math.hypot(m.x,m.z)<.01||now-m.started>2000)this.externalMotion=null
+  return delta
  }
  observeServer(p,now){
   if(!p.position||![p.position.x,p.position.y,p.position.z].every(Number.isFinite))return
@@ -38,7 +68,7 @@ export class Navigation{
   if(p.mode!=='teleport'&&tick!==null&&this.lastServerTick!==null&&this.lastServerTick!==undefined&&tick<this.lastServerTick)return
   if(tick!==null)this.lastServerTick=tick
   if(typeof p.on_ground==='boolean')this.world.serverGrounded=p.on_ground
-  if(p.on_ground===true)this.vy=0;else if(p.delta&&Number.isFinite(p.delta.y))this.vy=p.delta.y;else this.vy=0
+  if(p.on_ground===true&&(!this.externalMotion||this.vy<=0))this.vy=0;else if(p.delta&&Number.isFinite(p.delta.y))this.vy=p.delta.y;else if(!this.externalMotion)this.vy=0
   const before=this.world.position;this.world.position={...p.position};this.world.serverPosition={...p.position};this.lastPoseAt=now
   if(p.yaw!==undefined)this.yaw=p.yaw
   if(p.mode==='teleport'){this.pendingFlags.push('handled_teleport');this.stop('Server teleported the player; work cancelled.');this.progress.reset();return}
@@ -49,11 +79,13 @@ export class Navigation{
  }
  routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false,avoidHostiles=true,maxDrop=this.job?.maxDrop||(this.job?.kind==='follow'?5:1),allowBridge=this.job?.kind==='follow',allowWater=true}={}){
   const now=Date.now(),w=this.world
-  const routeWorld={walkable:p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
+  const memo=fn=>{const cache=new Map();return p=>{const id=key(p);if(!cache.has(id))cache.set(id,fn(p));return cache.get(id)}}
+  const routeWorld={walkable:memo(p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now)),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
   // Prefer dry routes, but consider short, observed shallow-water crossings.
   const dry=findPath(routeWorld,start,goal,{allowSteps,maxNodes,maxDrop})
+  if(dry.ok)return dry
   if(allowWater){
-   const wetWorld={...routeWorld,walkable:p=>w.walkable(p,{avoidHostiles,allowWater:true})&&!(this.blocked.get(key(p))>now),shallowWater:p=>w.shallowWater(p)}
+   const wetWorld={...routeWorld,walkable:memo(p=>w.walkable(p,{avoidHostiles,allowWater:true})&&!(this.blocked.get(key(p))>now)),shallowWater:memo(p=>w.shallowWater(p))}
    const wet=findPath(wetWorld,start,goal,{allowSteps,maxNodes,maxDrop,waterBudget:8,waterPenalty:3})
    if(wet.ok&&(!dry.ok||wet.totalCost<dry.totalCost*.75))return wet
   }
@@ -111,7 +143,9 @@ export class Navigation{
   const start=this.world.standPosition(),target=player.position
   if(!start)return
   if(flatDistance(this.world.position,target)<2.2&&Math.abs(this.world.position.y-target.y)<.6){this.route=null;this.state='following';this.reason='Close to the followed player.';return}
+  if(!force&&this.route?.length&&this.followTarget&&flatDistance(this.followTarget,target)<1&&!this.progress.stalled(now))return
   if(!force&&now-(this.lastFollowPlan||0)<1000)return
+  this.followTarget={...target}
   this.lastFollowPlan=now
   const candidates=[]
   for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(let dy=-5;dy<=5;dy++){
@@ -240,7 +274,7 @@ export class Navigation{
   if(!this.job||this.flight||this.mining.job||this.climbing.current||this.building.job)return false
   const a=this.world.standPosition(),obstacle=this.obstacleAhead(),goal=this.job.goal
   if(!a||!obstacle||!goal){if(this.job.kind==='follow'){this.route=null;this.state='blocked';this.reason=reason}else this.stop(reason);return false}
-  const landing={...obstacle,y:a.y+1},canJump=this.world.canJumpBetween?.(a,landing)
+  const landing={...obstacle,y:a.y+1},canJump=!(this.blocked.get(key(landing))>now)&&this.world.canJumpBetween?.(a,landing)
   // Temporarily exclude the troublesome cell even when the local block cache says air.
   this.blocked.set(key(obstacle),now+30000);while(this.blocked.size>32)this.blocked.delete(this.blocked.keys().next().value)
   const detour=canJump?{ok:false}:this.routeTo(goal,a,{allowSteps:true,allowDirt:true})
@@ -350,6 +384,7 @@ export class Navigation{
   if(now-this.lastInputAt>500&&this.lastInputAt&&(this.job||this.flight))this.stop('Phone paused; work stopped.')
   this.lastInputAt=now
   if(this.checkRespawn?.(now)){
+   this.externalMotion=null;this.vy=0
    // The ordinary movement/physics loop pauses on death, but nearby chunk
    // requests must not be starved through the respawn handshake.
    if(this.world.enabled&&this.world.position&&now-(this.lastRespawnTerrainRequest||0)>=1000){
@@ -395,10 +430,10 @@ export class Navigation{
    if(!this.world.clearBody(next)||!this.world.grounded(next)){this.stop('Bridge edge lost collision support; stopped.');construction={waiting:true}}
    else{delta={x:next.x-p.x,y:0,z:next.z-p.z};this.world.position=next;move={x:0,z:1};this.state='approaching-bridge-edge'}
   }else if(this.flight){({delta,move,flags}=this.flightStep(now))}
-  else if(this.route?.length&&!this.pendingFlightRecovery&&!construction.waiting&&!this.mining.job&&(this.world.grounded()||this.shallowWading())){
+  else if(this.route?.length&&!this.externalMotion&&!this.pendingFlightRecovery&&!construction.waiting&&!this.mining.job&&(this.world.grounded()||this.shallowWading())){
    const target=this.route[0],a=this.world.standPosition(),p=this.world.position
    if(this.routeAlignment&&Math.abs(p[this.routeAlignment.axis]-this.routeAlignment.value)>.025){
-    const {axis,value}=this.routeAlignment,next={...p,[axis]:p[axis]+Math.sign(value-p[axis])*Math.min(.1,Math.abs(value-p[axis]))},issue=this.job?.waterRouting&&this.world.shallowWater(this.world.standPosition())?this.world.bodyIssue(next,{allowWater:true}):this.world.standingIssue(next)
+    const {axis,value}=this.routeAlignment,next={...p,[axis]:p[axis]+Math.sign(value-p[axis])*Math.min(.215,Math.abs(value-p[axis]))},issue=this.job?.waterRouting&&this.world.shallowWater(this.world.standPosition())?this.world.bodyIssue(next,{allowWater:true}):this.world.standingIssue(next)
     if(issue)this.recover(this.clearanceMessage(issue,'Route alignment'),now)
     else{this.lastClearanceBlock=null;delta={x:next.x-p.x,y:0,z:next.z-p.z};this.world.position=next;move={x:0,z:1};this.state='walking'}
    }else if(target.y!==a.y){this.routeAlignment=null
@@ -409,7 +444,7 @@ export class Navigation{
     const dx=target.x+.5-p.x,dz=target.z+.5-p.z,d=Math.hypot(dx,dz)
     if(d<.07){this.route.shift();if(!this.route.length){this.route=null;this.state='arrived-predicted';this.arrivedAt=now;this.reason='Route inputs finished; server movement confirmation may still be pending.'}}
     else{
-     const speed=Math.min(.1,d),next={x:p.x+dx/d*speed,y:p.y,z:p.z+dz/d*speed}
+     const speed=Math.min(.215,d),next={x:p.x+dx/d*speed,y:p.y,z:p.z+dz/d*speed}
      const height=this.world.supportHeight(target)
      if(!this.world.clearBody(next)&&height!==null&&height+1.62>p.y&&height+1.62-p.y<=1&&this.world.clearBody({...p,y:height+1.62}))next.y=height+1.62
      const wading=!!this.job?.waterRouting&&(this.shallowWading()||this.world.shallowWater(target))
@@ -421,9 +456,10 @@ export class Navigation{
   }
   if(construction.sneak){flags.push('sneaking','sneak_down');if(!this.edgeSneaking)flags.push('start_sneaking');this.edgeSneaking=true}else if(this.edgeSneaking){flags.push('stop_sneaking');this.edgeSneaking=false}
   if(move.z){this.progress.commanded(Math.hypot(delta.x,delta.z));if(delta.x||delta.z)this.yaw=Math.atan2(-delta.x,delta.z)*180/Math.PI}
+  if(this.externalMotion){const impulse=this.applyMotion(now);delta.x+=impulse.x;delta.z+=impulse.z}
   if(!this.flight&&!hazard?.active&&!portal?.active){
    const p=this.world.position
-   if(this.world.grounded()||this.job?.waterRouting&&this.shallowWading()){this.vy=0;flags.push('vertical_collision')}
+   if(this.vy<=0&&(this.world.grounded()||this.job?.waterRouting&&this.shallowWading())){this.vy=0;flags.push('vertical_collision')}
    else{
     // Gravity also runs when idle or stopped. Sweep in short increments to avoid tunnelling.
     this.vy=Math.max(-3.92,(this.vy-.08)*.98)
@@ -478,5 +514,5 @@ export class Navigation{
   try{this.onResourceTick?.(now)}catch(e){this.reportRuntimeError?.(e);this.stop('Internal resource task error.');this.onResourceError?.(e)}
  }
  snapshot(){return {pillar:this.pillar?{confirmed:this.pillar.done,total:this.pillar.rise,phase:this.pillar.phase}:null,environmentRecovery:this.hazards.snapshot(),state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,flightRecovery:this.pendingFlightRecovery?{state:this.state,landing:this.pendingFlightRecovery.landing}:null,reason:this.reason,waterRisk:{shallowWading:this.shallowWading(),crossingPlanned:!!this.job?.waterRouting,maxConsecutiveWaterBlocks:8,deepWaterSupported:false},physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
- detach(){this.routeAlignment=null;this.lastClearanceBlock=null;this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
+ detach(){this.externalMotion=null;this.motionTick=undefined;this.followTarget=null;this.routeAlignment=null;this.lastClearanceBlock=null;this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
 }

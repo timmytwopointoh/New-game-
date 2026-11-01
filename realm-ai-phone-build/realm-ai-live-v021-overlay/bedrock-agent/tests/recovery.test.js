@@ -33,7 +33,7 @@ test('follow prefers jump; solo prefers detour; follow mines only when authorize
  assert.equal(recoveryDecision({mode:'follow',mine,allowMining:false}).action,'pause')
  assert.equal(recoveryDecision({mode:'solo',mine,allowMining:false}).action,'pause')
  assert.equal(recoveryDecision({mode:'solo',mine,allowMining:true}).action,'mine')
- assert.equal(recoveryDecision({mode:'follow',canJump:true,attempts:3}).action,'pause')
+ assert.equal(recoveryDecision({mode:'follow',canJump:true,attempts:6}).action,'pause')
 })
 test('jump route is available only with observed headroom, support and follow-step option',()=>{
  const {w,set}=fixture();set(1,64,0,'stone');const start={x:0,y:64,z:0},goal={x:1,y:65,z:0}

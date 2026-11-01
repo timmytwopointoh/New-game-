@@ -1,0 +1,3 @@
+24acbfe2888f77a76ca38bc0d107d87f7bf53396807bca7a157d786d507de900  Realm-AI-Live.apk
+6fbcddaa709c90bc698c5a5ffbbfef11b0485794e75fea39ec84fff4c74164b6  Realm-AI-Live-v0.39.3-source.zip
+ddaf00621b94e6d693392477234a7dcec258981ec6d40f75e359ff3d76ec73a3  BUILD-STATUS-v0.39.3.txt

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "applicationId": "com.veilforge.realmagent.live",
+  "versionCode": 200022,
+  "issuedAt": 1793521923525,
+  "expiresAt": 1794126723525,
+  "url": "https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0393-motion-and-dirt/Realm-AI-Live.apk",
+  "size": 110245334,
+  "sha256": "24acbfe2888f77a76ca38bc0d107d87f7bf53396807bca7a157d786d507de900",
+  "notes": "Fix own-player knockback, slow walking and dirt quarry prerequisites; reduce routing overhead; preserve Switch login and permanent key.",
+  "certificateSha256": "77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22",
+  "validation": "signature, package, version, alignment and archive checked; phone installation not tested"
+}

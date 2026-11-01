@@ -17,16 +17,17 @@ export function placementEvidence(world,pos,block=world.block(pos)){
 export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxMs=null,allowAbove=false,allowLowerForward=false}={}){
  // Explicit mining may be slow by hand; automatic obstacle clearing stays brief.
  // Tool suitability affects drops, not whether a finite-hardness block can break.
- maxMs ??= explicit ? 120000 : 5000
+ maxMs ??= explicit||world.allowBuiltMining===true ? 120000 : 5000
  if(world.abilityState?.effective.mine===false)return {ok:false,reason:'The server has disabled this player’s mining permission.'}
  if(world.serverAuthoritativeBreaking===null)return {ok:false,reason:'Waiting for the server block-breaking mode before mining.'}
  const creative=world.gameMode==='creative'&&world.creativeEditsVerified
  if(!world.survivalVerified&&!creative)return {ok:false,reason:'Server Survival or grounded Creative mode and abilities are not verified.'}
  const block=world.block(pos),evidence=placementEvidence(world,pos,block)
  if(!block||!world.position)return {ok:false,reason:'Block or position is unknown.',evidence}
- if(evidence.classification==='protected')return {ok:false,reason:evidence.reason,evidence}
- if(!allowBuilt&&evidence.classification==='likely-built')return {ok:false,reason:explicit?'Mining refused: this target is in or beside a likely player build. No block was changed.':'Looks like part of a player build; trying a detour.',evidence}
- if(!explicit&&evidence.classification!=='natural-looking')return {ok:false,reason:'Placement is uncertain; not clearing it automatically.',evidence}
+ const ownerAuthorized=world.allowBuiltMining===true
+ if(!ownerAuthorized&&evidence.classification==='protected')return {ok:false,reason:evidence.reason,evidence}
+ if(!ownerAuthorized&&!allowBuilt&&evidence.classification==='likely-built')return {ok:false,reason:explicit?'Mining refused: this target is in or beside a likely player build. No block was changed.':'Looks like part of a player build; trying a detour.',evidence}
+ if(!ownerAuthorized&&!explicit&&evidence.classification!=='natural-looking')return {ok:false,reason:'Placement is uncertain; not clearing it automatically.',evidence}
  if(!block.diggable||!Number.isFinite(block.hardness)||block.hardness<0)return {ok:false,reason:'Block cannot be mined normally.',evidence}
  if(Math.hypot(pos.x+.5-world.position.x,pos.y+.5-world.position.y,pos.z+.5-world.position.z)>4||!world.visible(pos))return {ok:false,reason:'Block is out of reach or not visible.',evidence}
  for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
@@ -54,7 +55,7 @@ export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxM
  return {ok:true,block,held,tool:tool?.name||'empty hand',durationMs:creative?250:Math.max(250,Math.ceil(estimated/50)*50+250),estimatedMs:estimated,handMs:handTime,toolEffective,canHarvest,expectedDrop:canHarvest?'possible':'not expected with held tool',evidence}
 }
 export function recoveryDecision({mode,canJump=false,hasDetour=false,mine=null,allowMining=false,attempts=0}){
- if(attempts>=3)return {action:'pause',reason:'Recovery attempt limit reached.'}
+ if(attempts>=6)return {action:'pause',reason:'Recovery attempt limit reached.'}
  if(mode==='follow'&&canJump)return {action:'jump',reason:'Following: one-block obstacle, known landing and headroom.'}
  if(hasDetour)return {action:'detour',reason:mode==='follow'?'Jump is unavailable; taking another route.':'Solo travel: taking another route first.'}
  if(allowMining&&mine?.ok)return {action:'mine',reason:'No route around; target is within the current clearing job and tool budget.'}

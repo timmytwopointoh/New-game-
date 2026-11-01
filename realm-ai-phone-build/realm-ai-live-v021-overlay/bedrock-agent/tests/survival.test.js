@@ -52,7 +52,7 @@ test('real 1.26.60 auth-input serializer accepts idle/walking; no teleport packe
  client.queue=(name,p)=>{writer.createPacketBuffer({name,params:p});sent.push([name,p])}
  const n=new Navigation(w);n.attach(client);client.emit('start_game',{current_tick:0n,rotation:{x:0,z:0}});n.spawned=true
  assert(n.walk({x:2,y:64,z:0}).accepted);n.step(1000);assert.equal(sent[0][0],'serverbound_loading_screen');const input=sent.find(([name])=>name==='player_auth_input');assert.equal(input[1].input_mode,'touch');assert(w.position.x>.5)
- assert(sent.filter(([name])=>name==='player_auth_input').every(([,p])=>Math.hypot(p.delta.x,p.delta.z)<=.101))
+ assert(sent.filter(([name])=>name==='player_auth_input').every(([,p])=>Math.hypot(p.delta.x,p.delta.z)<=.216))
  client.emit('correct_player_move_prediction',{position:{x:.5,y:65.62,z:.5}});client.emit('correct_player_move_prediction',{position:{x:-8,y:65.62,z:.5}})
  assert.equal(n.route,null);n.detach()
 })

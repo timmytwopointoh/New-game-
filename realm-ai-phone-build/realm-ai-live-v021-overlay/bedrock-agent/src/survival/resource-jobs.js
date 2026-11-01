@@ -195,16 +195,17 @@ export class ResourceJobs {
   return candidates[0]?.cell||null
  }
  chooseApproach(target){
-  const w=this.world,n=this.navigation,start=w.standPosition?.();if(!start)return null
+  const w=this.world,n=this.navigation,start=w.standPosition?.();if(!start||!w.visible(target))return null
   const cells=[]
   for(const dist of [2,3])for(const [dx,dz] of [[dist,0],[-dist,0],[0,dist],[0,-dist],[dist,1],[-dist,-1],[1,dist],[-1,-dist]])for(const dy of [0,1,-1]){
    const p={x:target.x+dx,y:start.y+dy,z:target.z+dz}
-   if(!w.walkable(p)||!w.visible(target))continue
-   const candidate=n.routeTo(p,start,{allowDirt:false,maxNodes:512})
-   if(candidate?.ok)cells.push({p,steps:candidate.path.length})
+   if(w.walkable(p))cells.push(p)
   }
-  cells.sort((a,b)=>a.steps-b.steps)
-  return cells[0]?.p||null
+  cells.sort((a,b)=>distance(a,start)-distance(b,start))
+  // Try distinct nearby approaches, stopping as soon as one route works.
+  // Do not synchronously run dozens of complete A* searches per mining tick.
+  for(const p of cells.slice(0,12))if(n.routeTo(p,start,{allowDirt:false,maxNodes:512})?.ok)return p
+  return null
  }
  tick(now=Date.now()){
   const a=this.active;if(!a||now-a.lastAt<250)return
