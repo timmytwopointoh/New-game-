@@ -1,5 +1,5 @@
 name: Realm AI Microsoft Code UI - Installable TEST APK
-# Re-run after correcting all Android Robolectric dialog tests.
+# Run Robolectric tests against original package, then package separate signed installer.
 on:
   push:
     branches: [feature/realm-ai-0391-microsoft-code-frontmost-20261101]
@@ -34,6 +34,15 @@ jobs:
           npm ci --omit=dev --no-audit --no-fund
           cd ..
           python3 tools/fetch_native_runtime.py
+      - name: Test code and Microsoft UI using ORIGINAL Android app identity
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:testDebugUnitTest
+      - name: Prepare isolated app identity AFTER tests, without touching app source
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           app=Path('android-app/app')
@@ -50,11 +59,11 @@ jobs:
           assert 'android:label="Realm AI Live"' in content
           m.write_text(content.replace('android:label="Realm AI Live"','android:label="Realm AI LOGIN TEST"'))
           PY
-      - name: Run Android Microsoft code tests and compile standalone Android APK
+      - name: Compile standalone test Android APK
         working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
         run: |
           set -euo pipefail
-          gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
+          gradle --no-daemon :app:assembleRelease
           test -s app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Sign, verify and package standalone test APK
         run: |
