@@ -1,5 +1,5 @@
 name: Realm AI Live v0.39.1 corrected Android build
-# One-shot retry includes Gradle fix: dependency sample/test assets excluded.
+# One-shot retry includes Gradle fix and portable Robolectric screenshot temp paths.
 on:
   push:
     branches: [feature/realm-ai-live-v039-retry-knowledge-20261101]
