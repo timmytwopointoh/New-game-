@@ -71,6 +71,14 @@ public class MicrosoftCodeFrontmostTest {
     ClipboardManager clipboard=(ClipboardManager)a.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
     assertEquals("ABC123",clipboard.getPrimaryClip().getItemAt(0).getText().toString());
   }
+  @Test public void missingLocalControllerTokenShowsVisibleStartBotInstruction(){
+    a.token="";
+    a.showSettings();
+    a.showAuth();
+    AlertDialog notice=ShadowAlertDialog.getLatestAlertDialog();
+    assertTrue(notice.isShowing());
+    assertTrue(notice.getMessage().toString().contains("Start the bot first"));
+  }
   @Test public void noCodeShowsVisibleExplanationInsteadOfHiddenChatBubble()throws Exception{
     a.showSettings();
     a.showAuth(new JSONObject("{}"));
