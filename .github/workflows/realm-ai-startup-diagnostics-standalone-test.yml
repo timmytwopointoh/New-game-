@@ -1,5 +1,5 @@
 name: Realm AI startup-stage diagnostics - Installable TEST APK
-# Startup stage capture and 3-minute first-run grace, plus existing Microsoft-code visibility UI.
+# Include the whitelisted startup.json in strict bug report ZIP tests; no auth changes.
 on:
   push:
     branches: [fix/realm-ai-startup-grace-diagnostics-20261101]
