@@ -28,7 +28,7 @@ public class MainActivity extends Activity {
     final ExecutorService urgent = Executors.newSingleThreadExecutor();
     volatile long commandEpoch=System.currentTimeMillis(); int selectedPlan=0;
     EditText botField,ownerField,realmField,input;
-    LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton,retryButton;String displayedAuthCode="";
+    LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton,retryButton;String displayedAuthCode="",lastPresentedMicrosoftCode="";AlertDialog settingsDialog;
     String token="",lastProgressText=""; long cursor=0,serviceRevision=0,lastApiSuccessAt=0,serviceStateSince=0; boolean active=false,serviceStarted=false,apiConnected=false;
     final int PORT=8765;
     int d(int v){return (int)(v*getResources().getDisplayMetrics().density);}
@@ -77,7 +77,7 @@ public class MainActivity extends Activity {
         body.addView(button("Saved plans",this::showPlans),space(7));body.addView(button("Stop bot service",this::stopServiceNow),space(7));
         body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("Bug reports",this::showBugReports),space(7));body.addView(button("Connection diagnostics",this::showDiagnostics),space(7));body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
         body.addView(txt("Share only a file you choose in Android's picker.",12,MUTED),space(14));Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(5));
-        AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();dialog.setOnDismissListener(x->{for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
+        AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();settingsDialog=dialog;dialog.setOnDismissListener(x->{if(settingsDialog==dialog)settingsDialog=null;for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
     }
     TextView sectionLabel(String label){TextView v=txt(label,11,PURPLE);v.setLetterSpacing(.12f);return v;}
     void showLearning(){
@@ -233,8 +233,14 @@ public class MainActivity extends Activity {
     void showAuth(){if(token.isEmpty()){bubble("Progress","Start the bot and wait for the local controller before requesting its Microsoft sign-in code.",false);return;}io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showAuth(status);});}catch(Exception e){ui.post(()->bubble("Progress","Could not check Microsoft sign-in status: "+e.getMessage(),false));}});}
     void showAuth(JSONObject status){JSONObject info=status!=null?status.optJSONObject("authChallenge"):null;
         if(info==null||info.optString("userCode").isEmpty()){
-            bubble("Progress","No Microsoft sign-in code is pending, so there is nothing to copy. The latest connection error is shown above. When Microsoft requests a new code, it and the clickable link will appear here.",false);return;}
+            // A chat bubble is behind Settings; use a visible dialog for missing-code feedback.
+            new AlertDialog.Builder(this).setTitle("Microsoft sign-in")
+              .setMessage("No Microsoft sign-in code has been issued yet. Start the bot, then check the connection status. When Microsoft issues a code, it will appear here automatically.")
+              .setPositiveButton("OK",null).show();return;}
         String code=info.optString("userCode");
+        lastPresentedMicrosoftCode=code;
+        // Settings is another Android window; close it so the code and Copy action are never hidden behind it.
+        if(settingsDialog!=null&&settingsDialog.isShowing())settingsDialog.dismiss();
         displayedAuthCode=code;authCodeLabel.setText("Microsoft sign-in code: " + code + "\nOpen https://www.microsoft.com/link and enter it");
         authCodeLabel.setVisibility(View.VISIBLE);copyAuthCode.setVisibility(View.VISIBLE);
         new AlertDialog.Builder(this).setTitle("Sign in to your bot Xbox account")
@@ -336,8 +342,10 @@ public class MainActivity extends Activity {
             displayedAuthCode=code;
             authCodeLabel.setText("MICROSOFT CODE: "+code+"\nOpen https://www.microsoft.com/link and enter it.");
             authCodeLabel.setVisibility(View.VISIBLE);copyAuthCode.setVisibility(View.VISIBLE);
+            if(!code.equals(lastPresentedMicrosoftCode))showAuth(r);
         }else{
             displayedAuthCode="";authCodeLabel.setVisibility(View.GONE);copyAuthCode.setVisibility(View.GONE);
+            if(!"sign-in-required".equals(phase))lastPresentedMicrosoftCode="";
         }
         JSONArray updates=r.optJSONArray("updates");if(updates!=null)for(int i=0;i<updates.length();i++){JSONObject e=updates.optJSONObject(i);if(e==null||e.optLong("id")<=cursor)continue;cursor=e.optLong("id");bubble(e.optString("source","Realm"),e.optString("message"),false);}
         });}catch(Exception ex){ui.post(()->{if(revision!=serviceRevision)return;apiConnected=false;long reference=Math.max(lastApiSuccessAt,serviceStateSince);if(serviceStarted&&reference>0&&System.currentTimeMillis()-reference>=15000){serviceStarted=false;serviceStateSince=0;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();bubble("Progress","The bot service stopped responding. Your saved login and plans remain; tap the power button to start it again.",false);}renderPowerButton();connection.setText("Waiting for local bot…");File f=new File(getFilesDir(),"boot-status.txt");if(f.exists())try(FileInputStream in=new FileInputStream(f)){byte[] buf=new byte[512];int n=in.read(buf);if(n>0)connection.setText(new String(buf,0,n,StandardCharsets.UTF_8));}catch(Exception ignored){}});}});}
