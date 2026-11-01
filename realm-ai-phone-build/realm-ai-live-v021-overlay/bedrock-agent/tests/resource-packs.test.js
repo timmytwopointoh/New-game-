@@ -44,7 +44,7 @@ test('bad pack hash fails closed and does not send ready',t=>{
 })
 test('too many Realm packs fail without requesting downloads',t=>{
  const h=harness();t.after(h.done)
- h.client.emit('resource_packs_info',{texture_packs:Array.from({length:17},(_,i)=>meta('p'+i))})
+ h.client.emit('resource_packs_info',{texture_packs:Array.from({length:33},(_,i)=>meta('p'+i))})
  assert.equal(h.handler.snapshot().failed,true)
  assert.equal(h.sent.length,0)
 })
