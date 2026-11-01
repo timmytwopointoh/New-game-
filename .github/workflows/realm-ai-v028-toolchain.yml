@@ -1,0 +1,49 @@
+name: Realm AI Live v0.28 - requested compiler inputs
+on:
+  push:
+    branches:
+      - sandbox/realm-ai-live-v028-compiler-20261031
+    paths:
+      - '.github/workflows/realm-ai-v028-toolchain.yml'
+permissions:
+  contents: read
+jobs:
+  prepare-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android SDK 35 build tools only
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          mkdir -p compiler/android
+          cp "$SDK/platforms/android-35/android.jar" compiler/android/
+          cp "$SDK/build-tools/35.0.0/lib/d8.jar" compiler/android/
+          cp "$SDK/build-tools/35.0.0/aapt2" compiler/android/
+          cp "$SDK/build-tools/35.0.0/aapt" compiler/android/
+          cp "$SDK/build-tools/35.0.0/zipalign" compiler/android/
+          cp "$SDK/build-tools/35.0.0/apksigner" compiler/android/
+          cp "$SDK/build-tools/35.0.0/lib/apksigner.jar" compiler/android/
+      - name: Fetch known-good, owner-requested v0.26 Live base APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-delay 3 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-026-climb-recovery/Realm-AI-Live.apk' -o compiler/Realm-AI-Live-v026-base.apk
+          echo 'c03c155e98ba5f3ac3f6fcf9ca5f43314d7ac0ae9100d507c602f291278355fd  compiler/Realm-AI-Live-v026-base.apk' | sha256sum -c -
+          python3 - <<'PY'
+          import zipfile
+          p='compiler/Realm-AI-Live-v026-base.apk'
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None
+              assert 'lib/arm64-v8a/libnode.so' in z.namelist()
+              assert 'classes2.dex' in z.namelist()
+          print('Base APK ZIP and ARM64 runtime verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: realm-v028-private-local-compiler-inputs
+          path: compiler/
+          retention-days: 2
