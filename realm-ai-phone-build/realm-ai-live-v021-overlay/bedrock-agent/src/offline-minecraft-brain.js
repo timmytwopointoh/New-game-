@@ -2,6 +2,7 @@
 // Knowledge is read from minecraft-data already bundled with Realm AI Live.
 // Knowledge is NOT permission or a replacement for Bedrock server confirmations.
 import minecraftData from 'minecraft-data'
+import {blockReference,blockAllTools,mobReference,referenceStats} from './knowledge/bedrock-reference.js'
 import {resolveMaterial, materialInfo, recipeInfo, supplyPlan, catalogCounts} from './survival/catalog.js'
 
 const data=minecraftData('bedrock_1.26.60')
@@ -28,7 +29,7 @@ function itemFacts(name){
  const item=materialInfo(name)
  const rs=recipeInfo(name).slice(0,2)
  const info=[`${item.displayName||friendly(name)} (${name}) is in the bundled Bedrock catalog.`,item.block?'It is a block.':item.item?'It is an item.':'']
- if(item.diggable===true)info.push('It can be broken; tool/reach and server conditions still matter.')
+ if(item.diggable===true){info.push('It can be broken; tool/reach and server conditions still matter.');const facts=blockReference(name);if(facts&&!facts.error)info.push('Hardness '+facts.hardness+'; hand '+(facts.seconds===null?'unbreakable/unknown':facts.seconds+'s')+'. Ask for mining time or a full mining table for any tool.');}
  if(rs.length)info.push('Recipe reference: '+rs.map(r=>`${r.output} from ${Object.entries(r.ingredients).map(([k,v])=>`${v} ${friendly(k)}`).join(' + ')} at ${friendly(r.station)}${r.verified?'':' (verify in game)'}`).join('; ')+'.')
  else info.push('No reliable recipe in this bundled data; it may require obtaining from the world.')
  return info.filter(Boolean).join(' ')
@@ -48,7 +49,7 @@ const requirements={
  combat:'Observe hostile -> verify line of sight and distance -> evade or attack -> observe outcome',
  use:'Identify interactive target -> verify reach -> send use interaction -> await server confirmation'
 }
-export const offlineKnowledgeStats=Object.freeze({version:'bedrock_1.26.60',blocks:catalogCounts.blocks,items:catalogCounts.items,entities:entities.size,biomes:biomes.size,recipes:Object.keys(data.recipes||{}).length,networkRequired:false})
+export const offlineKnowledgeStats=Object.freeze({...referenceStats,version:'bedrock_1.26.60',blocks:catalogCounts.blocks,items:catalogCounts.items,entities:entities.size,biomes:biomes.size,recipes:Object.keys(data.recipes||{}).length,networkRequired:false})
 
 /** Return a grounded, read-only answer or bounded plan. Never fabricate actions. */
 export function offlineMinecraftResponse(raw,{world=null}={}){
@@ -56,10 +57,16 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
  let s=normalize(raw).replace(/^(?:(?:please|hey bot|bot)[, ]+|(?:can|could|would|will) you\s+|i (?:want|need) you to\s+|go ahead and\s+)+/,'')
  s=s.replace(/^(?:research and (?:do|perform|execute)|do research on|teach me (?:how to|about))\s+/,'')
  if(/^(?:minecraft knowledge|offline knowledge|what do you know about minecraft|knowledge status)$/.test(s))return result(`Offline Bedrock ${offlineKnowledgeStats.version} knowledge: ${offlineKnowledgeStats.blocks} blocks, ${offlineKnowledgeStats.items} items, ${offlineKnowledgeStats.entities} entities, ${offlineKnowledgeStats.biomes} biomes, ${offlineKnowledgeStats.recipes} recipe records. No Google key or network required. Knowledge is not proof the bot can perform every game mechanic.`,{knowledge:offlineKnowledgeStats})
- let m=s.match(/^(?:what (?:is|are)|what do you know about|tell me about|explain|about|define)\s+(.+?)(?:\?)?$/)
+ let mining=s.match(/^(?:mining time|break time|how long (?:does it take|will it take) to (?:mine|break|destroy)|how long to (?:mine|break|destroy))\s+([a-z0-9_ ]+?)(?:\s+with\s+([a-z0-9_ ]+))?(?:\?)?$/)
+ if(mining){const name=material(mining[1]);if(!name)return null;const facts=blockReference(name,{tool:/^(?:hand|bare hand|bare hands|your hand|my hand|fist|nothing)$/.test((mining[2]||'hand').trim())?'hand':mining[2],world});if(!facts||facts.error)return result(facts?.error||'No known mining time for that item.');return result(`${facts.displayName}: ${facts.tool} ${facts.seconds===null?'cannot be mined normally':facts.seconds+' seconds ('+facts.ticks+' ticks)'}; hardness ${facts.hardness}; ${facts.expectedDrop}. Water, enchantments, airborne and status effects can change the time.`,{knowledge:facts})}
+ let table=s.match(/^mining table\s+([a-z0-9_ ]+?)(?:\?)?$/)
+ if(table){const name=material(table[1]);if(!name)return null;const tools=blockAllTools(name,{world});if(!tools.length)return result('No mining table in this Bedrock version.');return result(`${name}: `+tools.slice(0,14).map(t=>`${t.tool} ${t.seconds===null?'∞':t.seconds+'s'}`).join(', ')+'. Remaining tools and statuses are available through the local knowledge endpoint.',{knowledge:{kind:'mining-table',name,tools}})}
+ let mob=s.match(/^(?:mob (?:stats|info)|how much health does|hp of|attack of|mob behavior)\s+([a-z0-9_ ]+?)(?:\?)?$/)
+ if(mob){const info=mobReference(mob[1]);if(!info)return null;return result(`${info.name}: HP ${info.health??'unknown'}; attack damage ${info.normalDamage??'not independently verified'}. ${info.behavior} ${info.response}`,{knowledge:{kind:'mob',...info}})}
+  let m=s.match(/^(?:what (?:is|are)|what do you know about|tell me about|explain|about|define)\s+(.+?)(?:\?)?$/)
  if(m){const subject=m[1].replace(/\?$/,'');const n=material(subject),e=entity(subject),b=biome(subject),v=learnVerbs[subject];
   if(n)return result(itemFacts(n),{knowledge:{kind:'material',name:n}})
-  if(e)return result(`${e.displayName||friendly(e.name)} is a Minecraft entity in the ${e.category||e.type||'entity'} category.${threatKinds.has(e.name)?' Treat as potentially hostile; the combat system must use observed server entities, not a name guess.':''}`,{knowledge:{kind:'entity',name:e.name}})
+  if(e){const info=mobReference(e.name);return result(`${info?.name||e.displayName||friendly(e.name)}: HP ${info?.health??'unknown'}; attack damage ${info?.normalDamage??'not independently verified'}. ${info?.behavior||'Behavior needs observation.'} ${info?.response||''}`,{knowledge:{kind:'entity',...info}})}
   if(b)return result(`${friendly(b.name)} is a Bedrock biome. Its presence in the data does not mean this Realm has been surveyed there.`,{knowledge:{kind:'biome',name:b.name}})
   if(v)return result(`In Minecraft, ${subject} means ${v}. That describes a goal, not a standalone executable packet.`)
   return null
