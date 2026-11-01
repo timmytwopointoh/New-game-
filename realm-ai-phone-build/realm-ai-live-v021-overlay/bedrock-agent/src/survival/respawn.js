@@ -1,14 +1,21 @@
 // Complete the normal Bedrock death-screen handshake. Never restore health
 // locally, enable immunity, reconnect authentication, or resume interrupted jobs.
+export function respawnState(state){
+ if(state===0||state==='0'||state==='searching_for_spawn'||state==='SearchingForSpawn')return 0
+ if(state===1||state==='1'||state==='ready_to_spawn'||state==='ReadyToSpawn')return 1
+ return null
+}
 export class RespawnRecovery{
  constructor(world,navigation,interrupt=()=>{},report=()=>{}){this.world=world;this.navigation=navigation;this.interrupt=interrupt;this.report=report;this.listeners=[];this.reset()}
  reset(){this.state='alive';this.attempts=0;this.readyAttempts=0;this.startedAt=null;this.lastAttemptAt=null;this.readyPosition=null;this.reason=''}
  attach(client){this.detach();this.reset();this.client=client;const on=(name,fn)=>{client.on(name,fn);this.listeners.push([name,fn])}
   on('respawn',p=>{
-   if(String(p.runtime_entity_id)!==this.world.entityId||![0,1].includes(p.state))return
+   // Different protocol decoders may expose the enum as a number or a label.
+   const state=respawnState(p?.state)
+   if(String(p?.runtime_entity_id)!==this.world.entityId||![0,1].includes(state))return
    if(['alive','respawned'].includes(this.state)&&this.world.attributes['minecraft:health']>0)return
    this.begin(Date.now())
-   if(p.state===1&&p.position&&Object.values(p.position).every(Number.isFinite)){
+   if(state===1&&p.position&&['x','y','z'].every(k=>Number.isFinite(p.position[k]))){
     this.readyPosition={...p.position};this.state='server-ready';this.tick(Date.now())
    }
   })
@@ -26,13 +33,19 @@ export class RespawnRecovery{
   const health=this.world.attributes['minecraft:health']
   if(health===0)this.begin(now)
   if(['alive','respawned'].includes(this.state))return false
-  if(this.state==='blocked')return true
-  if(health>0&&this.readyAttempts>0){
+  // Positive health is server-sourced evidence of recovery even if the phone
+  // never observed ReadyToSpawn, or it arrived after our 15-second timeout.
+  // A sent Respawn/ClientReady packet is NOT required as evidence of success.
+  if(health>0){
    this.state='respawned';this.navigation.vy=0;this.navigation.unknownSince=null;this.navigation.loading={state:'waiting-for-terrain',id:null,dimension:false}
-   this.reason='Server confirms respawn and positive health. Loading terrain; previous work stays stopped.';this.report(this.reason);return false
+   this.reason='Server reports positive health after death. Previous work remains stopped; waiting for observed terrain.';this.report(this.reason);return false
   }
+  if(this.state==='blocked')return true
   if(now-this.startedAt>15000){this.state='blocked';this.reason='The server did not confirm respawn within 15 seconds. No health or position was invented; retry Respawn or rejoin.';this.report(this.reason);return true}
-  if(!this.client||!this.navigation.spawned||this.lastAttemptAt!==null&&now-this.lastAttemptAt<2000)return true
+  // A fresh server ReadyToSpawn must be acknowledged promptly. The two-second
+  // cooldown applies to retries, not the first ClientReadyToSpawn response.
+  const firstReady=!!this.readyPosition&&this.readyAttempts===0
+  if(!this.client||!this.navigation.spawned||(!firstReady&&this.lastAttemptAt!==null&&now-this.lastAttemptAt<2000))return true
   try{
    if(this.readyPosition&&this.readyAttempts<3){
     this.client.queue('respawn',{position:this.readyPosition,state:2,runtime_entity_id:BigInt(this.world.entityId)})

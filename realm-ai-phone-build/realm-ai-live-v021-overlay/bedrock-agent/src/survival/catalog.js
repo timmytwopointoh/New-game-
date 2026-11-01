@@ -6,6 +6,7 @@ const simpleRecipes={
  stick:{output:4,ingredients:{oak_planks:2},station:'inventory'},
  crafting_table:{output:1,ingredients:{oak_planks:4},station:'inventory'},
  wooden_pickaxe:{output:1,ingredients:{oak_planks:3,stick:2},station:'crafting_table'},
+ wooden_axe:{output:1,ingredients:{oak_planks:3,stick:2},station:'crafting_table'},
  stone_pickaxe:{output:1,ingredients:{cobblestone:3,stick:2},station:'crafting_table'},
  furnace:{output:1,ingredients:{cobblestone:8},station:'crafting_table'},
  chest:{output:1,ingredients:{oak_planks:8},station:'crafting_table'},

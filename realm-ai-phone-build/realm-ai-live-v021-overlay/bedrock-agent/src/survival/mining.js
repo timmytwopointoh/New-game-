@@ -8,9 +8,9 @@ export class Mining{
   const eye=this.world.position,dx=eye.x-position.x-.5,dy=eye.y-position.y-.5,dz=eye.z-position.z-.5
   const face=Math.abs(dy)>=Math.max(Math.abs(dx),Math.abs(dz))?(dy>=0?1:0):Math.abs(dx)>=Math.abs(dz)?(dx>=0?5:4):(dz>=0?3:2)
   const click={x:face===4?0:face===5?1:.5,y:face===0?0:face===1?1:.5,z:face===2?0:face===3?1:.5}
-  this.job={protocol:this.world.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',initialVersion:this.world.blockVersion(position),face,click,position:{...position},name:assessment.block.name,stateId:assessment.block.stateId,started:now,duration:assessment.durationMs,heldSlot:this.world.selectedSlot,heldStackId:assessment.held.stack_id,heldId:assessment.held.network_id,toolEffective:assessment.toolEffective,options,finishedRequest:false}
+  this.job={protocol:this.world.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',initialVersion:this.world.blockVersion(position),face,click,position:{...position},name:assessment.block.name,stateId:assessment.block.stateId,started:now,duration:assessment.durationMs,heldSlot:this.world.selectedSlot,heldStackId:assessment.held.stack_id,heldId:assessment.held.network_id,toolEffective:assessment.toolEffective,canHarvest:assessment.canHarvest,options,finishedRequest:false}
   this.pending.push({action:'start_break',position:{...position},face});this.result='mining'
-  return {accepted:true,queued:true,message:`Mining request: ${assessment.block.name}, held item ${assessment.tool}${assessment.toolEffective?' (effective tool)':' (hand-speed mining)'}. Estimated ${(assessment.durationMs/1000).toFixed(2)}s, holding the mining input until the server confirms the break.`}
+  return {accepted:true,queued:true,message:`Mining request: ${assessment.block.name}, held item ${assessment.tool}${assessment.toolEffective?' (effective tool)':' (hand-speed mining)'}. Estimated ${(assessment.durationMs/1000).toFixed(2)}s; ${assessment.canHarvest?'a drop may be possible':'the held tool is not suitable for a drop'}. I will wait for the server to confirm the break and inventory to confirm any collection.`}
  }
  cancel(reason='Mining cancelled.'){
   if(this.job)this.pending.push({action:'abort_break',position:this.job.position,face:this.job.face})

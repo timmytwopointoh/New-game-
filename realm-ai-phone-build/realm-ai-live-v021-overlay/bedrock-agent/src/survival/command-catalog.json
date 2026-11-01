@@ -308,6 +308,13 @@
     "note": ""
   },
   {
+    "id": "collect",
+    "label": "Collect nearby dropped item",
+    "template": "collect drops",
+    "fields": [],
+    "note": "Approach one observed drop; send normal pickup and require server inventory increase. Never claim collection from disappearing entities alone."
+  },
+  {
     "id": "find",
     "label": "Find visible material",
     "template": "find {material}",

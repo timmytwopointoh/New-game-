@@ -26,26 +26,26 @@ export function classifyConversation(raw){
 export function respondToConversation(raw,{vocabulary=null}={}){
  const intent=classifyConversation(raw)
  switch(intent.kind){
-  case 'greeting':return "Hey! I’m here. Ask me about the Realm or Minecraft, or start an action with “command …”."
-  case 'thanks':return "You’re welcome! I’ll keep actions waiting for your command and Activate."
+  case 'greeting':return "Hey! I’m here. Ask me about the Realm or Minecraft, or tell me a supported action directly."
+  case 'thanks':return "You’re welcome! I can execute supported direct instructions; the saved-plan queue still has its own Activate control."
   case 'joke':return "Why did the Creeper bring a map? It kept losing its friends in a blast!"
   case 'teasing':return "I’m still here to help. Want a status check, a Minecraft lookup, or to prepare a command?"
-  case 'identity':return 'I’m the Realm assistant running in this app. I can chat and answer Realm or Minecraft questions; I only prepare an action when you start with “command”, and nothing starts until Activate.'
-  case 'capabilities':return "I can check Realm status, look at nearby blocks and inventory, answer Minecraft material or recipe questions, and prepare supported movement, mining, and building actions. Start an action with “command”; nothing runs until you press Activate."
+  case 'identity':return 'I’m the Realm assistant running in this app. I can chat and answer Realm or Minecraft questions; I can start recognized, supported instructions directly. Saved command cards still wait for Activate.'
+  case 'capabilities':return "I can check Realm status, look at nearby blocks and inventory, answer Minecraft material or recipe questions, and prepare supported movement, mining, and building actions. Tell me a recognized action directly, or use command cards and Activate for a manual queue."
   case 'movement':return 'movement status'
   case 'status':return 'survival status'
   case 'inventory':return 'inventory'
   case 'about':{
    const learned=vocabulary?.meaning(intent.query)
    if(learned?.kind==='material')return `about ${learned.target}`
-   if(learned?.kind==='action')return `You taught me that “${intent.query}” means ${learned.label||learned.target} in this Realm. To prepare it, start with “command”; Activate is still required.`
+   if(learned?.kind==='action')return `You taught me that “${intent.query}” means ${learned.label||learned.target} in this Realm. You can give a complete direct instruction, or prepare a saved command card.`
    const answer=answerWordQuestion(intent.query)
    if(answer.kind==='material')return `about ${answer.material}`
    if(answer.kind==='definition')return answer.message
-   return `I don't have a reliable offline definition for “${answer.query}”. What context did you see it in? If you want an action, start with “command …”; I won't guess or start anything.`
+   return `I don't have a reliable offline definition for “${answer.query}”. What context did you see it in? Try “look up ${answer.query}” to check an online dictionary. I will not guess or start an unsupported action.`
   }
   case 'recipe':return `recipe ${intent.query}`
-  case 'question':return "I’m not sure what you mean yet. I can answer Realm status and Minecraft material or recipe questions. If you want me to do something, start with “command”."
-  default:return "Got it. I’ll treat that as chat, not an action. Ask me a question, or start an action with “command …”."
+  case 'question':return "I’m not sure what you mean yet. I can answer Realm status and Minecraft material or recipe questions. Try a supported direct instruction such as “walk to 3 64 2”."
+  default:return "Got it. I’ll treat that as chat, not an action. Ask me a question, or tell me a supported action directly."
  }
 }

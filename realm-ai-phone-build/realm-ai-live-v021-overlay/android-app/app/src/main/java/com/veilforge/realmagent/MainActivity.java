@@ -60,7 +60,7 @@ public class MainActivity extends Activity {
         Button stop=button("STOP",this::stopNow);stop.setBackground(circle(0xff743344));stop.setContentDescription("Stop command immediately");actions.addView(stop,new FrameLayout.LayoutParams(d(72),d(64),Gravity.START|Gravity.CENTER_VERTICAL));
         activateButton=button("▶",this::activateQueuedPlans);activateButton.setTextSize(22);activateButton.setBackground(circle(0xff198754));activateButton.setContentDescription("Activate all waiting commands");actions.addView(activateButton,new FrameLayout.LayoutParams(d(74),d(74),Gravity.CENTER));
         commandsButton=button("Commands",this::showJobs);commandsButton.setBackground(shape(0xffb33b50));commandsButton.setContentDescription("Commands: open the supported command picker");actions.addView(commandsButton,new FrameLayout.LayoutParams(d(100),d(60),Gravity.END|Gravity.CENTER_VERTICAL));
-        LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask, or type command …");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
+        LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask or tell me a task…");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
         input.setOnEditorActionListener((v,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_SEND){send(input.getText().toString());return true;}return false;});
     }
     void saveAccountSettings(){getPreferences(MODE_PRIVATE).edit().putString("botTag",botField.getText().toString().trim()).putString("ownerTag",ownerField.getText().toString().trim()).putString("realmName",realmField.getText().toString().trim()).apply();}
@@ -71,6 +71,8 @@ public class MainActivity extends Activity {
         LinearLayout modes=new LinearLayout(this);body.addView(modes,space(5));modes.addView(button("Survival",()->modeAction("survival")),new LinearLayout.LayoutParams(0,d(46),1));modes.addView(button("Creative",()->modeAction("creative")),new LinearLayout.LayoutParams(0,d(46),1));
         LinearLayout management=new LinearLayout(this);body.addView(management,space(5));management.addView(button("Saved plans",this::showPlans),new LinearLayout.LayoutParams(0,d(46),1));management.addView(button("Stop bot service",this::stopServiceNow),new LinearLayout.LayoutParams(0,d(46),1));
         body.addView(button("Learning",this::showLearning),space(5));
+        body.addView(button("Google AI research / Internet lookup",()->startActivityForResult(new Intent(this,WordBrowserActivity.class),3109)),space(5));
+        body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(5));
         body.addView(button("Connection diagnostics",this::showDiagnostics),space(5));
         body.addView(button("Bug reports",this::showBugReports),space(5));
         body.addView(txt("Choose one file to share with another app. Android opens its file picker first, then its Share sheet. Only the file you choose is shared; Realm AI Live does not scan your phone or keep file access.",12,MUTED),space(10));
@@ -111,6 +113,26 @@ public class MainActivity extends Activity {
         JSONObject safe=ConnectionDiagnostics.sanitize(report);
         try{safe.put("reportSource",source);safe.put("localApiReachable",reachable);safe.put("serviceRequested",serviceStarted);safe.put("applicationId",getPackageName());safe.put("configuredLoginPlatform","Nintendo Switch");safe.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);safe.put("copiedAt",System.currentTimeMillis());safe.put("reportAvailable",report!=null);return safe.toString(2);}catch(Exception ignored){return "Connection diagnostics are unavailable. Saved login has not been changed.";}
     }
+    void showChatDiagnostics(){
+        if(!serviceStarted&&!apiConnected){new AlertDialog.Builder(this).setTitle("Realm chat diagnostics").setMessage("Start the bot first. Then send !ai ping in Realm chat.").setPositiveButton("Close",null).show();return;}
+        io.submit(()->{try{
+            JSONObject status=request("GET","/status",null), stats=status.optJSONObject("chatDiagnostics");
+            String message="Bot spawned: "+status.optBoolean("spawned")+"\n"
+                +"Incoming text packets: "+(stats==null?"unknown":stats.optInt("textPackets"))+"\n"
+                +"Player chat packets: "+(stats==null?"unknown":stats.optInt("playerChatPackets"))+"\n"
+                +"AI-prefixed commands: "+(stats==null?"unknown":stats.optInt("aiRequests"))+"\n"
+                +"Owner commands accepted: "+(stats==null?"unknown":stats.optInt("ownerRequests"))+"\n"
+                +"Non-owner commands rejected: "+(stats==null?"unknown":stats.optInt("nonOwnerRequests"))+"\n"
+                +"Bot replies queued: "+(stats==null?"unknown":stats.optInt("replyQueued"))+"\n"
+                +"Reply send failures: "+(stats==null?"unknown":stats.optInt("replyFailures"))+"\n"
+                +"Last rejection: "+(stats==null?"unknown":stats.optString("lastRejection","none"))+"\n"
+                +"Last reply error: "+(stats==null?"unknown":stats.optString("lastReplyError","none"))
+                +"\n\nTest: send !ai ping from the configured owner in Minecraft chat, then reopen this screen. Counts reset when the bot service restarts. This shows messages queued, not proof they were delivered to players.";
+            ui.post(()->new AlertDialog.Builder(this).setTitle("Realm chat diagnostics").setMessage(message)
+                .setPositiveButton("Copy counts",(a,b)->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Realm AI chat diagnostics",message));})
+                .setNegativeButton("Close",null).show());
+        }catch(Exception e){ui.post(()->new AlertDialog.Builder(this).setTitle("Realm chat diagnostics").setMessage("Unable to reach the bot's local API. Check the power/connection indicator.").setPositiveButton("Close",null).show());}});
+    }
     void showDiagnostics(){
         JSONObject saved=savedDiagnostics();final String[] text={diagnosticText(saved,saved==null?"app-only":"saved",false)};
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Connection diagnostics").setMessage(text[0]).setPositiveButton("Copy diagnostics",(d,w)->{android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cb.setPrimaryClip(ClipData.newPlainText("Realm AI Live diagnostics",text[0]));Toast.makeText(this,"Diagnostics copied; paste them into the development chat",Toast.LENGTH_LONG).show();}).setNegativeButton("Close",null).show();
@@ -125,7 +147,19 @@ public class MainActivity extends Activity {
     void writeBugReport(Uri destination){supportIo.submit(()->{try(OutputStream out=getContentResolver().openOutputStream(destination)){if(out==null)throw new IOException();SupportBundle.export(this,out);SupportLog.record(this,"report_exported");ui.post(()->bubble("Progress","Bug report ZIP saved. Attach it to the development chat so its recorded issues can be investigated.",false));}catch(Exception e){SupportLog.record(this,"report_failed");ui.post(()->bubble("Progress","Could not save the bug report. Choose a writable location and try again.",false));}});}
     static final int REQUEST_PICK_SHARED_FILE=41021;
     void pickFileToShare(){Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);picker.setType("*/*");try{startActivityForResult(picker,REQUEST_PICK_SHARED_FILE);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open its file picker.",false);}}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==REQUEST_EXPORT_REPORT){if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null)writeBugReport(data.getData());else bubble("Progress","Bug report export canceled.",false);return;}if(requestCode!=REQUEST_PICK_SHARED_FILE)return;if(resultCode!=RESULT_OK||data==null||data.getData()==null){bubble("Progress","File sharing canceled; no file was shared.",false);return;}Uri selected=data.getData();String mime;try{mime=getContentResolver().getType(selected);}catch(RuntimeException ignored){mime=null;}if(mime==null||mime.isEmpty())mime="*/*";Intent send=new Intent(Intent.ACTION_SEND);send.setType(mime);send.putExtra(Intent.EXTRA_STREAM,selected);send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);send.setClipData(ClipData.newUri(getContentResolver(),"Selected file",selected));try{startActivity(Intent.createChooser(send,"Share selected file"));}catch(ActivityNotFoundException e){bubble("Progress","No app is available to receive the selected file.",false);}}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==3109){
+            if(resultCode==RESULT_OK&&data!=null){
+                if(data.hasExtra("researchKey")){setGoogleResearchKey(data.getStringExtra("researchKey"),false);return;}
+                if(data.getBooleanExtra("clearResearchKey",false)){setGoogleResearchKey(null,true);return;}
+                String direct=data.getStringExtra("automaticResearchTask");
+                if(direct!=null){runAutomaticResearch(direct);return;}
+                String task=data.getStringExtra("researchTask"),answer=data.getStringExtra("researchAnswer");
+                if(task!=null&&answer!=null)showResearchPlan(task,answer);
+            }
+            return;
+        }
+        if(requestCode==REQUEST_EXPORT_REPORT){if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null)writeBugReport(data.getData());else bubble("Progress","Bug report export canceled.",false);return;}if(requestCode!=REQUEST_PICK_SHARED_FILE)return;if(resultCode!=RESULT_OK||data==null||data.getData()==null){bubble("Progress","File sharing canceled; no file was shared.",false);return;}Uri selected=data.getData();String mime;try{mime=getContentResolver().getType(selected);}catch(RuntimeException ignored){mime=null;}if(mime==null||mime.isEmpty())mime="*/*";Intent send=new Intent(Intent.ACTION_SEND);send.setType(mime);send.putExtra(Intent.EXTRA_STREAM,selected);send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);send.setClipData(ClipData.newUri(getContentResolver(),"Selected file",selected));try{startActivity(Intent.createChooser(send,"Share selected file"));}catch(ActivityNotFoundException e){bubble("Progress","No app is available to receive the selected file.",false);}}
     void renderPowerButton(){if(powerButton==null)return;if(apiConnected){powerButton.setBackground(circle(0xffb33b50));powerButton.setContentDescription("Stop bot service");}else if(serviceStarted){powerButton.setBackground(circle(0xff88672c));powerButton.setContentDescription("Cancel bot service startup");}else{powerButton.setBackground(circle(0xff7e3040));powerButton.setContentDescription("Start bot service");}}
     void toggleBotService(){if(serviceStarted){stopServiceNow();return;}if(botField.getText().toString().trim().length()<2||ownerField.getText().toString().trim().length()<2){showSettings();bubble("Progress","Enter the bot and owner gamertags in Settings, then turn the bot on.",false);return;}startBot();}
     void stopServiceNow(){commandEpoch++;try{ComponentName accepted=startService(new Intent(this,BotService.class).setAction("STOP"));if(accepted==null)throw new IllegalStateException("Android did not accept the stop request.");serviceRevision++;serviceStarted=false;apiConnected=false;serviceStateSince=0;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();renderPowerButton();connection.setText("Bot service stopped; saved login and plans kept.");bubble("Progress","Stop request sent to Android. Saved login and plans are kept; plans do not resume automatically.",false);}catch(Exception e){bubble("Progress","Android could not stop the bot service: "+e.getClass().getSimpleName(),false);}}
@@ -198,6 +232,48 @@ public class MainActivity extends Activity {
               Toast.makeText(this,"Code copied. Paste it at microsoft.com/link",Toast.LENGTH_LONG).show();
           })
           .setNegativeButton("Close",(dlg,w)->{}).show();}
+    void setGoogleResearchKey(String key,boolean clear){
+        if(!apiConnected||token.isEmpty()){bubble("VEILFORGE","Start the bot service before configuring online research.",false);return;}
+        io.submit(()->{try{
+            JSONObject data=clear?new JSONObject().put("clear",true):new JSONObject().put("key",key);
+            JSONObject response=request("POST","/research/google-key",data);
+            ui.post(()->bubble("VEILFORGE",response.optString("message","Google configuration updated."),false));
+        }catch(Exception e){ui.post(()->bubble("VEILFORGE","Google key setup failed. Check the local bot service.",false));}});
+    }
+    void runAutomaticResearch(String task){
+        if(!apiConnected||token.isEmpty()){bubble("VEILFORGE","Start and join the Realm before researching tasks.",false);return;}
+        final long epoch=commandEpoch;
+        io.submit(()->{try{
+            JSONObject payload=new JSONObject().put("task",task).put("epoch",epoch);
+            JSONObject response=request("POST","/research/automatic",payload);
+            ui.post(()->{if(epoch==commandEpoch)bubble("VEILFORGE",response.optString("message","Research started."),false);});
+        }catch(Exception e){ui.post(()->bubble("VEILFORGE","Automatic research could not start: "+e.getMessage(),false));}});
+    }
+    void showResearchPlan(String task,String answer){
+        if(!apiConnected||token.isEmpty()){bubble("VEILFORGE","Start the phone bot before using the researched plan.",false);return;}
+        final long epoch=commandEpoch;
+        io.submit(()->{try{
+            JSONObject payload=new JSONObject().put("task",task).put("answer",answer).put("epoch",epoch);
+            JSONObject response=request("POST","/research/preview",payload);
+            ui.post(()->{if(epoch!=commandEpoch)return;
+                JSONObject preview=response.optJSONObject("preview");JSONArray steps=preview==null?new JSONArray():preview.optJSONArray("commands");
+                StringBuilder summary=new StringBuilder("Your task: "+task+"\n\n");
+                if(steps!=null)for(int i=0;i<steps.length();i++)summary.append(i+1).append(". ").append(steps.optJSONObject(i).optString("text")).append("\n");
+                if(steps==null||steps.length()==0)summary.append("No supported executable steps were identified.\n");
+                summary.append("\nOnly the selected supported steps will run; server confirmation is still required. Unsupported abilities remain unfinished.");
+                new AlertDialog.Builder(this).setTitle("Google research → Realm actions").setMessage(summary.toString())
+                  .setPositiveButton("Run supported steps",(dlg,which)->runResearchPlan(task,answer,epoch))
+                  .setNegativeButton("Not now",null).show();
+            });
+        }catch(Exception e){ui.post(()->bubble("VEILFORGE","Research preview unavailable: "+e.getMessage(),false));}});
+    }
+    void runResearchPlan(String task,String answer,long epoch){
+        io.submit(()->{if(epoch!=commandEpoch)return;try{
+            JSONObject payload=new JSONObject().put("task",task).put("answer",answer).put("epoch",epoch);
+            JSONObject result=request("POST","/research/run",payload);
+            ui.post(()->{if(epoch!=commandEpoch)return;syncPlans(result.optJSONObject("plans"));bubble("VEILFORGE",result.optString("message","No research result"),false);});
+        }catch(Exception e){ui.post(()->bubble("VEILFORGE","Research execution failed: "+e.getMessage(),false));}});
+    }
     void send(String raw){String msg=raw.trim();if(msg.equalsIgnoreCase("stop")){stopNow();return;}if(msg.equalsIgnoreCase("command")||msg.equalsIgnoreCase("commands")){input.setText("");showJobs();return;}final long epoch=commandEpoch;if(msg.length()<1||msg.length()>190||msg.contains("\n"))return;input.setText("");bubble("YOU",msg,true);
         io.submit(()->{if(epoch!=commandEpoch)return;try{JSONObject r=request("POST","/message",new JSONObject().put("message",msg).put("epoch",epoch));ui.post(()->{syncPlans(r.optJSONObject("plans"));if(r.optBoolean("showCatalog"))showJobs();bubble("VEILFORGE",r.optString("message","No response"),false);});}
           catch(Exception e){ui.post(()->bubble("VEILFORGE","Bot not ready: "+e.getMessage(),false));}});}

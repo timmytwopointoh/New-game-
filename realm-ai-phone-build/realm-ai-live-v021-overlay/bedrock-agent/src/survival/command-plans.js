@@ -103,6 +103,15 @@ export class CommandPlans{
   if(first?.accepted===false)return {...first,plans:this.snapshot()}
   return {accepted:true,queued:true,message:`Started queued commands: ${ordered.length} item${ordered.length===1?'':'s'}. The next starts two seconds after server-confirmed completion; Stop cancels the remaining queue.`,plans:this.snapshot()}
  }
+ // Execute exactly these newly created cards, not older waiting saved cards.
+ activateSubset(ids){
+  this.reconcile();if(this.running!==null||this.batch)throw Error('Another job is already running.')
+  if(!Array.isArray(ids)||ids.length<1||ids.length>5||new Set(ids).size!==ids.length)throw Error('Choose 1-5 unique new cards.')
+  for(const id of ids){const card=this.cards.find(c=>c.id===id);if(!card||card.state!=='waiting'||card.activationLocked)throw Error('Research plan is not waiting.');this.validateChoices(validateDescriptor(card.descriptor))}
+  this.batch={ids:[...ids],index:0};const first=this.launchBatchItem()
+  if(first?.accepted===false)return {...first,plans:this.snapshot()}
+  return {accepted:true,queued:true,message:`Started ${ids.length} researched command(s), with server checks and two-second spacing. Stop cancels the remaining steps.`,plans:this.snapshot()}
+ }
  launchBatchItem(){
   if(!this.batch)return {accepted:false,queued:false,message:'No command batch is active.'}
   if(this.batch.index>=this.batch.ids.length){this.finishBatch('All queued commands processed.');return {accepted:true,queued:false,message:'All queued commands processed.'}}
@@ -129,7 +138,12 @@ export class CommandPlans{
    if(this.controller.connection?.spawned&&elapsed>1000){this.completeActive('Realm connection and spawn were restored.');return}
    if(elapsed>60000)this.failActive('Realm rejoin was not confirmed; remaining commands stayed queued.');return
   }
+  if(descriptor.id==='look'){if(nav?.survey)return;this.completeActive('360-degree survey finished or was interrupted; inspect scan results before acting.');return}
   if(descriptor.id==='follow')return // Continuous follow ends only when Stop is pressed.
+  if(descriptor.id==='collect'){
+   if(nav?.pickup?.state==='confirmed'){this.completeActive(nav.pickup.reason||'Server inventory confirms item pickup.');return}
+   if(['failed','interrupted','unverified'].includes(nav?.pickup?.state)){this.failActive(nav.pickup.reason||'Item pickup not confirmed.');return}
+  }
   if(descriptor.id==='dig'){
    if(nav?.mining?.result==='confirmed'||nav?.state==='confirmed'){this.completeActive(nav.reason||'Server confirmed the block break.');return}
    if(nav?.mining?.result==='cancelled'||['interrupted','stopped','failed'].includes(nav?.state)){this.failActive(nav.reason||'Mining did not complete.');return}

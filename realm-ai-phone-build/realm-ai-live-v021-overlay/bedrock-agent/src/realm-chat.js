@@ -3,6 +3,7 @@
 // Strict owner allowlist; no automatic action from other players or echoed bot messages.
 const PREFIX = /^(?:!ai|@veilforge)(?:\s+|$)/i
 const LOCAL_PING = /^(?:ping|are you there|connection|connection status|are you connected|hello)$/i
+const normalizedName = value => String(value||'').trim().toLocaleLowerCase('en-US')
 
 export class RealmChat {
   constructor(connection, controller, config, log=()=>{}, {cooldownMs=900, clock=()=>Date.now()}={}){
@@ -11,7 +12,7 @@ export class RealmChat {
     this.log=log
     this.clock=clock
     this.cooldownMs=cooldownMs
-    this.owners=new Set(config.ownerPlayerNames||[])
+    this.owners=new Set((config.ownerPlayerNames||[]).map(normalizedName))
     this.last=new Map()
     this.active=true
     this.onMessage=this.onMessage.bind(this)
@@ -25,12 +26,19 @@ export class RealmChat {
     if(!this.active || !packet || typeof packet.message!=='string')return
     const raw=packet.message.trim()
     if(!PREFIX.test(raw))return
-    const source=String(packet.source||'')
-    if(!this.owners.has(source)){
+    const stats=this.connection.chatDiagnostics
+    if(stats)stats.aiRequests++
+    const source=String(packet.source||'').trim()
+    if(!this.owners.has(normalizedName(source))){
+      if(stats){stats.nonOwnerRequests++;stats.lastRejection='sender not in configured owner list'}
       this.log('Ignoring in-world AI command from non-owner.')
       return
     }
-    if(source===this.connection.username || source===this.connection.config?.minecraft?.botPlayerName)return
+    if(normalizedName(source)===normalizedName(this.connection.username)||normalizedName(source)===normalizedName(this.connection.config?.minecraft?.botPlayerName)){
+      if(stats){stats.ignoredSelf++;stats.lastRejection='self-message excluded'}
+      return
+    }
+    if(stats){stats.ownerRequests++;stats.lastCommandAt=this.clock();stats.lastRejection='none'}
     const now=this.clock(), prev=this.last.get(source)||0
     const emergency=/^(stop|stop everything|cancel plan|stop following|stop walking|stop mining)$/i.test(raw.replace(PREFIX,'').trim())
     if(!emergency&&now-prev<this.cooldownMs)return

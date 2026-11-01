@@ -56,7 +56,7 @@ export class Building{
    if(!outside||Math.hypot(hit.x-eye.x,hit.y-eye.y,hit.z-eye.z)>4)continue
    // Only a visible face may be clicked; never interact through another block.
    const distance=Math.hypot(hit.x-eye.x,hit.y-eye.y,hit.z-eye.z),steps=Math.ceil(distance*10);let clear=true
-   for(let i=1;i<steps;i++){const t=i/steps,q={x:Math.floor(eye.x+(hit.x-eye.x)*t),y:Math.floor(eye.y+(hit.y-eye.y)*t),z:Math.floor(eye.z+(hit.z-eye.z)*t)};if(key(q)===key(target))continue;const b=w.block(q);if(!b||b.shapes?.length){clear=false;break}}
+   for(let i=1;i<steps;i++){const t=i/steps,q={x:Math.floor(eye.x+(hit.x-eye.x)*t),y:Math.floor(eye.y+(hit.y-eye.y)*t),z:Math.floor(eye.z+(hit.z-eye.z)*t)};if(key(q)===key(target)||key(q)===key(p))continue;const b=w.block(q);if(!b||b.shapes?.length){clear=false;break}}
    if(clear)return {position:p,face:d.face,click,hit}
   }
   return null
@@ -92,7 +92,7 @@ export class Building{
    if(w.selectedSlot!==slot){return {selectSlot:slot}}
    if(j.equipWaitUntil&&now<j.equipWaitUntil)return {}
    j.pending={target:{...target},slot,count:held.count,heldId:held.network_id,creative:w.gameMode==='creative',version:w.blockVersion(target),sentAt:now,blockConfirmed:false};this.state='waiting-for-placement'
-   return {aim:anchor.hit,placement:{legacy:{legacy_request_id:0,legacy_transactions:null},transaction_type:'item_use',actions:[],transaction_data:{action_type:'click_block',trigger_type:'player_input',block_position:anchor.position,face:anchor.face,hotbar_slot:slot,hand:'main_hand',held_item:held,player_pos:{...w.position,y:w.position.y-1.62},click_pos:anchor.click,block_runtime_id:w.runtimeIdAt(anchor.position)>>>0,client_prediction:'failure',client_cooldown_state:'off'}}}
+   return {aim:anchor.hit,placement:{legacy:{legacy_request_id:0,legacy_transactions:null},transaction_type:'item_use',actions:[],transaction_data:{action_type:'click_block',trigger_type:'player_input',block_position:anchor.position,face:anchor.face,hotbar_slot:slot,hand:'main_hand',held_item:held,player_pos:{...w.position,y:w.position.y-1.62},click_pos:anchor.click,block_runtime_id:w.runtimeIdAt(anchor.position)>>>0,client_prediction:'success',client_cooldown_state:'off'}}}
   }
   if(routeTo&&j.approachAttempts<3){
    const target=targets.find(p=>directions.some(d=>full(w.block({x:p.x+d.x,y:p.y+d.y,z:p.z+d.z}))))

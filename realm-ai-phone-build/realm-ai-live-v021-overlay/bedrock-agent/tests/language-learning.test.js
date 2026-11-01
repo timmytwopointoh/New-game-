@@ -27,7 +27,7 @@ test('merged Live answers glossary questions and learned meanings without execut
  assert(message('command travel to -3 64 -8').accepted)
  assert.equal(s.commandPlans.snapshot().cards[0].command,'walk to -3 64 -8')
  for(const text of ['lol','just kidding','you are stupid','I want you to dig 1 64 2'])message(text)
- assert.deepEqual(calls,['about cobblestone']);assert.equal(s.commandPlans.cards.length,1)
+ assert.deepEqual(calls,['about cobblestone','dig 1 64 2']);assert.equal(s.commandPlans.cards.length,1)
  assert.equal(s.snapshot().language.bundledWords,5000);assert.equal(s.snapshot().language.neuralModel,false)
 })
 test('clarified unfamiliar actions persist across restarts and wait for Activate',()=>temporary(dir=>{

@@ -1,0 +1,284 @@
+REALM AI LIVE — CODEX SOURCE HANDOFF AND UNFINISHED WORK
+Prepared: 2026-10-31 (based on latest available local working tree)
+STATUS: UNRELEASED v0.34 SOURCE CANDIDATE. NOT A COMPILED v0.34 APK.
+
+READ THIS FIRST
+===============
+This is a work-order and factual implementation inventory for Codex. It describes
+what the owner wants, what the source actually contains, and what must still be
+built and tested. Do NOT interpret a passing unit test as a working live Realm
+feature. Do NOT report scheduled chests/axes as physically crafted or placed.
+
+Keep this handoff inside the SOURCE ZIP, but keep the permanent signing key in
+its SEPARATE PRIVATE BACKUP. Never commit, upload, echo, or log the private key,
+password, Microsoft account session, or auth-cache files. The signing material
+must never be incorporated into the public source ZIP or a public repository.
+
+PROJECT IDENTITY / NON-NEGOTIABLES
+=================================
+Application: Realm AI Live / VEILFORGE Realm AI
+Android package: com.veilforge.realmagent.live
+Working source: attached Realm-AI-Live-v0.34-CODEX-SOURCE.zip, project root
+Current Java/Android metadata in that working tree is STILL v0.33:
+  versionCode 200014; versionName 0.33-roam-memory
+When building the next update, choose versionCode > 200014 and update versionName.
+Do not claim a v0.34 APK already exists. The previous signed v0.33 APK is the
+last verified installer in this handoff.
+Signing: existing permanent Live key, alias realm-live-update. Verify public
+certificate SHA256 is exactly:
+  77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22
+The user's separate private signing backup is NOT part of this source archive.
+Preserve Nintendo Switch auth: title 00000000441cc96b; deviceType Nintendo;
+DeviceOS 12; flow live; persistent private/auth/switch login storage.
+Preserve app update mechanism, saved Realm data, chat owner allowlist, immediate
+Stop, gravity/grounded movement, native Bedrock runtime and dependency patches.
+Do NOT overwrite the Live overlay with the legacy standalone app or old main.
+Repository context: timmytwopointoh/New-game-, original Live source at
+realm-ai-phone-build/realm-ai-live-v021-overlay/ (directory name is historical).
+Prefer an isolated work branch; read AGENTS.md and ecosystem rules. Do not
+trigger unrelated GitHub Actions, overwrite other games, or expose credentials.
+
+OWNER'S INTENDED EXPERIENCE
+===========================
+The OWNER issues plain commands from authorized Minecraft Bedrock Realm chat.
+The BOT understands Minecraft rules internally: no owner-facing knowledge menu,
+no Google AI API key, and no repeated manual Activate button for a task.
+Bot makes a bounded plan, walks and jumps physically, sees only blocks visible
+with line of sight, finds resources, uses/crafts tools and chests, and waits
+for authoritative server results. It remembers useful locations per Realm.
+Goal is an autonomous player, NOT a teleporting entity or a fake simulation.
+
+CORE COMMANDS
+=============
+  !ai get wood               Start continuous forestry until an explicit owner
+                             return-home request or emergency stop (unless the
+                             bot must halt on health, death, missing terrain,
+                             disconnection, or safety failure).
+  !ai chop down trees        Alias of above forestry job.
+  !ai stop chopping trees    End harvesting and START a return-home logistics
+                             job; distinct from emergency Stop.
+  !ai return home            Also invoke homeward forestry logistics.
+  !ai stop                   EMERGENCY cancellation of all work NOW; do NOT
+                             silently treat this as 'bring wood home'.
+  !ai roam / !ai explore     Travel toward a ~30-block direction by safe
+                             observed steps and scan around; remember trees.
+  !ai go get wood            Use nearby and remembered tree sightings.
+  !ai find and mine <block>  Locate and mine visible known material, using
+                             server-confirmed breaking and pickup checks.
+Only authorized owner's in-Game chat should launch jobs.
+
+FORESTRY MILESTONES — EXACT REQUESTED WORKFLOW
+==============================================
+Tree 1:
+  - Chop ALL reachable logs belonging to the same tree; don't count 'tree
+    finished' merely from breaking the first log.
+  - Convert confirmed collected logs to correct planks; craft needed sticks,
+    crafting table and SIX wooden axes once enough materials are available.
+    Put axes in hotbar slots 1,2,3,4,5,6; use each until actual durability
+    exhaustion, then move to an available axe. Check inventory and durability
+    rather than forcing a new batch at any predetermined tree number.
+  - For six axes, nominal requirements include 18 planks and 12 sticks;
+    converting six planks to 12 sticks requires 3 stick craft batches in
+    vanilla Minecraft. A table is 4 planks and a chest 8 planks. Acquire
+    enough wood before attempting all crafts; NEVER invent supplies. The
+    helper in code calculates 36 planks total with chest/table/six axes.
+Tree 2:
+  - Harvest entire tree. Craft/place the FIRST chest at/near the cleared
+    tree site only after collision/placement/reach checks; step aside when
+    needed. This FIRST CHEST is the permanent HOME base; never mine it.
+  - If trunk logs remain above reach, navigate and safely climb/jump onto
+    chest (only if collision and server placement confirm this is possible),
+    look up and mine remaining wood. No teleport or unsafe pillar behavior.
+Trees 3 and 4:
+  - Continue felling, gathering drops, depositing wood and spare lumber
+    supplies into the tree-2 home chest; verify transfer was accepted.
+Tree 5:
+  - Place the next chest after finishing the fifth tree.
+Trees 6 and 7:
+  - Deposit gathered wood in the tree-5 chest.
+Repeat checkpoints at trees 8,11,14,17,... and deposit the following two
+  trees into the latest chest. Do not create double chests accidentally.
+When tools are exhausted:
+  - Check the real tool durability and axe inventory; if replacements are
+    needed and crafting is possible, craft more axes and refill slots 1–6.
+    Do NOT blindly renew at tree 5 or tree 15. If unable to craft, report
+    why, use safe bare-hand breaking when allowed, or safely pause.
+  - Minecraft blocks vary in breakability and drops; unsuitable tools/hand
+    can break many blocks but do not necessarily yield drops. Unbreakable
+    blocks such as bedrock cannot be collected in normal survival.
+  - If inventory fills, never throw away valuable wood; deposit, re-route,
+    or pause safely. Track supplies separately from random filler drops.
+
+RETURN HOME / SPECIAL STOP COMMAND — OWNER'S LATEST CHANGE
+==========================================================
+  !ai stop chopping trees   (and !ai return home)
+must NOT merely terminate the job. It should:
+  1) Abort any unfinished mining and STOP searching for new trees.
+  2) Remember the complete harvesting route and server-confirmed chest
+     locations. The tree-2 chest is the HOME ANCHOR: NEVER PICK IT UP.
+  3) Visit later storage chests, preferably reverse order of harvesting.
+  4) Open each chest using real Bedrock container transactions; read the
+     SERVER-REPORTED inventory and withdraw wood, planks, and designated
+     lumber supplies. Preserve tools and necessary supplies.
+  5) When the player's inventory is full, navigate back to tree-2 home,
+     deposit confirmed cargo into a home chest, and return to source. Make
+     as many trips as necessary. If home storage fills, place recovered
+     empty chests beside it (with a one-block gap to avoid double chests)
+     and continue filling the home storage line.
+  6) After server confirms a remote chest is EMPTY, break it carefully,
+     verify the actual item was collected, bring it to home and place it
+     in a line next to home. Do not break any chest still containing items.
+  7) Finish ONLY when the stored wood is consolidated and all recovered
+     chests are safely installed, or report exactly what remains blocked.
+  8) If no tree-2 chest was ever actually placed, report the missing home
+     base and avoid invented chest/container actions. Don't destroy the
+     owner's pre-existing structures. Keep emergency !ai stop working NOW.
+  9) For disconnect, death, stale terrain, or crashes, do not resume unsafe
+     world edits automatically. Persist checkpoints to allow user-directed
+     recovery without duplicating mining or chest operations.
+
+WHAT IS CURRENTLY IN SOURCE (CHECKED)
+====================================
+- v0.33 core: separate phone-hosted Bedrock client, Switch authentication,
+  owner-authorized chat, observed chunk/terrain collision and line-of-sight,
+  walking/follow/jump/short dirt staircase code, mining, basic placement
+  transactions, pickup attempts, defensive mob handling, 360-degree scan,
+  30-block roam/explore, private Realm/dimension-scoped landmark memory,
+  offline Minecraft catalog and natural-language phrase handling.
+  IMPORTANT: several of these are implemented/tested but NOT live-proven.
+- v0.34 candidate (UNBUILT):
+  * forestry-cycle.js: six-slot axe inspection, durability helpers, chest
+    checkpoint schedule 2/5/8/11..., provisioning/material estimates.
+  * resource-jobs.js: continuous forestry scan/mine/pickup loop; short safe
+    scouting segments; previously observed tree revisit; axe-switch attempts;
+    server-check gating; schedules chest checkpoints; return-home control.
+  * forestry-return.js: dedicated return-home intent, home-first logic,
+    reverse checkpoint list, conservative cargo policy helper, spaced chest
+    coordinates and remembered-waypoint route hints.
+  * api.js + survival/controller.js: chat and task integration for the special
+    'stop chopping trees' / 'return home' request separate from !ai stop.
+  * tests/forestry-cycle.test.js + tests/forestry-return.test.js: checks for
+    schedules, tool semantics and non-fabricated return-home logic.
+- The last full local Node test run showed 299 tests passed / 0 failures.
+  This verifies source logic in the local environment only. It is not a new
+  APK compile or live Realm acceptance. Android metadata is still v0.33.
+
+NOT IMPLEMENTED OR NOT YET VERIFIED — DO NOT CLAIM COMPLETE
+==========================================================
+1) REAL CRAFTING: no full server-verified recipe/crafting transaction executor
+   for planks, sticks, crafting table, 6 axes, and chests. A crafting plan is
+   NOT a crafted object. Need open/use table, recipe request/response,
+   inventory updates, and hotbar placement acknowledgments.
+2) REAL CHEST STORAGE: no working container open, contents, item-stack transfer,
+   deposit, withdraw, inventory-full split-trip and reliable close sequence.
+   Current forestry-return.js is mainly a pure *planner* and safety policy.
+3) REAL CHEST CREATION/RELOCATION: checkpoints are recorded as UNCONFIRMED;
+   chests are NOT physically crafted/placed/picked up or arranged in a row.
+   The return job currently stops near the home waypoint and reports storage
+   pending; it does NOT visit and empty remote chests yet.
+4) FULL TREE FELLING: current tree numbering starts when the first observed log
+   in a new trunk cluster is broken, NOT when every log/leaf belonging to that
+   tree has been broken. Need tree-component identification, reaching upper
+   logs, safe climbing, missing/unloaded blocks, leave handling and collection.
+5) AXE DISTRIBUTION: code inspects existing hotbar slots 1–6 and attempts a
+   server-recognized hotbar selection. It does NOT yet craft axes or transfer
+   crafted items into slots 1–6. Wear/durability and item names can vary with
+   version/protocol. Confirm authoritative equipment/durability updates.
+6) PICKUP RELIABILITY: initial collector and inventory-delta checking exist,
+   but in-Game collection across realistic drops and inventory/full stacks
+   needs phone testing; keep break, drop, pickup as separate verified states.
+7) BLOCK PLACEMENT: placement packet code exists; owner previously reported
+   actual placement unfinished in the Realm. Do NOT assume placing a chest,
+   crafting table, dirt stair, wall, floor or shelter works yet.
+8) MINING: real input and server-block update checks exist, but reliability
+   with poor tools, long hardness, high logs, protected blocks, item pickup,
+   and movement reach needs live proof.
+9) RETURN ROUTE: currently only short safe waypoints toward home; does not
+   guarantee a complete route across unloaded chunks/obstacles or reconnects.
+10) HOSTILE DEFENSE, DEATH/RESPAWN: protocol paths exist but need real phone
+    evidence and shouldn't be claimed fully autonomous combat/survival.
+11) AUTO GOOGLE AI: user prefers NO paid Google API key. The offline Minecraft
+    knowledge is primary, and optional key-free lookup should not execute
+    untrusted web instructions as in-game commands.
+12) NO AUTOMATIC FULL RECOVERY after app death/restart. Persist safe progress
+    and offer bounded explicit resume; don't duplicate harvested resources.
+13) v0.34 APK BUILD & INSTALL: not done in the source handoff. Compile,
+    sign with the verified existing key, update version metadata, check byte
+    parity of native/dependency runtime, verify full Android install/update.
+
+HIGH-PRIORITY IMPLEMENTATION ORDER FOR CODEX
+============================================
+A. Build a version-specific Bedrock inventory/container protocol adapter with
+   serializer tests against bundled protocol and packet samples. Observe server
+   snapshots/stack responses, use inventory request IDs correctly, and do not
+   fabricate successful actions from local predictions.
+B. Fix and validate single-block placement (support face, reach, correct held
+   hotbar item, protection, authoritative block update + survival consumption).
+C. Build minimal recipe executor: logs->planks, planks->sticks, crafting table,
+   six wooden axes, chests; test grid/table access and hotbar operations.
+D. Finish entire-tree mining and drop pickup, with durability-aware tool use,
+   genuine safe jump/stance planning and inventory-capacity handling.
+E. Implement chest checkpoint placement/storage, then one real source chest
+   open->withdraw->return->deposit round trip before multi-chest loops.
+F. Implement reverse collection, empty-chest pickup and spaced home-chest line.
+G. Add persistence and idempotent reconciliation for all chest/axe/tree states;
+   ensure emergency Stop always immediately cancels network input.
+H. Re-run complete Node and Android tests; test fresh and update installs; use
+   a disposable Realm area to phone-test tree1, chest2, trees3-5 and a
+   return-home run with both empty and full inventory.
+I. Preserve all source and runtime/security behavior. Only release after
+   signed APK check, reproducible source archive, and honest open-issue list.
+
+ACCEPTANCE / WHAT TO DEMONSTRATE IN THE REAL REALM
+=================================================
+- With a visible tree and empty inventory: bot actually breaks logs, picks up
+  items, crafts a table and tools when resources suffice; inventory increases
+  are real and item names/durability visible to server.
+- It uses actual wooden axe from slots 1–6, switches after breakage and crafts
+  new ones only when depleted and supplies exist.
+- Every trunk is counted only after it is felled (or explicitly partial).
+- A chest is physically placed at tree 2 and later at tree 5; their contents
+  can be read, deposited and withdrawn with server-confirmed transactions.
+- 'stop chopping trees' stops harvesting then brings contents to the first
+  chest, makes multiple trips if full, retrieves only EMPTY later chests,
+  places them beside the first, and fills them safely. The first stays put.
+- '!ai stop' remains instant emergency cancellation (no forced home return).
+- No key re-login, no downgrade or new Android application ID, no APK installed
+  as separate app. Track actual server results and export privacy-safe report.
+
+KEY SOURCE FILES (relative to this ZIP root)
+===========================================
+bedrock-agent/src/survival/resource-jobs.js
+bedrock-agent/src/survival/forestry-cycle.js
+bedrock-agent/src/survival/forestry-return.js
+bedrock-agent/src/survival/internal-skills.js
+bedrock-agent/src/survival/navigation.js
+bedrock-agent/src/survival/mining.js
+bedrock-agent/src/survival/building.js
+bedrock-agent/src/survival/world.js
+bedrock-agent/src/survival/learning-memory.js
+bedrock-agent/src/survival/landmark-memory.js
+bedrock-agent/src/api.js
+bedrock-agent/src/survival/controller.js
+bedrock-agent/src/realm-chat.js
+bedrock-agent/tests/forestry-cycle.test.js
+bedrock-agent/tests/forestry-return.test.js
+android-app/app/build.gradle
+android-app/app/src/main/java/com/veilforge/realmagent/MainActivity.java
+android-app/app/src/main/java/com/veilforge/realmagent/BotService.java
+
+TESTING AND RELEASE SAFETY
+==========================
+From bedrock-agent with installed dependencies:
+  node --test tests/*.test.js
+From android-app after native setup:
+  gradle :app:testDebugUnitTest
+Run actual Java/D8 compilation and APK verification; do not just change the
+AndroidManifest or rename a source ZIP to APK. The APK must contain the latest
+source, original patched native runtime/dependencies, target package, newer
+versionCode and matching signing certificate. The owner can update over v0.33
+without uninstalling only if package/signature/version are compatible.
+
+Private key: separate owner-supplied zip, NOT included here. Do NOT request
+or expose its password in a public issue, pull request, workflow or chat log.
+END OF CODEX HANDOFF

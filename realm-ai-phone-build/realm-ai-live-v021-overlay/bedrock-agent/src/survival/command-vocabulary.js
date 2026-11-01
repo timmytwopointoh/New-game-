@@ -64,7 +64,7 @@ export class CommandVocabulary{
   if(!Object.hasOwn(this[field],key)&&Object.keys(this.actions).length+Object.keys(this.materials).length>=200)throw Error('Vocabulary holds 200 mappings. Forget an old mapping before adding another.')
   const actions={...this.actions},materials={...this.materials};(kind==='action'?actions:materials)[key]=learned
   this.persist(actions,materials);this.actions=actions;this.materials=materials
-  return {accepted:true,queued:false,message:`Learned ${JSON.stringify(key)} as ${kind} ${learned}. It is saved for this Realm; actions still need the command prefix and Activate.`}
+  return {accepted:true,queued:false,message:`Learned ${JSON.stringify(key)} as ${kind} ${learned}. It is saved for this Realm; complete direct instructions can run without Activate, while saved cards remain manual.`}
  }
  forget(kind,word){
   const field=entriesFor(kind),key=normalize(word);if(!field||!Object.hasOwn(this[field],key))throw Error('That learned word is not saved in this Realm.')

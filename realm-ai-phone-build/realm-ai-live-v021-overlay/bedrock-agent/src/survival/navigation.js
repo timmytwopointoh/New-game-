@@ -3,12 +3,15 @@ import {ProgressTracker,miningAssessment,recoveryDecision} from './obstacles.js'
 import {Mining} from './mining.js'
 import {Building} from './building.js'
 import {Climbing,dirtStaircase} from './climbing.js'
+import {nearbyHostiles,safestEscape} from './threat-defense.js'
+import {meleeTarget,meleePacket} from './combat.js'
+import {Pickup,nearestDrop} from './pickup.js'
 const key=p=>`${p.x},${p.y},${p.z}`
 const flatDistance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z)
 export class Navigation{
  constructor(world,report=()=>{}){
   this.world=world;this.report=report;this.client=null;this.timer=null;this.route=null;this.state='idle';this.reason='';this.tick=0n;this.lastInputAt=0;this.lastPoseAt=0;this.listeners=[];this.lastRequestAt=0
-  this.vy=0;this.progress=new ProgressTracker();this.mining=new Mining(world,report);this.building=new Building(world,report);this.climbing=new Climbing(world,report);this.job=null;this.flight=null;this.blocked=new Map();this.recoveryAttempts=0;this.decisions=[];this.pendingFlags=[]
+  this.vy=0;this.progress=new ProgressTracker();this.mining=new Mining(world,report);this.building=new Building(world,report);this.climbing=new Climbing(world,report);this.job=null;this.flight=null;this.blocked=new Map();this.recoveryAttempts=0;this.decisions=[];this.pendingFlags=[];this.survey=null;this.pickup=new Pickup(world);this.defense={lastAttempt:0,lastStrike:0,strikes:0,attackedId:null,state:'idle',reason:'',threat:null}
  }
  note(action,reason){this.decisions.push({action,reason});this.decisions=this.decisions.slice(-6);this.reason=reason;this.report(reason)}
  attach(client){
@@ -40,9 +43,9 @@ export class Navigation{
   if(this.progress.feedback==='progressing'&&this.lastRecoveryPosition&&flatDistance(p.position,this.lastRecoveryPosition)>=1){this.recoveryAttempts=0;this.lastRecoveryPosition=null}
   if(this.job&&!this.flight&&this.progress.stalled(now))this.recover('Server feedback shows no forward progress.',now)
  }
- routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false}={}){
+ routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false,avoidHostiles=true}={}){
   const now=Date.now(),w=this.world
-  const routeWorld={walkable:p=>w.walkable(p)&&!(this.blocked.get(key(p))>now),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b)}
+  const routeWorld={walkable:p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b)}
   const plan=findPath(routeWorld,start,goal,{allowSteps,maxNodes});return plan.ok||!allowDirt||!start?plan:dirtStaircase(w,start,goal,{excluded:p=>this.blocked.get(key(p))>now})||plan
  }
  assignRoute(plan){this.climbing.prepare(plan.stairs);this.route=plan.path.slice(1);this.state=this.route.length?'walking':'arrived-predicted';this.arrivedAt=this.route.length?0:Date.now()}
@@ -123,6 +126,74 @@ export class Navigation{
   if(result.accepted){this.progress.reset();this.job={kind:'build',allowMining:false,gameMode:this.world.gameMode};this.state='building'}
   return result
  }
+ collectNearby(){
+  if(this.job)return {accepted:false,queued:false,message:'Finish or Stop the current job before collecting.'}
+  const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
+  if(!this.world.inventoryKnown)return {accepted:false,queued:false,message:'Waiting for server inventory.'}
+  const drop=nearestDrop(this.world,{range:9});if(!drop)return {accepted:false,queued:false,message:'No identifiable dropped item observed within nine blocks.'}
+  const p={x:Math.floor(drop.position.x),y:Math.floor(drop.position.y),z:Math.floor(drop.position.z)}
+  const goals=[p,{...p,y:p.y+1},{...p,y:p.y-1}].filter(q=>this.world.walkable(q))
+  const route=goals.map(q=>this.routeTo(q,this.world.standPosition(),{allowDirt:false})).find(x=>x.ok)
+  if(!route)return {accepted:false,queued:false,message:'No safe observed walking route to the dropped item.'}
+  const result=this.pickup.begin(drop);if(!result.accepted)return result
+  this.startedAt=Date.now();this.progress.reset();this.job={kind:'solo',goal:route.path.at(-1),pickup:true,allowMining:false};this.assignRoute(route)
+  return result
+ }
+ beginSurvey(now=Date.now()){
+  if(!this.spawned||!this.client||!this.world.position)return {accepted:false,queued:false,message:'Join and spawn before looking around.'}
+  if(this.job||this.survey)return {accepted:false,queued:false,message:'A task or survey is already running. Stop it before scanning.'}
+  if(!this.world.terrainKnown())return {accepted:false,queued:false,message:'Waiting for nearby terrain before scanning.'}
+  this.survey={startYaw:this.yaw||0,step:0,lastAt:now-300,startedAt:now,seen:new Set(),counts:new Map(),nearest:[],state:'turning'}
+  return {accepted:true,queued:true,message:'Starting an actual 360-degree turn in twelve 30-degree steps. Each view checks line-of-sight against received terrain; nothing hidden behind opaque blocks is claimed visible.'}
+ }
+ surveyTick(now){
+  const survey=this.survey
+  if(!survey||now-survey.lastAt<300||this.job)return
+  survey.lastAt=now
+  if(survey.step>=12){
+   this.yaw=survey.startYaw;const names=[...survey.counts].sort((a,b)=>b[1]-a[1]).slice(0,8)
+   this.report('360-degree scan finished: '+(names.map(([name,count])=>name+' x'+count).join(', ')||'no exposed blocks were verifiable')+'. Hidden blocks were excluded; this is observed terrain, not an x-ray.')
+   this.survey=null;return
+  }
+  this.yaw=(survey.startYaw+survey.step*30)%360
+  const sector=this.world.scan(null,{yaw:this.yaw,fov:34,range:8})
+  this.onSurveySector?.(this.yaw,now)
+  for(const v of sector.found){const k=key(v);if(survey.seen.has(k))continue;survey.seen.add(k);survey.counts.set(v.name,(survey.counts.get(v.name)||0)+1)}
+  survey.step++
+ }
+ defend(now){
+  const danger=nearbyHostiles(this.world,7)
+  if(!danger.length){if(this.defense.state!=='idle')this.defense={...this.defense,state:'idle',threat:null,strikes:0,attackedId:null};return}
+  const close=danger[0]
+  this.defense.threat={type:close.type,distance:+close.distance.toFixed(1)}
+  if(close.distance>5.5||this.world.gameMode!=='survival'||this.isRespawning?.()||!this.world.movementVerified||!this.world.grounded())return
+  // Prefer a bounded melee defense only for verified, visible hostile mobs.
+  // A sent transaction is never reported as a confirmed kill.
+  const target=meleeTarget(this.world)
+  if(target&&this.defense.strikes<4){
+   if(now-this.defense.lastStrike<850)return
+   const packet=meleePacket(this.world,target)
+   if(packet){
+    if(this.defense.attackedId!==target.id){this.defense.strikes=0;this.defense.attackedId=target.id}
+    if(this.defense.state!=='fighting'){this.onThreat?.('Hostile mob within melee reach; interrupting work for defense.');this.stop('',false)}
+    try{this.lookAt({x:target.position.x,y:target.position.y+.9,z:target.position.z});this.client.queue('inventory_transaction',packet)
+      this.defense.strikes++;this.defense.lastStrike=now;this.defense.state='fighting';this.defense.reason='Sent melee attack '+this.defense.strikes+'/4 toward observed hostile; hit and kill unverified.';return
+    }catch(e){this.defense.reason='Melee packet rejected locally; falling back to escape.';this.defense.strikes=4}
+   }
+  }
+  if(now-this.defense.lastAttempt<3500)return
+  this.defense.lastAttempt=now
+  const escape=safestEscape(this,danger)
+  if(!escape){this.defense.state='trapped';this.defense.reason='Hostile mob nearby; no safe observed escape route. No teleport or blind digging attempted.';this.report(this.defense.reason);return}
+  this.onThreat?.(`Threat: ${close.type} within ${close.distance.toFixed(1)} blocks. Interrupting work and escaping.`)
+  this.stop('',false)
+  this.survey=null
+  this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.startedAt=now
+  this.job={kind:'solo',goal:escape.goal,allowMining:false,defense:true}
+  this.assignRoute(escape.plan)
+  this.defense.state='evading';this.defense.reason=`Evading ${close.type} along received terrain. No combat packet sent.`
+  this.report(this.defense.reason)
+ }
  lookAt(target){const eye=this.world.position,dx=target.x-eye.x,dy=target.y-eye.y,dz=target.z-eye.z;this.yaw=Math.atan2(-dx,dz)*180/Math.PI;this.pitch=-Math.atan2(dy,Math.hypot(dx,dz))*180/Math.PI}
  obstacleAhead(){
   const a=this.world.standPosition(),goal=this.route?.[0]||this.job?.goal
@@ -188,19 +259,36 @@ export class Navigation{
   const active=!!this.job||this.route!==null||!!this.flight||!!this.mining.job
   if(this.flight)this.vy=this.flight.vy
   this.route=null;this.job=null;this.flight=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
-  this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason)
+  this.pickup.stop();this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason);this.survey=null
   // Send neutral input now, including abort_break, rather than waiting for the next timer tick.
   if(active&&this.spawned&&this.client&&!this.stopping){this.stopping=true;try{this.step(Date.now())}finally{this.stopping=false}}
   if(active&&notify&&reason)this.report(reason)
  }
- step(now=Date.now()){if(this.inStep)return;this.inStep=true;try{this.inputStep(now)}finally{this.inStep=false}}
+ step(now=Date.now()){
+  if(this.inStep)return;this.inStep=true
+  try{this.inputStep(now)}
+  catch(e){
+   if(now-(this.lastStepFailure||0)>5000){this.lastStepFailure=now;this.reportRuntimeError?.(e);this.report('Movement engine encountered an error and stopped the current action. Export a Bug report ZIP for its source location.')}
+   try{this.stop('Movement input failed; no unverified action should continue.',false)}catch{}
+  }finally{this.inStep=false}
+ }
  inputStep(now=Date.now()){
   if(!this.spawned||!this.client||!this.world.position)return
   if(now-this.lastInputAt>500&&this.lastInputAt&&(this.job||this.flight))this.stop('Phone paused; work stopped.')
   this.lastInputAt=now
-  if(this.checkRespawn?.(now))return
+  if(this.checkRespawn?.(now)){
+   // The ordinary movement/physics loop pauses on death, but nearby chunk
+   // requests must not be starved through the respawn handshake.
+   if(this.world.enabled&&this.world.position&&now-(this.lastRespawnTerrainRequest||0)>=1000){
+    this.lastRespawnTerrainRequest=now
+    try{if(!this.world.terrainKnown())this.world.requestNearby(this.client)}catch(e){this.reportRuntimeError?.(e)}
+   }
+   return
+  }
   try{this.finishLoading()}catch(e){this.stop('Loading acknowledgement failed: '+String(e.message||e).slice(0,100));this.detach();return}
   this.checkVerification?.()
+  this.defend(now)
+  this.surveyTick(now)
   const health=this.world.attributes['minecraft:health']
   if(health===0){this.stop('Player died; work stopped.');return}
   if(this.job&&health!==undefined&&health<=6)this.stop('Health is low; work stopped.')
@@ -219,6 +307,10 @@ export class Navigation{
    if(now-this.unknownSince>=5000){this.stop('Terrain/clearance could not be verified after five seconds; disconnecting with saved login preserved.');this.report(this.reason);this.client.disconnect?.(this.reason);this.client.close?.();this.detach();return}
   }else this.unknownSince=null
   this.updateFollow(now)
+  if(this.pickup.target){
+    try{this.pickup.tick(now,this.client)}catch(e){this.pickup.state='failed';this.pickup.reason='Pickup packet could not be sent: '+String(e.message||e).slice(0,90);this.pickup.target=null}
+    if(!this.pickup.target){this.report(this.pickup.reason);if(this.job?.pickup){this.job=null;this.route=null}}
+  }
   let delta={x:0,y:0,z:0},move={x:0,z:0},flags=[]
   let construction=this.route?.length?this.climbing.beforeStep(this.route[0],now):{}
   if(construction.error){this.stop(construction.error);construction={waiting:true}}
@@ -281,7 +373,7 @@ export class Navigation{
   if(mining.actions.length)flags.push('block_action')
   if(mining.transaction)flags.push('item_interact')
   if(this.job?.kind==='mine'&&!this.mining.job){this.state=this.mining.result;this.reason=this.mining.reason;this.job=null}
-  if(this.job?.kind==='solo'&&this.arrivedAt&&now-this.arrivedAt>10000){this.job=null;this.report('Route inputs finished. No further movement queued.')}
+  if(this.job?.kind==='solo'&&this.arrivedAt&&!this.job.pickup&&now-this.arrivedAt>10000){this.job=null;this.report('Route inputs finished. No further movement queued.')}
   try{
    this.client.queue('player_auth_input',{pitch:this.pitch||0,yaw:this.yaw||0,position:{...this.world.position},move_vector:move,head_yaw:this.yaw||0,input_data:[...new Set([...(move.z?['up']:[]),'received_server_data',...flags,...this.pendingFlags.splice(0)])],input_mode:'touch',play_mode:'normal',interaction_model:'crosshair',interact_rotation:{x:this.pitch||0,z:this.yaw||0},tick:++this.tick,delta,transaction:mining.transaction,item_stack_request:null,block_action:mining.actions.length?mining.actions:null,vehicle_rotation:null,predicted_vehicle:null,analogue_move_vector:move,camera_orientation:{x:-Math.sin((this.yaw||0)*Math.PI/180)*Math.cos((this.pitch||0)*Math.PI/180),y:-Math.sin((this.pitch||0)*Math.PI/180),z:Math.cos((this.yaw||0)*Math.PI/180)*Math.cos((this.pitch||0)*Math.PI/180)},raw_move_vector:move})
    for(const a of standaloneActions)this.client.queue('player_action',{runtime_entity_id:BigInt(this.world.entityId),action:a.action,position:a.position,result_position:a.position,face:a.face})
@@ -289,7 +381,8 @@ export class Navigation{
    if(construction.placement)this.client.queue('inventory_transaction',{transaction:construction.placement})
    if(now-this.lastRequestAt>5000){this.lastRequestAt=now;this.world.requestNearby(this.client)}
   }catch(e){this.stop('Input packet failed: '+String(e.message||e).slice(0,100));this.detach()}
+  try{this.onResourceTick?.(now)}catch(e){this.reportRuntimeError?.(e);this.stop('Internal resource task error.');this.onResourceError?.(e)}
  }
- snapshot(){return {state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions}}
- detach(){if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null}
+ snapshot(){return {state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,reason:this.reason,physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
+ detach(){if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
 }

@@ -1,0 +1,21 @@
+# Realm AI Live v0.28 experimental autonomy source — NOT AN APK
+
+The next compatible Android package must keep `com.veilforge.realmagent.live`, retain the existing permanent signing certificate, and use versionCode >= 200009. This source sets 200009. Never sign with the older `com.veilforge.realmagent` certificate or discard Switch login/cache.
+
+## Changes from v0.27 research source
+
+- An optional **Google AI Studio Gemini API key** can be entered via Settings → Internet lookup. The key goes to the phone's token-protected 127.0.0.1 controller and is saved in `private/google-research.json` mode 0600. It is **never included in this ZIP, code, diagnostics, or a GitHub publication**. Google AI Mode's browser window remains a manual fallback; copying Google answers is not necessary when the API is configured. Grounded Gemini requests may incur Google charges, according to the account's pricing.
+- New "Research + do automatically" action and owner commands like `research and do <task>` trigger a bounded background API call. Stop invalidates/aborts it. The engine may run up to five supported, terrain-validated steps through the existing queue, without an additional Activate tap. Existing waiting cards are not launched accidentally.
+- The internet AI's words are only proposed descriptions. No scripts, admin commands, unobserved coordinates, invented inventory, or executable code from web content are accepted. Task-specific permissions restrict edits. Some instructions still cannot be fulfilled: crafting, eating, intelligent harvesting, and complete automatic resource acquisition are unfinished.
+- A bounded hostile-mob melee attempt is implemented for visible, close, named hostile types in confirmed Survival. Players, passive mobs, pets, and creepers are excluded. Fallback evasion uses observed traversable terrain. An attack packet is **NOT** proof of a server-confirmed hit or kill; real combat has not yet been tested.
+- The world records observable dropped-item entities. `collect drops` approaches one nearby drop, issues a pickup packet only within physical reach, and confirms success solely from an **authoritative inventory count increase**, not from an entity disappearing. The exact live Bedrock packet acceptance is unverified. Item collection is not a complete gathering/mining loop.
+- Placement support ray-tracing no longer rejects its clicked solid support face. Valid placement sends the correct success prediction flag; it still waits for authoritative block and inventory changes. This is a plausible source-level repair, **not confirmation** that placement/building work in a live Realm.
+- Adds a command catalog item for `collect drops`, private research endpoints, Android Settings controls and 17 focused offline tests.
+
+## Build and verification
+
+- Tested: `node --test tests/realm-v028-autonomy.test.js tests/research-action-plan.test.js tests/web-dictionary.test.js tests/threat-defense-live-preview.test.js` — 17 passed, 0 failed.
+- Broad Node suite attempted. Twelve test files cannot load because `prismarine-nbt`, `prismarine-registry`, `minecraft-data`, `bedrock-protocol` and supporting dependencies are not installed in this isolated runtime. These missing-dependency failures are **not validated regressions**. Android/Gradle tests cannot run without the Android SDK and toolchain.
+- **No v0.28 APK was compiled, installed, signed or tested in a physical Realm.** Do not rename this ZIP to `.apk` or uninstall working v0.26.
+- Future build needs the canonical patched ARM64 runtime and installed Node modules, Android SDK 35/build-tools 35, Gradle 8.9/JDK 17, the verified v0.26 compiled APK or a fully prepared Gradle workspace, and the original permanent Live signing keystore (certificate `77694D4F0068469CB6F7FD951F84946A4BBB833AE2702DC2F87B9E0C2ADABF22`). Keep passwords/keystore OFF GitHub. Check version/package/certificate after signing.
+- Before claiming the milestone done, run in a real test Realm: Google task without manual copy; one hostile attack and damage observation; simple dirt block placement confirmed by update + consumption; one drop collected with increased inventory; stop during research/combat/pickup. Export an offline diagnostic ZIP on failures.

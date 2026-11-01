@@ -12,6 +12,14 @@ class FakeConnection extends EventEmitter {
 }
 const config={localAPI:{token:'e'.repeat(64)},ownerPlayerNames:['OwnerTag']}
 function make(){const c=new FakeConnection(),srv=createApi(config,c,()=>{});const rc=new RealmChat(c,srv.controller,config,()=>{},{cooldownMs:900,clock:(()=>{let n=2000;return ()=>{n+=1000;return n}})()});return {c,srv,rc}}
+test('case-insensitive exact Xbox owner matching and diagnostic counters remain owner only',()=>{
+ const {c,srv,rc}=make();c.chatDiagnostics={textPackets:0,playerChatPackets:0,aiRequests:0,ownerRequests:0,nonOwnerRequests:0,ignoredSelf:0,replyAttempts:0,replyQueued:0,replyFailures:0};
+ c.emit('player-chat',{source:'ownertag',message:'!ai ping'});
+ assert.equal(c.reply.length,1);assert.equal(c.chatDiagnostics.ownerRequests,1);
+ c.emit('player-chat',{source:'ownertag2',message:'!ai ping'});
+ assert.equal(c.reply.length,1);assert.equal(c.chatDiagnostics.nonOwnerRequests,1);
+ rc.stop();srv.close();
+})
 test('in-Realm chat allows the exact owner and blocks guests, bot echoes and near-name impersonation',()=>{
  const {c,srv,rc}=make();
  c.emit('player-chat',{source:'Stranger',message:'!ai plan gather 2 oak logs'});

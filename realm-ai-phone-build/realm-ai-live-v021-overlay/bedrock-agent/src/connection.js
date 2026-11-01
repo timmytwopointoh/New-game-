@@ -21,10 +21,11 @@ export class Connection extends EventEmitter {
     this.config=config;this.log=log
     this.client=null;this.connected=false;this.joined=false;this.spawned=false
     this.survival=new SurvivalController(this,{plansDirectory:path.join(root,'private','command-plans'),scope:this.config.minecraft.realmId?String(this.config.minecraft.realmId):null});this.lastRejoinAt=0
+    this.chatDiagnostics={textPackets:0,playerChatPackets:0,aiRequests:0,ownerRequests:0,nonOwnerRequests:0,ignoredSelf:0,replyAttempts:0,replyQueued:0,replyFailures:0,lastPacketAt:null,lastCommandAt:null,lastRejection:'none',lastReplyError:'none'}
     this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
   }
   diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
-  status(){return {support:this.trace?.summary(),diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
+  status(){return {chatDiagnostics:{...this.chatDiagnostics},support:this.trace?.summary(),diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
       packWaitSeconds:this.packRequestAt&&!this.spawned?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,
       packHeadersReceived:this.packHeadersReceived,packChunksReceived:this.packChunksReceived,authState:this.authState,packStatus:this.packStatus,lastCommand:this.lastCommand,recentMessages:this.recentMessages.slice(-8),authChallenge:this.authChallenge}}
   reconnect(){
@@ -66,6 +67,7 @@ export class Connection extends EventEmitter {
           this.survival.commandPlans.setScope(String(selected.id))
           this.survival.learning.setScope(String(selected.id))
           this.survival.commandVocabulary.setScope(String(selected.id))
+          this.survival.landmarks.setScope(String(selected.id))
           this.authChallenge=null;this.lastPhase='realm-selected';this.authState='realm-selected'
           this.log('Realm selected; attempting game connection.')
           return selected
@@ -151,7 +153,8 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       if(this.username!==m.botPlayerName)this.log('WARNING: gamertag in config differs from player identity. Server pack will not recognize commands; fix config and regenerate pack.')
     })
     client.on('text',p=>{
-      const message=String(p.message||'').slice(0,240),source=String(p.source_name||'').slice(0,80)
+      this.chatDiagnostics.textPackets++;this.chatDiagnostics.lastPacketAt=Date.now()
+      const message=String(p.message||'').slice(0,240),source=String(p.source_name||'').trim().slice(0,80)
       if(!message)return
       this.recentMessages.push({source,message})
       if(this.recentMessages.length>24)this.recentMessages.shift()
@@ -162,6 +165,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
         this.log('World bridge: '+message)
       }
       else if(source){
+        this.chatDiagnostics.playerChatPackets++
         this.log('Chat '+source+': '+message)
         // Ordinary server text is only an input event; never trust the displayed source
         // for authorization until the command router compares exact owner names.
@@ -228,8 +232,9 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
     this.client.queue('text',{type:'chat',needs_translation:false,source_name:this.username||this.config.minecraft.botPlayerName,xuid:'',platform_chat_id:'',filtered_message:'',message:safe})
   }
   say(message){
-    try{this.queueChat('[VF AI] '+String(message).slice(0,185));return true}
-    catch(err){this.lastError=String(err.message||err);return false}
+    this.chatDiagnostics.replyAttempts++
+    try{this.queueChat('[VF AI] '+String(message).slice(0,185));this.chatDiagnostics.replyQueued++;return true}
+    catch(err){this.chatDiagnostics.replyFailures++;this.chatDiagnostics.lastReplyError=String(err.message||err).slice(0,100);this.lastError=String(err.message||err);return false}
   }
   close(){try{this.survival.close();this.packHandler?.cleanup();this.client?.close()}catch(_){} }
 }
