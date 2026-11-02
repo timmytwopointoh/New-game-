@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
         LinearLayout account=new LinearLayout(this);body.addView(account,space(8));account.addView(button("Start bot",this::startBot),new LinearLayout.LayoutParams(0,d(56),1));Button signIn=button("Microsoft sign-in code",this::showAuth);signIn.setContentDescription("Show Microsoft sign-in code");account.addView(signIn,new LinearLayout.LayoutParams(0,d(56),1));
         body.addView(sectionLabel("SESSION"),space(18));LinearLayout modes=new LinearLayout(this);body.addView(modes,space(7));modes.addView(button("Survival",()->modeAction("survival")),new LinearLayout.LayoutParams(0,d(48),1));modes.addView(button("Creative",()->modeAction("creative")),new LinearLayout.LayoutParams(0,d(48),1));
         body.addView(button("Saved plans",this::showPlans),space(7));body.addView(button("Stop bot service",this::stopServiceNow),space(7));
-        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("Bug reports",this::showBugReports),space(7));body.addView(button("Connection diagnostics",this::showDiagnostics),space(7));body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
+        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("All-in-one Bug Report ZIP",this::showBugReports),space(7));body.addView(button("Connection diagnostics",this::showDiagnostics),space(7));body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
         body.addView(txt("Share only a file you choose in Android's picker.",12,MUTED),space(14));Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(5));
         AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();settingsDialog=dialog;dialog.setOnDismissListener(x->{if(settingsDialog==dialog)settingsDialog=null;for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
     }
@@ -143,9 +143,23 @@ public class MainActivity extends Activity {
         io.submit(()->{try{JSONObject report=request("GET","/diagnostics",null);ui.post(()->{if(revision!=serviceRevision)return;markControllerAvailable();rememberDiagnostics(report);text[0]=diagnosticText(savedDiagnostics(),"live",true);if(dialog.isShowing())dialog.setMessage(text[0]);});}catch(Exception e){ui.post(()->{text[0]=diagnosticText(savedDiagnostics(),savedDiagnostics()==null?"app-only":"saved",false);if(dialog.isShowing())dialog.setMessage(text[0]);});}});
     }
     static final int REQUEST_EXPORT_REPORT=41022;
-    void showBugReports(){new AlertDialog.Builder(this).setTitle("Bug reports and updates").setMessage(SupportBundle.issues(this)).setPositiveButton("Export ZIP",(d,w)->exportBugReport()).setNegativeButton("Close",null).show();}
-    void exportBugReport(){Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/zip");save.putExtra(Intent.EXTRA_TITLE,"Realm-AI-Live-bug-report-"+System.currentTimeMillis()+".zip");try{startActivityForResult(save,REQUEST_EXPORT_REPORT);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open a save location for the report.",false);}}
-    void writeBugReport(Uri destination){supportIo.submit(()->{try(OutputStream out=getContentResolver().openOutputStream(destination)){if(out==null)throw new IOException();SupportBundle.export(this,out);SupportLog.record(this,"report_exported");ui.post(()->bubble("Progress","Bug report ZIP saved. Attach it to the development chat so its recorded issues can be investigated.",false));}catch(Exception e){SupportLog.record(this,"report_failed");ui.post(()->bubble("Progress","Could not save the bug report. Choose a writable location and try again.",false));}});}
+    void showBugReports(){new AlertDialog.Builder(this).setTitle("All-in-one Bug Report ZIP").setMessage(SupportBundle.issues(this)).setPositiveButton("Export ONE ZIP",(d,w)->exportBugReport()).setNegativeButton("Close",null).show();}
+    void exportBugReport(){Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/zip");save.putExtra(Intent.EXTRA_TITLE,"Realm-AI-Live-ALL-DIAGNOSTICS-"+System.currentTimeMillis()+".zip");try{startActivityForResult(save,REQUEST_EXPORT_REPORT);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open a save location for the report.",false);}}
+    void writeBugReport(Uri destination){supportIo.submit(()->{
+        JSONObject live=null;
+        // Read-only, authenticated local snapshot. Unreachable or crashed bot
+        // must never prevent exporting already recorded diagnostic evidence.
+        if(serviceStarted&&token!=null&&!token.isEmpty())try{live=request("GET","/support/snapshot",null);}catch(Exception ignored){}
+        try(OutputStream out=getContentResolver().openOutputStream(destination)){
+            if(out==null)throw new IOException();
+            SupportBundle.export(this,out,live);
+            SupportLog.record(this,"report_exported");
+            ui.post(()->bubble("Progress","One complete diagnostic ZIP saved. Upload ONLY this ZIP here. It includes startup, connection, packs, loading, runtime, and safe learning/work evidence.",false));
+        }catch(Exception e){
+            SupportLog.record(this,"report_failed");
+            ui.post(()->bubble("Progress","Could not save the unified ZIP. Choose a writable location and try again.",false));
+        }
+    });}
     static final int REQUEST_PICK_SHARED_FILE=41021;
     void pickFileToShare(){Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);picker.setType("*/*");try{startActivityForResult(picker,REQUEST_PICK_SHARED_FILE);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open its file picker.",false);}}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);
