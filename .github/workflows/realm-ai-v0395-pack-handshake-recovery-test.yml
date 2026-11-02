@@ -1,4 +1,5 @@
 name: Realm AI v0.39.5 Pack Handshake Recovery - TEST APK
+# CI retry: update legacy CDN status expectations to match the modern protocol.
 on:
   push:
     branches: [fix/realm-ai-pack-handshake-watchdog-v0395-20261102]
