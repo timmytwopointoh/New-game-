@@ -74,7 +74,7 @@ export function selectRequiredRealmPacks(packet) {
   const required=advertised.filter(({meta,origin})=>
     origin==='behavior'||
     (distinguishable?(meta?.addon_pack===true||meta?.has_scripts===true):
-      packet?.must_accept===true)
+      packet?.must_accept!==false)
   )
   return {
     required,advertised:advertised.length,
