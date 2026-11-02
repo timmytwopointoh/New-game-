@@ -80,7 +80,7 @@ test('nine-pack modded Realm requests all nine with no unmarked pack skipped',t=
  const status=h.states.at(-1)
  assert.equal(status.packAdvertisedCount,9)
  assert.equal(status.packSkippedOptional,0)
- assert.equal(status.packServerCount,9)
+ assert.equal(status.serverPackCount,9)
  assert.equal(status.packSelectionPolicy,'all-advertised')
  assert.equal(status.neededMB,92)
  assert.equal(h.handler.snapshot().requested,9)
