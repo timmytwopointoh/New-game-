@@ -22,7 +22,7 @@ public class ConsoleMenuTest {
  @After public void destroy(){if(a.commandDeck!=null)a.commandDeck.dialog.dismiss();a.onDestroy();}
  View find(View v,String label){if(v instanceof TextView&&label.equals(((TextView)v).getText().toString()))return v;if(v instanceof ViewGroup)for(int i=0;i<((ViewGroup)v).getChildCount();i++){View r=find(((ViewGroup)v).getChildAt(i),label);if(r!=null)return r;}return null;}
  @Test public void fullCatalogCanBeBrowsedOfflineAndEveryCategoryRetainsItsCommands(){
-  a.showJobs();assertTrue(a.commandDeck.dialog.isShowing());assertTrue(a.catalog.length()>=28);assertEquals(a.catalog.length(),a.commandDeck.shown.size());Set<String> all=new HashSet<>();for(int category=1;category<=5;category++){a.commandDeck.rail.select(category);for(JSONObject d:a.commandDeck.shown){all.add(d.optString("id"));assertEquals(category,CommandDeck.category(d));}}
+  a.showJobs();assertTrue(a.commandDeck.dialog.isShowing());assertTrue(a.catalog.length()>=28);assertTrue(a.commandDeck.shown.size()<a.catalog.length());assertTrue(a.commandDeck.shown.size()>=5);Set<String> all=new HashSet<>();for(int category=1;category<=4;category++){a.commandDeck.rail.select(category);for(JSONObject d:a.commandDeck.shown){all.add(d.optString("id"));assertEquals(category,CommandDeck.category(d));}}a.commandDeck.rail.select(5);assertEquals(a.catalog.length(),a.commandDeck.shown.size());for(JSONObject d:a.commandDeck.shown)all.add(d.optString("id"));
   assertEquals(a.catalog.length(),all.size());assertTrue(a.calls.isEmpty());
  }
  @Test public void touchKeyboardAndAccessibilityOnlyBrowseNeverSaveOrActivate(){
