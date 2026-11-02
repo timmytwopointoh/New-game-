@@ -48,14 +48,14 @@
         "label": "Width (+X)",
         "type": "integer",
         "min": 1,
-        "max": 6
+        "max": 32
       },
       {
         "id": "height",
         "label": "Height",
         "type": "integer",
         "min": 1,
-        "max": 3
+        "max": 32
       },
       {
         "id": "x",
@@ -79,7 +79,7 @@
         "max": 30000000
       }
     ],
-    "note": "Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+    "note": "Describe dimensions and material in your own words. Up to 256 blocks per verified build job; larger work needs stages and supplies."
   },
   {
     "id": "build_floor",
@@ -96,14 +96,14 @@
         "label": "Width (+X)",
         "type": "integer",
         "min": 1,
-        "max": 6
+        "max": 32
       },
       {
         "id": "height",
         "label": "Length (+Z)",
         "type": "integer",
         "min": 1,
-        "max": 6
+        "max": 32
       },
       {
         "id": "x",
@@ -127,7 +127,7 @@
         "max": 30000000
       }
     ],
-    "note": "Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+    "note": "Describe dimensions and material in your own words. Up to 256 blocks per verified build job; larger work needs stages and supplies."
   },
   {
     "id": "build_shelter",
@@ -161,7 +161,7 @@
         "max": 30000000
       }
     ],
-    "note": "Requires 96 matching blocks in hotbar stacks. Clear 5\u00d75 footprint: floor at origin Y, 3-block walls, roof and 2-block doorway at the front (-Z), centered on +X. Needs safe observed access and server-confirmed approach movement. Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
+    "note": "Requires 96 matching blocks in hotbar stacks. Clear 5×5 footprint: floor at origin Y, 3-block walls, roof and 2-block doorway at the front (-Z), centered on +X. Needs safe observed access and server-confirmed approach movement. Survival consumes matching hotbar supplies; Creative uses a known held block without consuming it. The entire footprint must be known air; existing blocks are preserved. Origin is the first block; width runs +X and floor length +Z. Stop retains confirmed placements."
   },
   {
     "id": "follow",
@@ -401,14 +401,14 @@
         "label": "Width",
         "type": "integer",
         "min": 1,
-        "max": 12
+        "max": 64
       },
       {
         "id": "height",
         "label": "Height / length",
         "type": "integer",
         "min": 1,
-        "max": 12
+        "max": 64
       }
     ],
     "note": "Preview only. No placement or crafting."
@@ -428,14 +428,14 @@
         "label": "Width",
         "type": "integer",
         "min": 1,
-        "max": 12
+        "max": 64
       },
       {
         "id": "height",
         "label": "Height / length",
         "type": "integer",
         "min": 1,
-        "max": 12
+        "max": 64
       }
     ],
     "note": "Preview only. No placement or crafting."
@@ -451,7 +451,7 @@
         "type": "block"
       }
     ],
-    "note": "Fixed 5 \u00d7 5 shelter, 3-block walls, floor, roof and 2-block doorway. Preview only."
+    "note": "Fixed 5 × 5 shelter, 3-block walls, floor, roof and 2-block doorway. Preview only."
   },
   {
     "id": "status",
@@ -525,12 +525,12 @@
   },
   {
     "id": "strip_mine",
-    "label": "Strip mine \u2014 prepare and dig",
+    "label": "Strip mine — prepare and dig",
     "template": "strip mine {rows} rows at {depth}",
     "fields": [
       {
         "id": "rows",
-        "label": "30-block tunnel legs (1\u201316)",
+        "label": "30-block tunnel legs (1–16)",
         "type": "integer",
         "min": 1,
         "max": 16
@@ -556,7 +556,7 @@
         "type": "block"
       }
     ],
-    "note": "15\u00d715 area, two blocks deep. May continue into adjacent areas until 640 requested items; then deposit at the second tree site. Does not count occupied slots as full stacks. Keeps all real drops."
+    "note": "15×15 area, two blocks deep. May continue into adjacent areas until 640 requested items; then deposit at the second tree site. Does not count occupied slots as full stacks. Keeps all real drops."
   },
   {
     "id": "gather",
