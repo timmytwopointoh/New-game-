@@ -35,7 +35,13 @@ final class ConnectionDiagnostics {
             result.put("packDownloadRequestIssued",Boolean.TRUE.equals(input.opt("packDownloadRequestIssued")));
             for(String field:new String[]{"packResponseCount","packServerCount","packCdnCount","packAdvertisedCount","packSkippedOptional","packLegacyBehaviorCount"})
                 result.put(field,nonnegative(input,field));
-            for(String field:new String[]{"packHeaders","packChunks","recordedAt"})result.put(field,nonnegative(input,field));
+            for(String field:new String[]{"packHeaders","packChunks","recordedAt","loadingElapsedSeconds","loadingNoProgressSeconds","loadingUniqueSignals","loadingRepeatedSignals","loadingReceivedBytes","loadingGraceSeconds","loadingRecoveryAttempts","loadingNextRetrySeconds"})result.put(field,nonnegative(input,field));
+            result.put("loadingActive",Boolean.TRUE.equals(input.opt("loadingActive")));
+            result.put("loadingRecoveryScheduled",Boolean.TRUE.equals(input.opt("loadingRecoveryScheduled")));
+            String loadingStage=input.optString("loadingStage","unknown");
+            result.put("loadingStage",Arrays.asList("connecting","pack-request","pack-storage","pack-retry","downloading-packs","pack-cached","packs-ready","world-started","world-data","bedrock-login-accepted").contains(loadingStage)?loadingStage:"unknown");
+            String lastSignal=input.optString("loadingLastSignal","none");
+            result.put("loadingLastSignal",Arrays.asList("none","resource_packs_info","resource_pack_data_info","resource_pack_chunk_data","resource_pack_stack","start_game","level_chunk","sub_chunk","play_status").contains(lastSignal)?lastSignal:"none");
             result.put("failure",failure(input.optJSONObject("failure")));result.put("lastFailure",failure(input.optJSONObject("lastFailure")));
             String state=input.optString("processState");result.put("processState",Arrays.asList("running","stopped","crashed").contains(state)?state:"unknown");
             JSONObject identity=input.optJSONObject("clientIdentity");if(identity!=null&&((identity.optString("platform").equals("Android")&&identity.optInt("deviceOS")==1)||(identity.optString("platform").equals("Nintendo")&&identity.optInt("deviceOS")==12))&&identity.optString("flow").equals("live"))result.put("clientIdentity",new JSONObject().put("platform",identity.optString("platform")).put("deviceOS",identity.optInt("deviceOS")).put("flow","live"));
