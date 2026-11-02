@@ -47,16 +47,17 @@ export function explainPackFailure(error){
 }
 
 /**
- * "Download Required & Join" is not the same as "Download Everything".
- * Minecraft 1.26.x advertises resource packs in texture_packs, including
- * resources belonging to add-ons. Older schemas may also supply behavior_packs.
- * must_accept applies to the whole stack, NOT to each resource pack.
+ * Download the whole server-advertised pack stack for a modded Realm.
  *
- * Per-pack addon_pack/has_scripts identify the assets that need to accompany
- * the server's add-ons. A non-add-on asset is optional only when that
- * distinction is actually present; if no pack has any identifying flags and
- * the server requires the stack, fail safe by accepting the whole stack.
- * Never infer pack requirements from an add-on's displayed name.
+ * Bedrock pack metadata is not a reliable per-pack opt-out mechanism:
+ * must_accept refers to server policy for the stack, and addon_pack /
+ * has_scripts are descriptive flags, not a proof that an unmarked resource
+ * is unnecessary. v0.40.0 selected eight of nine packs in a failing Realm.
+ *
+ * Keep the server-advertised order and both modern texture_packs and legacy
+ * behavior_packs. Never download anything not explicitly advertised by the
+ * connected server. All bytes still pass the normal limits, cache checks,
+ * per-chunk hashes and private storage rules. No add-on scripts are run.
  */
 export function selectRequiredRealmPacks(packet) {
   const texture=packet?.texture_packs??[], behavior=packet?.behavior_packs??[]
@@ -66,21 +67,12 @@ export function selectRequiredRealmPacks(packet) {
     ...behavior.map(meta=>({meta,origin:'behavior'}))
   ]
   if(advertised.length>MAX_PACKS)throw Error('Too many Realm packs requested')
-  const addonMarked=advertised.some(({meta})=>meta?.addon_pack===true||meta?.has_scripts===true)
-  // A legacy behavior_packs entry denotes an add-on dependency even if its
-  // metadata lacks the new texture-pack addon_pack flag.
-  const behaviorPresent=behavior.length>0
-  const distinguishable=addonMarked||behaviorPresent
-  const required=advertised.filter(({meta,origin})=>
-    origin==='behavior'||
-    (distinguishable?(meta?.addon_pack===true||meta?.has_scripts===true):
-      packet?.must_accept!==false)
-  )
   return {
-    required,advertised:advertised.length,
-    skippedOptional:advertised.length-required.length,
-    policy:distinguishable?'addon-required':'server-required-fallback',
-    selectionKnown:distinguishable,
+    required:advertised,
+    advertised:advertised.length,
+    skippedOptional:0,
+    policy:'all-advertised',
+    selectionKnown:true,
     legacyBehaviorCount:behavior.length
   }
 }
@@ -106,7 +98,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false
-  let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='server-required-fallback',legacyBehaviorCount=0
+  let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='all-advertised',legacyBehaviorCount=0
   let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0
   const cdnQueue=[]
   // The bundled client schedules radius after 500ms, not after downloads.
@@ -278,7 +270,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       }
       if(!packs.size){
         response('have_all_packs')
-        emit('packs-none',skippedOptional?'Required-only downloads selected; skipped '+skippedOptional+' optional pack(s)':'No Realm download packs required',0,0)
+        emit('packs-none','No Realm packs advertised; continuing join',0,0)
       }else{
         fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
         let required=0
@@ -292,10 +284,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
           }
         }
         const storage=checkStorage(cacheDir,required)
-        emit('pack-storage','Required Realm add-on packs need '+storage.neededMB+' MB; '+storage.freeMB+' MB available; '+skippedOptional+' optional skipped',0,packs.size,storage)
+        emit('pack-storage','Full Realm pack stack needs '+storage.neededMB+' MB; '+storage.freeMB+' MB available',0,packs.size,storage)
         // Send exactly one request: duplicates can reset server transfer state.
         response('send_packs',[...packs.keys()])
-        emit('pack-request','Download Required & Join: requested '+packs.size+' pack(s); '+skippedOptional+' optional skipped; awaiting server response',0,packs.size)
+        emit('pack-request','Download Full Realm Pack Stack: requested '+packs.size+'/'+advertisedPacks+' advertised pack(s); awaiting server response',0,packs.size)
         if(pendingServerPacks()){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of packs.values())if(p.cdn)cdnQueue.push(p)
         pumpCdn()
@@ -360,7 +352,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
-  return {snapshot:()=>({policy:'required-only',selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'all-advertised',selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
