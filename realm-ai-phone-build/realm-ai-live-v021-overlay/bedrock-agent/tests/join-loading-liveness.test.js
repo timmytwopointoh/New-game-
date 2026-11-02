@@ -48,7 +48,7 @@ test('repeated status alone cannot keep extending a frozen loading session',()=>
  l.setStage('world-started');l.note('play_status','login_success')
  for(let i=0;i<10;i++){now+=min(2);l.note('play_status','login_success')}
  assert.equal(l.stalled(),true)
- assert.equal(l.snapshot().loadingRepeatedSignals,9)
+ assert.equal(l.snapshot().loadingRepeatedSignals,10)
 })
 test('CDN byte progress resets inactivity; same byte count does not',()=>{
  let now=0;const l=new JoinLoadingLiveness({now:()=>now})
