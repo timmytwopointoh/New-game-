@@ -33,5 +33,10 @@ jobs:
           node --check src/survival/building.js
           node --check src/survival/navigation.js
           node --check src/survival/command-plans.js
+          node --check src/connection.js
+          node --check src/join-loading-liveness.js
+          node --check src/realm-packs.js
 
 # Re-run after updating legacy bounds assertions and dictionary action confirmation.
+
+# Regression: 17-minute loading grace, actual chunk progress, bounded rejoin and compatible learning features.
