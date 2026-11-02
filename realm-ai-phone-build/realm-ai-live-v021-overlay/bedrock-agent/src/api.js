@@ -93,14 +93,14 @@ export function createApi(config,connection,log=console.log){
      pendingInterpretation={kind:'word-sense',word,choices,scope,createdAt:Date.now()}
      info+=' '+explainChoices(word,choices)
    }
-   if(result.action&&result.verified&&result.sourceCount>=2&&choices.length===1){
+   if(result.action&&result.verified&&result.sourceCount>=2&&choices.length<=1){
     try{
      survival.commandVocabulary.teach('action',word,result.action)
      info+=` Saved as ${result.action}.`
      if(original){const direct=runAutonomous(original,survival);info+=` ${direct?.message||'Instruction was not executable.'}`}
     }catch(e){info+=' Meaning not saved: '+String(e.message||e).slice(0,90)}
    }
-   if(result.action&&result.sourceCount<2&&choices.length===1){
+   if(result.action&&result.sourceCount<2&&choices.length<=1){
     if(original){pendingInterpretation={kind:'action',word,input:original,scope,learn:true,target:result.action,createdAt:Date.now()};info+=` One source suggests ${result.action}. Did you mean that Minecraft action? Reply yes to remember it and prepare the request, or no. Nothing has started.`}
     else info+=' One external source is not enough to learn an executable action automatically.'
    }
