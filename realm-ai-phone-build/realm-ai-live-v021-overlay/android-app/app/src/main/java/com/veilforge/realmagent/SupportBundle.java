@@ -47,14 +47,58 @@ final class SupportBundle {
  }
  static String issues(Context c){try{JSONObject t=trace(read(new File(c.getFilesDir(),"nodejs-project/private/diagnostics/runtime.json"),524288));JSONArray list=t.getJSONArray("issues");StringBuilder s=new StringBuilder("Collected symptoms: "+list.length()+" types. These are diagnostic clues, not proven causes.\n\n");for(int i=0;i<list.length();i++){JSONObject e=list.getJSONObject(i);s.append(e.getString("code")).append(" ×").append(e.getLong("count")).append('\n');}return s.append("\nExport bug report saves a ZIP with recent movement, mode, terrain, death/respawn and update events. It works with the bot stopped. Attach the ZIP in the development chat. Nothing is uploaded automatically; this does not give a remote connection to the phone.").toString();}catch(Exception e){return "No readable runtime report yet. You can still export app diagnostics with the bot stopped.";}}
  static void entry(ZipOutputStream zip,String name,String data)throws IOException{zip.putNextEntry(new ZipEntry(name));zip.write(data.getBytes(StandardCharsets.UTF_8));zip.closeEntry();}
- static void export(Context c,OutputStream destination)throws Exception{
+ static void export(Context c,OutputStream destination)throws Exception{export(c,destination,null);}
+ static void export(Context c,OutputStream destination,JSONObject liveSource)throws Exception{
   JSONObject metadata=new JSONObject().put("schema",1).put("package",c.getPackageName()).put("versionCode",c.getPackageManager().getPackageInfo(c.getPackageName(),0).versionCode).put("androidSdk",Build.VERSION.SDK_INT).put("createdAt",System.currentTimeMillis()).put("remoteAccess",false);
   JSONArray appEvents=new JSONArray(),source=read(SupportLog.file(c),131072).optJSONArray("events");if(source!=null)for(int i=Math.max(0,source.length()-200);i<source.length();i++){JSONObject e=source.optJSONObject(i);if(e!=null&&SupportLog.CODES.contains(e.optString("code")))appEvents.put(new JSONObject().put("at",count(e,"at")).put("code",e.optString("code")));}
+  JSONObject live=SupportSnapshot.sanitize(liveSource);
+  File nodeDir=new File(c.getFilesDir(),"nodejs-project/private/diagnostics");
+  File connectionFile=new File(nodeDir,"connection.json"),runtimeFile=new File(nodeDir,"runtime.json");
+  JSONObject connection=ConnectionDiagnostics.sanitize(read(connectionFile,32768));
+  JSONObject runtime=trace(read(runtimeFile,524288));
+  JSONObject summary=new JSONObject()
+    .put("schema",1).put("createdAt",System.currentTimeMillis())
+    .put("reportFormat","one-zip").put("includesLiveSnapshot",liveSource!=null)
+    .put("appVersionCode",metadata.optInt("versionCode"))
+    .put("connectionPhase",connection.optString("phase","unknown"))
+    .put("lastFailure",connection.optJSONObject("lastFailure"))
+    .put("loadingStage",connection.optString("loadingStage","unknown"))
+    .put("loadingNoProgressSeconds",count(connection,"loadingNoProgressSeconds"))
+    .put("resourcePackStage",connection.optString("packStage","unknown"))
+    .put("resourcePackReason",connection.optString("packReason","none"))
+    .put("packHeaders",count(connection,"packHeaders"))
+    .put("packChunks",count(connection,"packChunks"))
+    .put("runtimeEvents",runtime.optJSONArray("events").length())
+    .put("runtimeIssueTypes",runtime.optJSONArray("issues").length())
+    .put("savedAuthentication","kept");
+  JSONObject manifest=new JSONObject().put("schema",1).put("createdAt",System.currentTimeMillis())
+    .put("oneZipContainsAllAvailableDiagnostics",true)
+    .put("liveSnapshotCaptured",liveSource!=null)
+    .put("connectionReportFilePresent",connectionFile.isFile())
+    .put("runtimeReportFilePresent",runtimeFile.isFile())
+    .put("sections",new JSONArray(Arrays.asList("README.txt","summary.json","manifest.json","app.json","app-events.json","startup.json","connection.json","runtime.json","live-snapshot.json","pack-loading.json","work-learning.json")));
+  JSONObject pack=new JSONObject().put("schema",1)
+    .put("status",connection.optString("packStage","unknown"))
+    .put("reason",connection.optString("packReason","none"));
+  for(String k:new String[]{"packHeaders","packChunks","packAdvertisedCount","packSkippedOptional","packServerCount","packCdnCount","packResponseCount","loadingElapsedSeconds","loadingNoProgressSeconds","loadingUniqueSignals","loadingRepeatedSignals","loadingReceivedBytes","loadingRecoveryAttempts","loadingNextRetrySeconds"})pack.put(k,count(connection,k));
+  for(String k:new String[]{"packCacheStatusIssued","packDownloadRequestIssued","loadingRecoveryScheduled","loadingActive"})pack.put(k,connection.optBoolean(k));
+  pack.put("packSelectionPolicy",connection.optString("packSelectionPolicy","unknown"))
+    .put("loadingStage",connection.optString("loadingStage","unknown"))
+    .put("loadingLastSignal",connection.optString("loadingLastSignal","none"));
+  JSONObject work=new JSONObject().put("schema",1)
+    .put("task",live.optJSONObject("task"))
+    .put("learning",live.optJSONObject("learning"))
+    .put("world",live.optJSONObject("world"))
+    .put("liveAvailable",liveSource!=null);
   try(ZipOutputStream zip=new ZipOutputStream(destination)){
-   entry(zip,"README.txt","Realm AI Live diagnostic bundle. Recent app events, packet counts and sampled game state; includes in-game coordinates. No passwords, Microsoft codes/tokens, account names, chat, private signing material, raw packets or arbitrary phone files. Collected issues are symptoms. Attach this ZIP to the development chat; it is not uploaded automatically. Fixes arrive as signed APK updates and Android asks before installation.\n");
+   entry(zip,"README.txt","Realm AI Live ALL-IN-ONE diagnostic ZIP. Open summary.json first, then pack-loading.json, connection.json, runtime.json and work-learning.json. Includes game coordinates if known. Live snapshot is optional and never required for export. No passwords, Microsoft codes/tokens, account names, chat, private signing material, raw packets, raw URLs or arbitrary phone files. No automatic upload or remote access.\n");
+   entry(zip,"summary.json",summary.toString(2));entry(zip,"manifest.json",manifest.toString(2));
    entry(zip,"app.json",metadata.toString(2));entry(zip,"app-events.json",new JSONObject().put("events",appEvents).toString(2));entry(zip,"startup.json",startup(c).toString(2));
-   entry(zip,"connection.json",ConnectionDiagnostics.sanitize(read(new File(c.getFilesDir(),"nodejs-project/private/diagnostics/connection.json"),32768)).toString(2));
-   entry(zip,"runtime.json",trace(read(new File(c.getFilesDir(),"nodejs-project/private/diagnostics/runtime.json"),524288)).toString(2));
+   entry(zip,"connection.json",connection.toString(2));
+   entry(zip,"runtime.json",runtime.toString(2));
+   entry(zip,"live-snapshot.json",live.toString(2));
+   entry(zip,"pack-loading.json",pack.toString(2));
+   entry(zip,"work-learning.json",work.toString(2));
   }
  }
 }
