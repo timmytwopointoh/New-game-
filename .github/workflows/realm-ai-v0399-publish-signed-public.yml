@@ -1,0 +1,84 @@
+name: Publish original-key signed Realm AI Live v0.39.9 - extended loading
+on:
+  push:
+    branches: [feature/realm-ai-language-building-autonomy-20261102]
+    paths: ['.github/workflows/realm-ai-v0399-publish-signed-public.yml']
+permissions:
+  contents: write
+jobs:
+  publish-verified-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download previously public original-key signed Live APK as binary source
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 4 --retry-all-errors \
+            'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-v0398-required-packs/Realm-AI-Live-v0.39.8-UPDATE.apk' \
+            -o Realm-AI-Live-v0.39.8-UPDATE.apk
+          echo '19fbc2331152660bae0790157f482e815c83ead10d173fb2df2735f260ce76c2  Realm-AI-Live-v0.39.8-UPDATE.apk' | sha256sum -c -
+      - name: Reconstruct exact PRIVATELY SIGNED v0.39.9 from public APK bytes - no key used
+        run: |
+          set -euo pipefail
+          python3 realm-ai-phone-build/reconstruct_signed_v0398_public.py \
+            Realm-AI-Live-v0.39.8-UPDATE.apk \
+            Realm-AI-Live-v0.39.9-UPDATE.apk \
+            realm-ai-phone-build/v0399-public-recipe-parts/part-0{1,2,3,4,5,6,7}.b64
+          echo 'bbb1d1389c363f0548e0d0b732dc98be9c18afae9247b6547a12b84f194d0893  Realm-AI-Live-v0.39.9-UPDATE.apk' | sha256sum -c -
+      - name: Verify original signer, package, 17-minute loader, and language code
+        run: |
+          set -euo pipefail
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          if [ ! -x "$TOOLS/apksigner" ]; then "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'; fi
+          "$TOOLS/apksigner" verify --verbose --print-certs Realm-AI-Live-v0.39.9-UPDATE.apk > /tmp/realm-cert.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: 77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' /tmp/realm-cert.txt
+          "$TOOLS/zipalign" -c -P 16 4 Realm-AI-Live-v0.39.9-UPDATE.apk
+          "$TOOLS/aapt" dump badging Realm-AI-Live-v0.39.9-UPDATE.apk | tee /tmp/realm-package.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200028'" /tmp/realm-package.txt
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('Realm-AI-Live-v0.39.9-UPDATE.apk') as z:
+            assert z.testzip() is None
+            files=set(z.namelist())
+            for f in [
+              'lib/arm64-v8a/libnode.so',
+              'lib/arm64-v8a/libveilforge_bridge.so',
+              'assets/nodejs-project/src/realm-packs.js',
+              'assets/nodejs-project/src/join-loading-liveness.js',
+              'assets/nodejs-project/src/definition-comprehension.js',
+              'assets/nodejs-project/src/survival/building.js',
+              'assets/nodejs-project/node_modules/bedrock-protocol/src/client/realmJoin503Retry.js'
+            ]: assert f in files,f
+            assert b'17*60*1000' in z.read('assets/nodejs-project/src/realm-packs.js')
+            assert b'loadingRecoveryAttempts' in z.read('assets/nodejs-project/src/connection.js')
+            assert b'exploreDefinition' in z.read('assets/nodejs-project/src/api.js')
+          print('PASS original signer, installed package identity, loading recovery, improved vocabulary, runtime, and ZIP integrity')
+          PY
+          sha256sum Realm-AI-Live-v0.39.9-UPDATE.apk > SHA256SUMS.txt
+      - name: Publish public GitHub release with exact signed APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<'TXT'
+          Realm AI Live v0.39.9 - long-load recovery + language and flexible building improvements.
+          Installs OVER com.veilforge.realmagent.live with versionCode 200028 and its ORIGINAL permanent signing certificate.
+          Retains the saved Microsoft/Nintendo Switch authentication, Realm-scoped learning, private packs, and settings.
+          Allows a 17-minute no-progress loading window. Unique pack and world chunks extend the wait; repeated identical signals do not.
+          When confirmed stalled, attempts at most two bounded reconnects with saved authentication.
+          Language updates support multiple word definitions, bounded definition research, owner clarification and flexible 8x8 / 5x10 build dimensions.
+          The GitHub workflow did NOT receive or use the private signing key or password; it verified the public exact signed APK SHA.
+          No successful live Realm connection is claimed until tested on the user's phone. Full Android process-crash relaunch is not implemented.
+          Do not uninstall the existing Realm AI Live or clear its application data.
+          TXT
+          gh release create realm-ai-live-v0399-long-load-learning \
+            Realm-AI-Live-v0.39.9-UPDATE.apk SHA256SUMS.txt \
+            --repo "${{ github.repository }}" \
+            --target "$GITHUB_SHA" \
+            --title 'Realm AI Live v0.39.9 - 17m loading & learning - signed update' \
+            --notes-file release-notes.txt
