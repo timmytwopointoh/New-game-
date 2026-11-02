@@ -37,6 +37,17 @@ export function parseDescriptor(raw){
  if(/^(?:mine|get) [a-z_ ]+$/i.test(s)&&!/^mine dirt$/i.test(s))s=s.replace(/^(?:mine|get) /i,'gather 64 ')
  if(/^biome$/i.test(s))s='surroundings'
  if(/^mine$/i.test(s))throw Error('Choose Commands → Dig one block, or enter “dig X Y Z”. A target and known held item are required.')
+  // Natural rectangular builds are normalized into the same server-verified
+  // executable descriptor. Never invent a placement origin or material.
+  const natural=s.match(/^build\s+(?:(?:a|an)\s+)?(?:(floor|wall)\s+(\d+)\s*(?:x|by)\s*(\d+)|(\d+)\s*(?:x|by)\s*(\d+)\s+(floor|wall))(?:\s+(?:with|of|using|made of)\s+([a-z_ ]+?))?(?:\s+at\s+(-?\d+)[, ]+(-?\d+)[, ]+(-?\d+))?$/i)
+  if(natural){
+    const shape=(natural[1]||natural[6]).toLowerCase(),width=Number(natural[2]||natural[4]),height=Number(natural[3]||natural[5]),material=natural[7]?.trim()
+    if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||width>32||height>32)throw Error('A single build stage supports positive dimensions up to 32; larger builds must be staged.')
+    if(width*height>256)throw Error('This '+width+'×'+height+' build needs '+width*height+' blocks. Build stages are limited to 256 server-confirmed placements; split it into adjoining sections.')
+    if(!material)throw Error('Which Minecraft block material should I use for the '+width+'×'+height+' '+shape+'?')
+    if(natural[8]===undefined)throw Error('Where should the '+width+'×'+height+' '+shape+' begin? Give an origin, for example: build '+shape+' '+width+' by '+height+' with '+material+' at X Y Z. I did not assume a build position.')
+    return validateDescriptor({id:'build_'+shape,values:{width,height,material,x:natural[8],y:natural[9],z:natural[10]}})
+  }
  const aliases={status:'survival status',position:'survival status',look:'look around','view on':'look around',help:'help survival',commands:'help survival',rejoin:'rejoin realm','show plan':'plan status'};s=aliases[s.toLowerCase()]||s
  for(const def of commandCatalog){
   const names=[];let pattern=def.template.replace(/[.*+?^$()|[\]\\]/g,'\\$&').replace(/\{(\w+)\}/g,(_,k)=>{names.push(k);const f=def.fields.find(x=>x.id===k);return f.type==='integer'||f.type==='slot'?'(-?\\d+)':'(.+?)'})
@@ -62,7 +73,7 @@ export function parseCommandRequest(raw){
  if(/\bblocks?\s+of\s+slabs?\b/.test(phrasing)&&!height&&!stacks)return {clarification:'“Blocks of slabs” could mean slab items or a structure made from slabs. Which do you mean? I have not saved or started anything.'}
  try{return {descriptor:parseDescriptor(s)}}catch(e){
   const measure=s.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:-|\s)?blocks?\s+(?:high|tall)\b/i)
-  if(measure){const n=Number(measure[1])||NUMBER_WORDS[measure[1].toLowerCase()];return {clarification:`I interpreted that number as a height of ${n} blocks, not stacks. To prepare a build, use Commands → Build wall and fill in width, height, material, and origin. Executable walls are limited to 3 blocks high; wall previews can be up to 12 blocks high and do not place blocks.`}}
+  if(measure){const n=Number(measure[1])||NUMBER_WORDS[measure[1].toLowerCase()];return {clarification:`I interpreted that number as a height of ${n} blocks, not stacks. To prepare a build, use Commands → Build wall and fill in width, height, material, and origin. Executable rectangular stages support up to 256 verified placements and require a clear footprint, known materials, and an origin. Slab blocks still cannot be placed by this builder.`}}
   throw e
  }
 }
