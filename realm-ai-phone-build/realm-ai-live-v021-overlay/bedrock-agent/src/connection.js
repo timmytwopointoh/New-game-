@@ -110,7 +110,7 @@ export class Connection extends EventEmitter {
         this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0
       }
       this.packStatus=state
-      if(state.stage!=='pack-error')this.lastPhase=state.stage
+      this.lastPhase=state.stage
       if(state.stage==='pack-error'){
         this.authState='error'
         this.lastError='Resource pack ('+(state.reason||'failed')+'): '+state.message
