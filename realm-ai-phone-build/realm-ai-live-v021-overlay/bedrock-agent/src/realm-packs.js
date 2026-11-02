@@ -73,6 +73,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // Strict Realms reject this gameplay packet during the pack exchange.
   const originalQueue=client.queue,originalWrite=client.write
   let gameStarted=false,pendingRadius=null,radiusDeferred=0,cacheQueued=false
+  let cacheStatusIssued=false,downloadRequestIssued=false,packResponseCount=0
   const canRequestTerrain=()=>finished&&gameStarted&&!failed
   function gate(method,queued=false){return function(name,packet,...args){
     if(queued&&name==='client_cache_status'){if(cacheQueued)return;cacheQueued=true}
@@ -86,7 +87,16 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   client.on('start_game',onStartGame)
   // createClient installs its own info listener asynchronously after this one.
   // Announce cache policy FIRST and suppress the later queued duplicate.
-  const cacheFirst=()=>{if(gatedQueue)client.queue('client_cache_status',{enabled:false})}
+  const cacheFirst=()=>{
+    if(!gatedQueue||cacheQueued)return
+    // Send cache policy *before* a direct Downloading response, not in a
+    // queued batch which might be flushed after the response.
+    cacheQueued=true
+    try{
+      client.write('client_cache_status',{enabled:false})
+      cacheStatusIssued=true
+    }catch(error){cacheQueued=false;throw error}
+  }
   client.prependListener('resource_packs_info',cacheFirst)
   const cancellation = new AbortController()
   // CDN downloads have their own idle timeout; only watch missing server chunk data.
@@ -105,13 +115,14 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,...extra})
   }
 
   const response = (name,ids=[]) => {
-    // Keep the response behind the library's queued client_cache_status.
-    const send=typeof client.queue==='function'?client.queue:client.write
-    send.call(client,'resource_pack_client_response', {
+    // Pre-0.39.5 used an immediate write and did reach the world. Do not
+    // buffer critical handshake acknowledgements in the 20ms gameplay queue.
+    // cacheFirst already sent client_cache_status in a separate packet.
+    client.write('resource_pack_client_response', {
       response_status:name,
       // Modern Bedrock's response text differs from Prismarine enum labels.
       // Variant tags are 0..3; wire response strings are lowercase (Gophertunnel reference).
@@ -119,6 +130,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
       resourcepackids:ids
     })
+    packResponseCount++
+    if(name==='send_packs')downloadRequestIssued=true
   }
   const failure = err => {
     if(failed) return
@@ -242,9 +255,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         }
         const storage=checkStorage(cacheDir,required)
         emit('pack-storage','Realm packs need '+storage.neededMB+' MB; '+storage.freeMB+' MB available with '+storage.reserveMB+' MB reserved',0,packs.size,storage)
-        emit('pack-request','Requesting '+packs.size+' required Realm pack(s)',0,packs.size)
         // Send exactly one request: duplicates can reset server transfer state.
         response('send_packs',[...packs.keys()])
+        emit('pack-request','Request sent for '+packs.size+' required Realm pack(s); awaiting server headers',0,packs.size)
         if(pendingServerPacks()){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of packs.values())if(p.cdn)cdnQueue.push(p)
         pumpCdn()
