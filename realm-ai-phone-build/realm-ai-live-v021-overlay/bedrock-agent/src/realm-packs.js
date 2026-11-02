@@ -34,6 +34,8 @@ export function explainPackFailure(error){
  const code=String(error?.code||'')
  const raw=String(error?.message||'')
  if(code==='ENOSPC'||code==='EDQUOT'||code==='PACK_STORAGE_LOW')return {reason:'storage-low',retryable:false,message:'Not enough free phone storage for Realm packs. Free space, then rejoin; existing verified packs are kept.'}
+ if(code==='PACK_NO_SERVER_DATA')return {reason:'server-no-pack-data',retryable:false,message:'The Realm sent no resource-pack headers after the request. This is a stalled server handshake, not a storage or slow-download problem. Stop and manually rejoin.'}
+ if(code==='PACK_SERVER_STALLED')return {reason:'server-pack-stalled',retryable:false,message:'The Realm stopped sending resource-pack chunks before finishing. The download is incomplete; stop and manually rejoin.'}
  if(code==='PACK_STORAGE_UNKNOWN')return {reason:'storage-unknown',retryable:false,message:'Cannot determine available phone storage for the required Realm packs.'}
  if(code==='PACK_LIMIT'||/exceeds (?:the )?(?:permitted|download|pack)|too many Realm packs/i.test(raw))return {reason:'pack-size-limit',retryable:false,message:'This Realm requires more pack data than the bounded download limit allows.'}
  if(code==='CDN_HTTP_401'||code==='CDN_HTTP_403')return {reason:'cdn-access-denied',retryable:false,message:'Realm pack CDN access was denied or its download link expired. Rejoin to request a fresh URL.'}
@@ -58,11 +60,14 @@ async function hashStoredFile(filename){
  for await(const part of fs.createReadStream(filename))hash.update(part)
  return hash.digest('hex')
 }
-export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadCdn=downloadRealmCdn,checkStorage=checkPackStorage} = {}) {
+export function attachRealmPacks(client, cacheDir, report = () => {},
+  {downloadCdn=downloadRealmCdn,checkStorage=checkPackStorage,
+   serverPackIdleMs=60000,heartbeatMs=2000,now=()=>Date.now()} = {}) {
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false
   let totalBytes=0, skippedOptional=0, activeCdn=0
+  let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0
   const cdnQueue=[]
   // The bundled client schedules radius after 500ms, not after downloads.
   // Strict Realms reject this gameplay packet during the pack exchange.
@@ -84,6 +89,19 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
   const cacheFirst=()=>{if(gatedQueue)client.queue('client_cache_status',{enabled:false})}
   client.prependListener('resource_packs_info',cacheFirst)
   const cancellation = new AbortController()
+  // CDN downloads have their own idle timeout; only watch missing server chunk data.
+  const pendingServerPacks=()=>[...packs.values()].some(p=>!p.cdn&&!p.ready)
+  const packWatchdog=setInterval(()=>{
+    if(failed||finished||!serverWaitSince||!pendingServerPacks())return
+    if(now()-lastServerPacketAt<serverPackIdleMs)return
+    const code=serverPackHeaders===0?'PACK_NO_SERVER_DATA':'PACK_SERVER_STALLED'
+    const error=Error(code==='PACK_NO_SERVER_DATA'?
+      'The Realm did not send any pack headers after the request.':
+      'The Realm stopped sending pack chunks before completing the downloads.')
+    error.code=code
+    failure(error)
+  },heartbeatMs)
+  packWatchdog.unref?.()
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
@@ -97,14 +115,15 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
       response_status:name,
       // Modern Bedrock's response text differs from Prismarine enum labels.
       // Variant tags are 0..3; wire response strings are lowercase (Gophertunnel reference).
-      response_status_name:({refused:'cancel',send_packs:'downloading',
-        have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'})[name]||name,
+      response_status_name:({refused:'Cancel',send_packs:'Downloading',
+        have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
       resourcepackids:ids
     })
   }
   const failure = err => {
     if(failed) return
     failed=true
+    clearInterval(packWatchdog)
     cancellation.abort()
     const detail=explainPackFailure(err)
     for(const p of packs.values()){
@@ -224,7 +243,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
         const storage=checkStorage(cacheDir,required)
         emit('pack-storage','Realm packs need '+storage.neededMB+' MB; '+storage.freeMB+' MB available with '+storage.reserveMB+' MB reserved',0,packs.size,storage)
         emit('pack-request','Requesting '+packs.size+' required Realm pack(s)',0,packs.size)
+        // Send exactly one request: duplicates can reset server transfer state.
         response('send_packs',[...packs.keys()])
+        if(pendingServerPacks()){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of packs.values())if(p.cdn)cdnQueue.push(p)
         pumpCdn()
       }
@@ -239,6 +260,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
       // CDN owns readiness, cache and temporary files for this pack.
       // Server chunk metadata must never advance or cancel that transfer.
       if(p.cdn)return
+      serverPackHeaders++;lastServerPacketAt=now()
       if(p.requested||p.ready)throw Error('Duplicate pack data header')
       p.chunkSize=safeNumber(packet.max_chunk_size,MAX_CHUNK_BYTES)
       p.count=safeNumber(packet.chunk_count,65536)
@@ -272,6 +294,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
       if(BigInt(packet.progress??p.written)!==BigInt(p.written))throw Error('Realm pack offset mismatch')
       fs.writeSync(p.fd,data,0,data.length,p.written);p.hashContext.update(data)
       p.written+=data.length;p.next++
+      serverPackChunks++;lastServerPacketAt=now()
       if(p.next<p.count){client.write('resource_pack_chunk_request',{pack_id:p.uuid,chunk_index:p.next});return}
       fs.closeSync(p.fd);p.fd=undefined
       if(p.written!==p.expected || p.hashContext.digest('hex')!==p.hash){const e=Error('Downloaded Realm pack failed SHA-256 verification');e.code='PACK_INTEGRITY_FAILED';throw e}
@@ -285,11 +308,12 @@ export function attachRealmPacks(client, cacheDir, report = () => {}, {downloadC
     if([...packs.values()].every(p=>p.ready)) complete()
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
-  client.once('close',()=>cancellation.abort())
+  client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
   return {snapshot:()=>({policy:'required-only',radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
+    clearInterval(packWatchdog)
     cancellation.abort()
     for(const p of packs.values()){
       if(p.fd!==undefined){try{fs.closeSync(p.fd)}catch{}}
