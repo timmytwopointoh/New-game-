@@ -14,6 +14,7 @@ import {researchRouting,unsupportedResearchResponse} from './agent-lookup-router
 import {offlineMinecraftResponse,offlineKnowledgeStats} from './offline-minecraft-brain.js'
 import {blockCatalog,entityCatalog,blockReference,blockAllTools,mobReference} from './knowledge/bedrock-reference.js'
 import {OpenDictionaryResearch} from './web-dictionary.js'
+import {exploreDefinition,identifyReference,explainChoices} from './definition-comprehension.js'
 import {extractGooglePlan} from './research-action-plan.js'
 import {AutomaticGoogleResearch,PrivateResearchKey,validateObservedPlan} from './automatic-google-research.js'
 export function authorized(received,expected){
@@ -78,20 +79,28 @@ export function createApi(config,connection,log=console.log){
   if(researching)return {accepted:false,queued:false,message:'A word lookup is already running.'}
   if(!dictionaryResearch.configured())return {accepted:false,queued:false,message:'The phone HTTPS dictionary lookup is unavailable; offline vocabulary still works.'}
   researching=true
-  dictionaryResearch.study(word).then(result=>{
+  dictionaryResearch.study(word).then(async result=>{
+   if(epoch!==researchEpoch||survival!==connection.survival||scope!==survival?.commandVocabulary?.scope)return
+   const tree=await exploreDefinition(word,result,{lookupOnline:w=>dictionaryResearch.study(w),maxTerms:12,maxDepth:2,maxOnline:2})
    if(epoch!==researchEpoch||survival!==connection.survival||scope!==survival?.commandVocabulary?.scope)return
    let definitionSaved=false
-   try{definitionSaved=survival.commandVocabulary.rememberDefinition?.(word,result)===true}catch{}
+   try{definitionSaved=survival.commandVocabulary.rememberDefinition?.(word,{...result,relatedTerms:tree.terms})===true}catch{}
    let info=`Online dictionary: ${word} means ${result.definition} (${result.source}). ${result.reason}`
    if(definitionSaved)info+=' Definitions saved for this Realm; a definition alone is not an executable action.'
-   if(result.action&&result.verified&&result.sourceCount>=2){
+   if(tree.terms.length)info+=' Explored '+tree.terms.length+' related definition words (maximum two layers), such as '+tree.terms.slice(0,5).map(x=>x.word).join(', ')+'.'
+   const choices=tree.choices
+   if(choices.length>1){
+     pendingInterpretation={kind:'word-sense',word,choices,scope,createdAt:Date.now()}
+     info+=' '+explainChoices(word,choices)
+   }
+   if(result.action&&result.verified&&result.sourceCount>=2&&choices.length===1){
     try{
      survival.commandVocabulary.teach('action',word,result.action)
      info+=` Saved as ${result.action}.`
      if(original){const direct=runAutonomous(original,survival);info+=` ${direct?.message||'Instruction was not executable.'}`}
     }catch(e){info+=' Meaning not saved: '+String(e.message||e).slice(0,90)}
    }
-   if(result.action&&result.sourceCount<2){
+   if(result.action&&result.sourceCount<2&&choices.length===1){
     if(original){pendingInterpretation={kind:'action',word,input:original,scope,learn:true,target:result.action,createdAt:Date.now()};info+=` One source suggests ${result.action}. Did you mean that Minecraft action? Reply yes to remember it and prepare the request, or no. Nothing has started.`}
     else info+=' One external source is not enough to learn an executable action automatically.'
    }
@@ -118,7 +127,7 @@ export function createApi(config,connection,log=console.log){
      if(/^command(?:\s|$)/i.test(text))pendingInterpretation=null
      if(pendingInterpretation&&Date.now()-pendingInterpretation.createdAt>60000)pendingInterpretation=null
      const yes=/^(?:yes|yes that's right|yes that is right|correct|that's right|that is right)$/i.test(text),no=/^(?:no|nope|not that|wrong|cancel)$/i.test(text)
-     const isChoice=pendingInterpretation?.choices&&( /^[1-4]$/.test(text)||pendingInterpretation.choices.some(x=>x.toLowerCase().replace(/_/g,' ')===text.toLowerCase().trim().replace(/_/g,' ')))
+     const isChoice=pendingInterpretation?.kind==='word-sense'||(pendingInterpretation?.choices&&( /^[1-4]$/.test(text)||pendingInterpretation.choices.some(x=>typeof x==='string'&&x.toLowerCase().replace(/_/g,' ')===text.toLowerCase().trim().replace(/_/g,' '))))
      if(pendingInterpretation&&!yes&&!no&&!/^command\s/i.test(text)&&!isChoice&&!(pendingInterpretation.kind==='unknown-action'&&resolveActionTarget(text)))pendingInterpretation=null
      if(isForestryReturnCommand(text)){pendingInterpretation=null;output=connection.survival.handle(text.replace(/^command\s+/i,''))}
      else if(/^(?:offline knowledge|minecraft knowledge|knowledge status)$/i.test(text))output=offlineMinecraftResponse(text,{world:connection.survival?.world})
@@ -132,6 +141,27 @@ export function createApi(config,connection,log=console.log){
      }
      else if((m=text.match(/^(?:by )?([a-z][a-z -]{1,35}?) (?:means|i mean|means to) (.{2,80})[.!]?$/i))&&resolveActionTarget(m[2])){pendingInterpretation=null;output=vocabulary.teach('action',m[1].trim(),resolveActionTarget(m[2]))}
      else if(/^command\s+vocabulary$/i.test(text)){const v=vocabulary.list();output={accepted:true,queued:false,message:`Learned action words: ${Object.keys(v.actions).join(', ')||'none'}. Learned material words: ${Object.keys(v.materials).join(', ')||'none'}. Forget one with “command forget action <word>” or “command forget material <word>”. Teach one with “command teach action <word> = dig” or “command teach material <word> = stone”.`,vocabulary:v}}
+     else if(pendingInterpretation?.kind==='word-sense'){
+       const pending=pendingInterpretation
+       if(no){pendingInterpretation=null;output={accepted:true,queued:false,message:'Okay, no meaning was selected. Nothing executed.'}}
+       else if(pending.scope!==vocabulary?.scope){pendingInterpretation=null;output={accepted:false,queued:false,message:'Realm changed; discarded the old definition question.'}}
+       else {
+         const sense=identifyReference(text,pending.choices)
+         if(sense){
+           pendingInterpretation=null
+           const result={definition:sense.definition,source:'owner-selected dictionary sense',sourceCount:1,meanings:[{partOfSpeech:sense.partOfSpeech,definitions:[sense.definition]}]}
+           let saved=false
+           try{saved=vocabulary.rememberDefinition(pending.word,result)}catch{}
+           output={accepted:true,queued:false,message:'I will use “'+pending.word+'” in the sense: '+sense.definition+(saved?' Saved for this Realm.':' I could not persist the definition.')+' I have not executed a command. Give me a complete instruction when ready.'}
+         }else{
+           output={accepted:false,queued:false,message:'I still cannot tell which definition your reference means. '+explainChoices(pending.word,pending.choices)}
+           const ref=text.match(/^(?:it means |like |the one about |i mean )?([a-z][a-z-]{1,29})$/i)
+           if(ref&&dictionaryResearch.configured())dictionaryResearch.study(ref[1].toLowerCase()).then(related=>{
+             if(pendingInterpretation===pending)connection.survival?.report('Reference “'+ref[1]+'”: '+related.definition+'. Please choose the numbered sense. No task started.')
+           }).catch(()=>{})
+         }
+       }
+     }
      else if(pendingInterpretation?.kind==='unknown-action'&&pendingInterpretation.scope!==vocabulary?.scope){pendingInterpretation=null;output={accepted:false,queued:false,message:'Realm changed. Nothing was learned or queued.',plans:plans.snapshot()}}
      else if(pendingInterpretation?.kind==='unknown-action'){
       const target=resolveActionTarget(text)
