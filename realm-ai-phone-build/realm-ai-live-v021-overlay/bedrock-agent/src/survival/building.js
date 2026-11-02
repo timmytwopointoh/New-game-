@@ -1,5 +1,12 @@
 // Server-confirmed placement only. Survival consumes inventory; Creative uses the server-reported held block without inventing an inventory item.
 import {placementEvidence} from './obstacles.js'
+const MAX_SINGLE_BUILD_BLOCKS=256
+export function buildSize({shape,width=1,height=1}){
+ if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||width>32||height>32)throw Error('Use positive whole dimensions up to 32 blocks per side for a single build stage.')
+ const count=shape==='block'?1:shape==='wall'||shape==='floor'?width*height:shape==='shelter'?96:0
+ if(!count||count>MAX_SINGLE_BUILD_BLOCKS)throw Error('This structure needs '+count+' blocks. A verified build stage is limited to '+MAX_SINGLE_BUILD_BLOCKS+' placements; split larger designs into adjacent stages and resupply between stages.')
+ return count
+}
 const key=p=>`${p.x},${p.y},${p.z}`
 const air=b=>b&&['air','cave_air','void_air'].includes(b.name)
 const directions=[{x:0,y:-1,z:0,face:1},{x:0,y:1,z:0,face:0},{x:0,y:0,z:1,face:2},{x:0,y:0,z:-1,face:3},{x:1,y:0,z:0,face:4},{x:-1,y:0,z:0,face:5}]
@@ -13,7 +20,7 @@ const full=b=>b?.shapes?.some(q=>q.every((v,i)=>v===(i<3?0:1)))
 const functional=/water|lava|sand$|gravel|powder|anvil|concrete_powder|chest|barrel|furnace|crafting_table|hopper|dispenser|dropper|bedrock|portal|command|structure|spawner|tnt|piston|observer|redstone|bed$|shulker|beehive|bee_nest|farmland|path$|ice|glass|leaves|copper_chest/
 export function blueprint({shape,origin,width=1,height=1,material}){
  if(!['block','wall','floor','shelter'].includes(shape)||![origin?.x,origin?.y,origin?.z].every(Number.isSafeInteger)||Math.abs(origin.x)>30000000||Math.abs(origin.z)>30000000||origin.y< -64||origin.y>315)throw Error('Choose a supported build shape and whole block coordinates.')
- if(!Number.isSafeInteger(width)||width<1||width>6||!Number.isSafeInteger(height)||height<1||height>(shape==='wall'?3:6))throw Error('Executable walls: width 1–6, height 1–3. Floors: dimensions 1–6.')
+ buildSize({shape,width,height})
  const positions=[];const add=(x,y,z)=>positions.push({x:origin.x+x,y:origin.y+y,z:origin.z+z})
  if(shape==='block')add(0,0,0)
  if(shape==='wall')for(let y=0;y<height;y++)for(let x=0;x<width;x++)add(x,y,0)
@@ -71,7 +78,7 @@ export class Building{
  tick(now=Date.now(),routeTo=null){
   const j=this.job,w=this.world;if(!j)return {}
   const denied=this.check();if(denied){this.cancel(denied);return {}}
-  if(now-j.started>180000){this.cancel('Build time limit reached.');return {}}
+  if(now-j.started>Math.min(1800000,Math.max(180000,j.positions.length*7000))){this.cancel('Build stage time limit reached. Confirmed placements stay in the Realm; remaining blocks were not assumed complete.');return {}}
   if(j.pending){
    const p=j.pending,block=w.block(p.target),version=w.blockVersion(p.target),stack=w.inventory.get(p.slot)
    if(version>p.version&&block&&!air(block)&&block.name!==j.material){this.cancel('Server changed the target to another block; placement not confirmed.');return {}}
