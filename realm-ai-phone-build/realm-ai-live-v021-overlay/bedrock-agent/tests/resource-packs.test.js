@@ -53,14 +53,17 @@ test('oversized Realm pack rejected',t=>{
  h.client.emit('resource_packs_info',{texture_packs:[{uuid:'a',version:'1.0.0',size:1000000000}]})
  assert.equal(h.handler.snapshot().failed,true)
 })
-test('required-only policy skips optional cosmetics without canceling the Realm join',t=>{
+test('unmarked server-advertised texture is requested instead of silently skipped',t=>{
  const h=harness();t.after(h.done);h.client.emit('resource_packs_info',{texture_packs:[meta('optional')],must_accept:false})
- assert.equal(h.sent[0][1].response_status,'have_all_packs');assert.equal(h.handler.snapshot().requested,0);assert.equal(h.handler.snapshot().skippedOptional,1)
- h.client.emit('resource_pack_stack',{resource_packs:[meta('optional')]});assert(h.handler.snapshot().finished)
+ assert.equal(h.sent[0][1].response_status,'send_packs')
+ assert.equal(h.handler.snapshot().requested,1)
+ assert.equal(h.handler.snapshot().skippedOptional,0)
+ h.client.emit('resource_pack_stack',{resource_packs:[meta('optional')]})
+ assert.equal(h.handler.snapshot().finished,false)
 })
 test('addon dependencies are retained and an early stack waits for their completed download',t=>{
  const h=harness();t.after(h.done);h.client.emit('resource_packs_info',{texture_packs:[meta('cosmetic'),{...meta('needed'),addon_pack:true}],must_accept:false})
- assert.deepEqual(h.sent[0][1].resourcepackids,['needed_1.0.0']);assert.equal(h.handler.snapshot().skippedOptional,1)
+ assert.deepEqual(h.sent[0][1].resourcepackids,['cosmetic_1.0.0','needed_1.0.0']);assert.equal(h.handler.snapshot().skippedOptional,0)
  h.client.emit('resource_pack_stack',{resource_packs:[meta('needed')]});assert.equal(h.handler.snapshot().finished,false)
 })
 test('more than sixteen required packs are supported within the total byte limit',t=>{
