@@ -8,7 +8,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
 
 /** A thumb rail browses categories only. It never starts or saves a command. */
 public final class CommandRail extends View {
-    static final String[] LABELS={"All","Travel","Work","Build","Info","Session"};
+    static final String[] LABELS={"Quick","Travel","Work","Build","Info","Advanced"};
     interface Listener { void selected(int index); }
     final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     final Listener listener; int index;
