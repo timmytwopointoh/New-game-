@@ -79,7 +79,7 @@ test('API Stop cancels both controllers and rejects delayed requests from before
 })
 
 test('shared catalog validates popup ranges and unknown commands before any plan is saved',()=>{
- assert(commandCatalog.length>=20);for(const [id,values] of [['supply',{material:'torch',count:257}],['wall',{material:'stone',width:13,height:2}],['hotbar',{slot:0}],['walk',{x:0,y:'no',z:0}]])assert.throws(()=>validateDescriptor({id,values}))
+ assert(commandCatalog.length>=20);for(const [id,values] of [['supply',{material:'torch',count:257}],['wall',{material:'stone',width:65,height:2}],['hotbar',{slot:0}],['walk',{x:0,y:'no',z:0}]])assert.throws(()=>validateDescriptor({id,values}))
  assert.throws(()=>parseDescriptor('move forward 3 blocks'),/Unsupported/);assert.equal(renderDescriptor(parseDescriptor('plan build wall 3 by 2 with stone')),'plan build wall 3 by 2 with stone')
 })
 test('command wording separates height from stacks and asks before treating slab blocks as a build',()=>{
