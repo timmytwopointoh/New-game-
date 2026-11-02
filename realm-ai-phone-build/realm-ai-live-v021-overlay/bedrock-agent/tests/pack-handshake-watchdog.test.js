@@ -48,12 +48,12 @@ test('empty-world pack handshake sends canonical completion strings, no watchdog
  h.advance(120000);await nap(35)
  assert.equal(h.updates.some(x=>x.stage==='pack-error'),false)
 })
-test('no server header is a 60-second handshake stall, not a slow download',async t=>{
+test('simulated 45ms server-idle stall is detected without misidentifying storage',async t=>{
  const h=harness();t.after(()=>h.close());h.begin();h.advance(70)
  await wait(()=>h.updates.some(x=>x.stage==='pack-error'))
  const error=h.updates.at(-1)
  assert.equal(error.reason,'server-no-pack-data')
- assert.equal(error.retryable,false)
+ assert.equal(error.retryable,true)
  assert.match(error.message,/no resource-pack headers/)
  assert.equal(h.handler.snapshot().failed,true)
  assert.equal(h.packets.some(p=>p.data?.response_status==='have_all_packs'),false)
