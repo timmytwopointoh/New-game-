@@ -10,6 +10,7 @@ import {parseCommand} from '../pack-template/scripts/commands.js'
 import {interpretMessage} from './chat.js'
 import {Planner} from './planner.js'
 import {runAutonomous} from './autonomous-intent.js'
+import {makeSupportSnapshot} from './support-snapshot.js'
 import {researchRouting,unsupportedResearchResponse} from './agent-lookup-router.js'
 import {offlineMinecraftResponse,offlineKnowledgeStats} from './offline-minecraft-brain.js'
 import {blockCatalog,entityCatalog,blockReference,blockAllTools,mobReference} from './knowledge/bedrock-reference.js'
@@ -291,6 +292,7 @@ export function createApi(config,connection,log=console.log){
      }catch(e){return send(400,{accepted:false,message:String(e.message||e).slice(0,120)})}
    }
    if(req.method==='GET'&&pathname==='/support')return send(200,{support:connection.trace?.summary()||null})
+   if(req.method==='GET'&&pathname==='/support/snapshot')return send(200,makeSupportSnapshot(connection))
    if(req.method==='GET'&&pathname==='/diagnostics')return send(200,connection.diagnostics?.()||{phase:'unavailable',savedAuthentication:'kept'})
    if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot()})
    if(req.method==='GET'&&pathname==='/catalog')return send(200,{catalog:commandCatalog,options:connection.survival?{...formOptions(connection.survival.world,new URL(req.url,'http://127.0.0.1').searchParams.get('q')||''),owners:config.ownerPlayerNames||[]}:null})
