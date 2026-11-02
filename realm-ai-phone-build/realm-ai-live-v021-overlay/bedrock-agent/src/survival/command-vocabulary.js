@@ -54,7 +54,9 @@ export class CommandVocabulary{
  cleanDefinition(word,result){
   if(!/^[a-z][a-z-]{1,29}$/.test(word)||!isRecord(result)||typeof result.definition!=='string'||!result.definition.trim())return null
   const clean=value=>String(value||'').replace(/[\x00-\x1f\x7f]/g,' ').slice(0,200)
-  return {definition:clean(result.definition),source:clean(result.source||'dictionary').slice(0,60),sourceCount:Number.isSafeInteger(result.sourceCount)?Math.max(1,Math.min(10,result.sourceCount)):1,meanings:(Array.isArray(result.meanings)?result.meanings:[]).slice(0,3).map(m=>({partOfSpeech:clean(m.partOfSpeech).slice(0,24),definitions:(Array.isArray(m.definitions)?m.definitions:[]).slice(0,2).map(clean)}))}
+  return {definition:clean(result.definition),source:clean(result.source||'dictionary').slice(0,60),sourceCount:Number.isSafeInteger(result.sourceCount)?Math.max(1,Math.min(10,result.sourceCount)):1,
+   meanings:(Array.isArray(result.meanings)?result.meanings:[]).slice(0,4).map(m=>({partOfSpeech:clean(m.partOfSpeech).slice(0,24),definitions:(Array.isArray(m.definitions)?m.definitions:[]).slice(0,3).map(clean)})),
+   relatedTerms:(Array.isArray(result.relatedTerms)?result.relatedTerms:[]).slice(0,12).filter(t=>/^[a-z][a-z-]{1,29}$/.test(t?.word||'')).map(t=>({word:t.word,source:t.source==='dictionary'?'dictionary':'offline',senses:(Array.isArray(t.senses)?t.senses:[]).slice(0,2).map(m=>({partOfSpeech:clean(m.partOfSpeech).slice(0,24),definition:clean(m.definition)}))}))}
  }
  definitionFor(word){return this.definitions[normalize(word)]?copy(this.definitions[normalize(word)]):null}
  rememberDefinition(word,result){
