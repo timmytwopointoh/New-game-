@@ -34,8 +34,8 @@ export function explainPackFailure(error){
  const code=String(error?.code||'')
  const raw=String(error?.message||'')
  if(code==='ENOSPC'||code==='EDQUOT'||code==='PACK_STORAGE_LOW')return {reason:'storage-low',retryable:false,message:'Not enough free phone storage for Realm packs. Free space, then rejoin; existing verified packs are kept.'}
- if(code==='PACK_NO_SERVER_DATA')return {reason:'server-no-pack-data',retryable:false,message:'The Realm sent no resource-pack headers after the request. This is a stalled server handshake, not a storage or slow-download problem. Stop and manually rejoin.'}
- if(code==='PACK_SERVER_STALLED')return {reason:'server-pack-stalled',retryable:false,message:'The Realm stopped sending resource-pack chunks before finishing. The download is incomplete; stop and manually rejoin.'}
+ if(code==='PACK_NO_SERVER_DATA')return {reason:'server-no-pack-data',retryable:true,message:'The Realm sent no resource-pack headers during the extended 17-minute loading window. This is a stalled handshake; the bot may attempt a bounded rejoin with saved login.'}
+ if(code==='PACK_SERVER_STALLED')return {reason:'server-pack-stalled',retryable:true,message:'The Realm stopped sending resource-pack chunks for 17 minutes. The bot may attempt a bounded rejoin with its existing saved login.'}
  if(code==='PACK_STORAGE_UNKNOWN')return {reason:'storage-unknown',retryable:false,message:'Cannot determine available phone storage for the required Realm packs.'}
  if(code==='PACK_LIMIT'||/exceeds (?:the )?(?:permitted|download|pack)|too many Realm packs/i.test(raw))return {reason:'pack-size-limit',retryable:false,message:'This Realm requires more pack data than the bounded download limit allows.'}
  if(code==='CDN_HTTP_401'||code==='CDN_HTTP_403')return {reason:'cdn-access-denied',retryable:false,message:'Realm pack CDN access was denied or its download link expired. Rejoin to request a fresh URL.'}
@@ -102,7 +102,7 @@ async function hashStoredFile(filename){
 }
 export function attachRealmPacks(client, cacheDir, report = () => {},
   {downloadCdn=downloadRealmCdn,checkStorage=checkPackStorage,
-   serverPackIdleMs=60000,heartbeatMs=2000,now=()=>Date.now()} = {}) {
+   serverPackIdleMs=17*60*1000,heartbeatMs=2000,now=()=>Date.now()} = {}) {
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false
