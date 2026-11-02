@@ -116,7 +116,7 @@ export function createApi(config,connection,log=console.log){
      return connection.survival?.commandPlans?.retryBlocked()||{accepted:false,message:'Join the Realm first.'}
    }
    if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
-     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
+     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();connection.cancelAutoRecovery?.();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
    }
    let output
    if(connection.survival?.commandPlans){
