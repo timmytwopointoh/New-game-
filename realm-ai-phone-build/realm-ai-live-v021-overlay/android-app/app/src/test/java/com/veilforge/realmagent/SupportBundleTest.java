@@ -34,4 +34,43 @@ public class SupportBundleTest {
   for(int i=0;i<210;i++)SupportLog.record(a,i%2==0?"update_check":"update_current");SupportLog.record(a,"PRIVATE-TOKEN");JSONObject saved=SupportBundle.read(SupportLog.file(a),131072);assertEquals(200,saved.getJSONArray("events").length());assertFalse(saved.toString().contains("PRIVATE"));
  }
  @Test public void inventoryAndPlacementEvidenceIsAvailableInExportWithoutRawItems()throws Exception{JSONObject raw=new JSONObject("{\"events\":[{\"kind\":\"sample\",\"state\":{\"inventoryRevision\":12,\"selectedHotbar\":2,\"heldCount\":8,\"placementConfirmed\":1,\"placementTotal\":4,\"held_item\":{\"token\":\"PRIVATE\"}}}],\"packets\":{\"inventory_content\":2}}");JSONObject t=SupportBundle.trace(raw);JSONObject state=t.getJSONArray("events").getJSONObject(0).getJSONObject("state");assertEquals(12,state.getInt("inventoryRevision"));assertEquals(1,state.getInt("placementConfirmed"));assertEquals(2,t.getJSONObject("packets").getInt("inventory_content"));assertFalse(t.toString().contains("PRIVATE"));}
+
+ @Test public void completeSingleZipIncludesLiveStateWhileDroppingUnknownFields()throws Exception{
+  JSONObject raw=new JSONObject();
+  raw.put("source","live");raw.put("capturedAt",12345);raw.put("unwantedData","DO_NOT_EXPORT");
+  raw.put("pack",new JSONObject().put("stage","pack-request").put("advertised",5).put("optionalSkipped",2).put("rawLink","DO_NOT_EXPORT"));
+  raw.put("loading",new JSONObject().put("stage","pack-request").put("noProgressSeconds",900).put("repeatedSignals",30));
+  raw.put("task",new JSONObject().put("navigation","blocked").put("queuePending",2).put("rawInstruction","DO_NOT_EXPORT"));
+  raw.put("learning",new JSONObject().put("confirmed",3).put("learnedMappings",17).put("rawDefinitions","DO_NOT_EXPORT"));
+  ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+  SupportBundle.export(a,bytes,raw);
+  Map<String,String> files=new HashMap<>();
+  try(ZipInputStream z=new ZipInputStream(new ByteArrayInputStream(bytes.toByteArray()))){
+   ZipEntry e;while((e=z.getNextEntry())!=null){
+    ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[1024];int n;
+    while((n=z.read(b))!=-1)out.write(b,0,n);
+    files.put(e.getName(),out.toString("UTF-8"));
+   }
+  }
+  assertEquals(11,files.size());
+  JSONObject manifest=new JSONObject(files.get("manifest.json"));
+  assertTrue(manifest.getBoolean("liveSnapshotCaptured"));
+  assertEquals("one-zip",new JSONObject(files.get("summary.json")).getString("reportFormat"));
+  JSONObject live=new JSONObject(files.get("live-snapshot.json"));
+  assertEquals("live",live.getString("source"));
+  assertEquals(2,live.getJSONObject("pack").getInt("optionalSkipped"));
+  assertEquals(30,live.getJSONObject("loading").getInt("repeatedSignals"));
+  assertEquals(17,new JSONObject(files.get("work-learning.json")).getJSONObject("learning").getInt("learnedMappings"));
+  assertFalse(files.toString().contains("DO_NOT_EXPORT"));
+ }
+ @Test public void offlineSingleZipClearlyMarksLiveSnapshotMissingAndKeepsPreviousFailures()throws Exception{
+  write("nodejs-project/private/diagnostics/connection.json","{\"phase\":\"pack-error\",\"packReason\":\"server-no-pack-data\",\"packHeaders\":0,\"packChunks\":0,\"lastFailure\":{\"phase\":\"pack-error\",\"httpStatus\":null}}");
+  Map<String,String> files=export();
+  JSONObject manifest=new JSONObject(files.get("manifest.json"));
+  assertFalse(manifest.getBoolean("liveSnapshotCaptured"));
+  assertTrue(manifest.getBoolean("connectionReportFilePresent"));
+  assertEquals("server-no-pack-data",new JSONObject(files.get("summary.json")).getString("resourcePackReason"));
+  assertEquals("offline",new JSONObject(files.get("live-snapshot.json")).getString("source"));
+ }
+
 }
