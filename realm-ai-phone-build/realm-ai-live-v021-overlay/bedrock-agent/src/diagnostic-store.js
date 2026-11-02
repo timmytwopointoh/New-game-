@@ -23,6 +23,10 @@ export function sanitizeDiagnosticReport(input={}){
   for(const name of ['packResponseCount','packServerCount','packCdnCount','packAdvertisedCount','packSkippedOptional','packLegacyBehaviorCount'])report[name]=number(input[name])
   report.packSelectionPolicy=['addon-required','server-required-fallback'].includes(input.packSelectionPolicy)?input.packSelectionPolicy:'unknown'
   for(const name of ['packHeaders','packChunks'])report[name]=number(input[name])
+  for(const name of ['loadingElapsedSeconds','loadingNoProgressSeconds','loadingUniqueSignals','loadingRepeatedSignals','loadingReceivedBytes','loadingGraceSeconds','loadingRecoveryAttempts','loadingNextRetrySeconds'])report[name]=number(input[name])
+  report.loadingActive=input.loadingActive===true;report.loadingRecoveryScheduled=input.loadingRecoveryScheduled===true
+  report.loadingStage=['connecting','pack-request','pack-storage','pack-retry','downloading-packs','pack-cached','packs-ready','world-started','world-data','bedrock-login-accepted'].includes(input.loadingStage)?input.loadingStage:'unknown'
+  report.loadingLastSignal=['none','resource_packs_info','resource_pack_data_info','resource_pack_chunk_data','resource_pack_stack','start_game','level_chunk','sub_chunk','play_status'].includes(input.loadingLastSignal)?input.loadingLastSignal:'none'
   report.failure=failure(input.failure);report.lastFailure=failure(input.lastFailure)
   report.processState=['running','stopped','crashed'].includes(input.processState)?input.processState:'unknown'
   const identity=input.clientIdentity
