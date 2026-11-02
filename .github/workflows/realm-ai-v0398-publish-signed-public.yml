@@ -1,0 +1,82 @@
+name: Publish original-key signed Realm AI Live v0.39.8
+on:
+  push:
+    branches: [fix/realm-ai-live-0398-required-packs-20261102]
+    paths: ['.github/workflows/realm-ai-v0398-publish-signed-public.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-verified-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download successful unsigned original-identity Android build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p unsigned
+          gh run download 41413410510 --repo "${{ github.repository }}" --name realm-ai-live-v0398-unsigned-private-signing --dir unsigned
+          test -s unsigned/Realm-AI-Live-v0.39.8-ALIGNED-UNSIGNED.apk
+          echo '9fbcdf098e7760b22800059499f3ca6010aed0714cc50ea6cc34c9f22c9d4fd0  unsigned/Realm-AI-Live-v0.39.8-ALIGNED-UNSIGNED.apk' | sha256sum -c -
+      - name: Recreate exact privately signed APK from public bytes, never access signing key
+        run: |
+          set -euo pipefail
+          python3 realm-ai-phone-build/reconstruct_signed_v0398_public.py \
+            unsigned/Realm-AI-Live-v0.39.8-ALIGNED-UNSIGNED.apk \
+            Realm-AI-Live-v0.39.8-UPDATE.apk \
+            realm-ai-phone-build/v0398-public-recipe-parts/part-0{1,2,3,4}.b64
+          echo '19fbc2331152660bae0790157f482e815c83ead10d173fb2df2735f260ce76c2  Realm-AI-Live-v0.39.8-UPDATE.apk' | sha256sum -c -
+      - name: Verify signer, identity, native dependencies and pack choice in final release APK
+        run: |
+          set -euo pipefail
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          if [ ! -x "$TOOLS/apksigner" ]; then "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'; fi
+          "$TOOLS/apksigner" verify --verbose --print-certs Realm-AI-Live-v0.39.8-UPDATE.apk > /tmp/realm-cert-audit.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: 77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' /tmp/realm-cert-audit.txt
+          "$TOOLS/zipalign" -c -P 16 4 Realm-AI-Live-v0.39.8-UPDATE.apk
+          "$TOOLS/aapt" dump badging Realm-AI-Live-v0.39.8-UPDATE.apk | tee /tmp/realm-package-audit.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200027'" /tmp/realm-package-audit.txt
+          python3 - <<'PY'
+          import zipfile
+          apk='Realm-AI-Live-v0.39.8-UPDATE.apk'
+          with zipfile.ZipFile(apk) as z:
+            assert z.testzip() is None
+            code=z.read('assets/nodejs-project/src/realm-packs.js')
+            assert b'selectRequiredRealmPacks' in code
+            assert b'Download Required & Join' in code
+            assert b'packSelectionPolicy' in code
+            for n in [
+              'lib/arm64-v8a/libnode.so',
+              'lib/arm64-v8a/libveilforge_bridge.so',
+              'assets/nodejs-project/node_modules/bedrock-protocol/src/client/realmJoin503Retry.js'
+            ]:assert n in z.namelist(),n
+          print('PASS: original Live identity, selected-required-only pack handler, full native runtime and Realm retry patch')
+          PY
+          sha256sum Realm-AI-Live-v0.39.8-UPDATE.apk > SHA256SUMS.txt
+      - name: Publish verified public GitHub APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<'TXT'
+          Android install-over update for VEILFORGE Realm AI Live.
+          v0.39.8 / versionCode 200027 / package com.veilforge.realmagent.live.
+          Fixes required-only resource/add-on pack choice and records requested versus skipped packs.
+          Retains original signing certificate, saved Microsoft/Switch profile, native runtime, and Realm retry patch.
+          The signing key and its password were never used or uploaded to GitHub.
+          Automated tests and APK package/signature checks passed. Live Realm joining is not yet phone-verified.
+          Install this APK over your existing Live app; do NOT uninstall it first.
+          TXT
+          gh release create realm-ai-live-v0398-required-packs \
+            Realm-AI-Live-v0.39.8-UPDATE.apk SHA256SUMS.txt \
+            --repo "${{ github.repository }}" \
+            --target "$GITHUB_SHA" \
+            --title 'Realm AI Live v0.39.8 - Required Packs - Signed Update' \
+            --notes-file release-notes.txt
