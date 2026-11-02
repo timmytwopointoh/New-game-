@@ -25,7 +25,7 @@ final class ConnectionDiagnostics {
             for(String field:new String[]{"connected","joined","spawned","deviceCodePending","titleTokenRecoveryAttempted"})result.put(field,Boolean.TRUE.equals(input.opt(field)));
             result.put("packStage",phase(input.optString("packStage","not-reached")));
             String reason=input.optString("packReason","none");
-            Set<String> reasons=new HashSet<>(Arrays.asList("none","storage-low","storage-unknown","pack-size-limit","cdn-access-denied","cdn-missing","cdn-unavailable","network-interrupted","pack-integrity","pack-transfer-failed"));
+            Set<String> reasons=new HashSet<>(Arrays.asList("none","storage-low","storage-unknown","pack-size-limit","cdn-access-denied","cdn-missing","cdn-unavailable","network-interrupted","pack-integrity","pack-transfer-failed","server-no-pack-data","server-pack-stalled"));
             result.put("packReason",reasons.contains(reason)?reason:"none");
             result.put("packFreeMB",nonnegative(input,"packFreeMB"));result.put("packNeededMB",nonnegative(input,"packNeededMB"));
             result.put("packRetryable",Boolean.TRUE.equals(input.opt("packRetryable")));
