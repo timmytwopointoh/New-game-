@@ -307,6 +307,7 @@ public class MainActivity extends Activity {
         JSONObject plan=r.optJSONObject("planner");
         String phase=r.optString("authState","starting");
         String err=r.optString("lastError","").trim();
+        JSONObject diag=r.optJSONObject("diagnostics");
         JSONObject pack=r.optJSONObject("packStatus");
         String packStage=pack==null?"":pack.optString("stage","");
         if(!err.isEmpty()){String stage=r.optString("lastPhase","unknown stage");connection.setText((stage.startsWith("xbox-")||stage.startsWith("microsoft-")?"Switch sign-in error (":"Realm error (")+stage+"): "+err);}
@@ -331,6 +332,15 @@ public class MainActivity extends Activity {
         else if("sign-in-required".equals(phase))connection.setText("Microsoft sign-in pending • see code below");
         else if(plan!=null&&!"idle".equals(plan.optString("state")))connection.setText("Plan "+plan.optString("state")+" • "+plan.optInt("current")+"/"+plan.optInt("total"));
         else connection.setText("AI running • checking Microsoft / Realm connection");
+        if(!r.optBoolean("spawned")&&diag!=null&&diag.optBoolean("loadingActive")){
+            int elapsed=diag.optInt("loadingElapsedSeconds"),quiet=diag.optInt("loadingNoProgressSeconds"),repeat=diag.optInt("loadingRepeatedSignals");
+            String loading=" • loading "+(elapsed/60)+"m "+(elapsed%60)+"s"
+                +" • no new progress "+(quiet/60)+"m"
+                +" • repeated signals "+repeat;
+            if(diag.optBoolean("loadingRecoveryScheduled"))loading+=" • rejoining in "+diag.optInt("loadingNextRetrySeconds")+"s (attempt "+diag.optInt("loadingRecoveryAttempts")+"/2)";
+            else loading+=" • 17-minute no-progress allowance";
+            connection.setText(connection.getText()+loading);
+        }
         JSONObject savedPlans=survival==null?null:survival.optJSONObject("plans");JSONObject batch=savedPlans==null?null:savedPlans.optJSONObject("batch");
         if(batch!=null)connection.setText(connection.getText()+" · queued command "+(batch.optInt("total")-batch.optInt("remaining")+1)+"/"+batch.optInt("total"));
         else if(savedPlans!=null&&savedPlans.optInt("pending")>0)connection.setText(connection.getText()+" · "+savedPlans.optInt("pending")+" command(s) waiting");
