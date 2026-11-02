@@ -147,3 +147,5 @@ jobs:
           A successful live modded Realm join is not claimed until tested on the owner's phone.
           TXT
           gh release create realm-ai-live-v0401-modpack-field-test Realm-AI-v0.40.1-MOD-PACK-TEST.apk SHA256SUMS.txt package-report.txt certificate-report.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'Realm AI v0.40.1 Modded Realm Full-Pack - TEST APK' --notes-file release-notes.txt
+
+# Test assertion uses serverPackCount, matching the emitted diagnostics field.
