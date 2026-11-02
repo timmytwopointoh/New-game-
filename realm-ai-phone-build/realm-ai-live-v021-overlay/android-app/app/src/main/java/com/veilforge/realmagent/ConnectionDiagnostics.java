@@ -29,9 +29,11 @@ final class ConnectionDiagnostics {
             result.put("packReason",reasons.contains(reason)?reason:"none");
             result.put("packFreeMB",nonnegative(input,"packFreeMB"));result.put("packNeededMB",nonnegative(input,"packNeededMB"));
             result.put("packRetryable",Boolean.TRUE.equals(input.opt("packRetryable")));
+            String packChoice=input.optString("packSelectionPolicy","unknown");
+            result.put("packSelectionPolicy",packChoice.equals("addon-required")||packChoice.equals("server-required-fallback")?packChoice:"unknown");
             result.put("packCacheStatusIssued",Boolean.TRUE.equals(input.opt("packCacheStatusIssued")));
             result.put("packDownloadRequestIssued",Boolean.TRUE.equals(input.opt("packDownloadRequestIssued")));
-            for(String field:new String[]{"packResponseCount","packServerCount","packCdnCount"})
+            for(String field:new String[]{"packResponseCount","packServerCount","packCdnCount","packAdvertisedCount","packSkippedOptional","packLegacyBehaviorCount"})
                 result.put(field,nonnegative(input,field));
             for(String field:new String[]{"packHeaders","packChunks","recordedAt"})result.put(field,nonnegative(input,field));
             result.put("failure",failure(input.optJSONObject("failure")));result.put("lastFailure",failure(input.optJSONObject("lastFailure")));
