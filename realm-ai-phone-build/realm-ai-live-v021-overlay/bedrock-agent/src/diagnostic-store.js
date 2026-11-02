@@ -17,7 +17,7 @@ export function sanitizeDiagnosticReport(input={}){
   const report={schema:1,phase:phase(input.phase),authState:phase(input.authState),recordedAt:number(input.recordedAt),savedAuthentication:'kept'}
   for(const name of ['connected','joined','spawned','deviceCodePending','titleTokenRecoveryAttempted'])report[name]=input[name]===true
   report.packStage=phase(input.packStage)
-  report.packReason=['none','storage-low','storage-unknown','pack-size-limit','cdn-access-denied','cdn-missing','cdn-unavailable','network-interrupted','pack-integrity','pack-transfer-failed'].includes(input.packReason)?input.packReason:'none'
+  report.packReason=['none','storage-low','storage-unknown','pack-size-limit','cdn-access-denied','cdn-missing','cdn-unavailable','network-interrupted','pack-integrity','pack-transfer-failed','server-no-pack-data','server-pack-stalled'].includes(input.packReason)?input.packReason:'none'
   report.packFreeMB=number(input.packFreeMB);report.packNeededMB=number(input.packNeededMB);report.packRetryable=input.packRetryable===true
   for(const name of ['packHeaders','packChunks'])report[name]=number(input[name])
   report.failure=failure(input.failure);report.lastFailure=failure(input.lastFailure)
