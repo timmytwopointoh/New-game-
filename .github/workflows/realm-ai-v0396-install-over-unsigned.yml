@@ -1,0 +1,99 @@
+name: Realm AI v0.39.6 Original Identity - Unsigned Output For Private Signing
+on:
+  push:
+    branches: [release/realm-ai-v0396-update-20261102]
+    paths: ['.github/workflows/realm-ai-v0396-install-over-unsigned.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify original Live identity, signer prerequisites and version
+        run: |
+          set -euo pipefail
+          ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
+          grep -q "applicationId 'com.veilforge.realmagent.live'" "$ROOT/android-app/app/build.gradle"
+          grep -q "versionCode 200025" "$ROOT/android-app/app/build.gradle"
+          grep -q "versionName '0.39.6-pack-handshake-fix'" "$ROOT/android-app/app/build.gradle"
+          grep -q "authTitle:'00000000441cc96b',deviceType:'Nintendo',deviceOS:12,flow:'live'" "$ROOT/bedrock-agent/src/options.js"
+          test -f "$ROOT/bedrock-agent/src/realm-packs.js"
+          echo "Original Live package and profile verified. No private signing key stored in repository or workflow."
+      - name: Install Node dependencies and restore exact verified Live runtime dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          npm ci --omit=dev --no-fund --no-audit
+          curl -fsSL --retry 3 --retry-all-errors 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0395-pack-order-and-timing/Realm-AI-Live.apk' -o /tmp/realm-ai-previous-live.apk
+          echo 'e3e8b829e1b3c7113f9a8a23fa243a74c7c0dd3aba41a036af74d01bc9affebf  /tmp/realm-ai-previous-live.apk' | sha256sum -c -
+          python3 - <<'PY'
+          import os,zipfile,shutil,pathlib
+          apk=pathlib.Path('/tmp/realm-ai-previous-live.apk')
+          target=pathlib.Path('node_modules')
+          shutil.rmtree(target,ignore_errors=True)
+          target.mkdir()
+          expected='assets/nodejs-project/node_modules/'
+          count=0
+          with zipfile.ZipFile(apk) as z:
+              for item in z.infolist():
+                  if not item.filename.startswith(expected) or item.is_dir():
+                      continue
+                  relative=pathlib.PurePosixPath(item.filename[len(expected):])
+                  if relative.is_absolute() or '..' in relative.parts:
+                      raise RuntimeError('Unsafe archive path')
+                  out=target.joinpath(*relative.parts)
+                  out.parent.mkdir(parents=True,exist_ok=True)
+                  with z.open(item) as src,open(out,'wb') as dst:shutil.copyfileobj(src,dst)
+                  count+=1
+          assert count>=11000,count
+          assert (target/'bedrock-protocol/src/client/realmJoin503Retry.js').exists()
+          print('Verified original Live dependency patch restored; dependency entries:',count)
+          PY
+      - name: Test full Bedrock bot against original working dependency tree
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --test tests/*.test.js
+      - name: Download verified Android ARM64 runtime
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay
+        run: python3 tools/fetch_native_runtime.py
+      - name: Test Android code with original identity before release
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Assemble unsigned original-identity APK
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Verify original package and align unsigned APK
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$BT/apksigner" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+          APK=realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          mkdir -p /tmp/realm-live-output
+          "$BT/zipalign" -P 16 -f 4 "$APK" /tmp/realm-live-output/Realm-AI-Live-v0.39.6-ALIGNED-UNSIGNED.apk
+          "$BT/zipalign" -c -P 16 4 /tmp/realm-live-output/Realm-AI-Live-v0.39.6-ALIGNED-UNSIGNED.apk
+          "$BT/aapt" dump badging /tmp/realm-live-output/Realm-AI-Live-v0.39.6-ALIGNED-UNSIGNED.apk | tee /tmp/realm-live-output/package-report.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200025'" /tmp/realm-live-output/package-report.txt
+          test -s "$BT/lib/apksigner.jar"
+          cp "$BT/lib/apksigner.jar" /tmp/realm-live-output/apksigner.jar
+          sha256sum /tmp/realm-live-output/* > /tmp/realm-live-output/SHA256SUMS.txt
+      - name: Upload unsigned installer and official APK signing utility - NO private keys
+        uses: actions/upload-artifact@v4
+        with:
+          name: realm-ai-live-v0396-unsigned-private-signing
+          path: /tmp/realm-live-output/
+          if-no-files-found: error
+          retention-days: 3
