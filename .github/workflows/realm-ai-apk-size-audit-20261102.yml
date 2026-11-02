@@ -1,0 +1,60 @@
+name: Audit Live vs Pack Fix APK contents - no build
+on:
+  push:
+    branches: [fix/realm-ai-pack-handshake-watchdog-v0395-20261102]
+    paths: ['.github/workflows/realm-ai-apk-size-audit-20261102.yml']
+permissions:
+  contents: read
+jobs:
+  audit-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download only the two already-published test and Live APKs
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-all-errors 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0395-pack-order-and-timing/Realm-AI-Live.apk' -o live.apk
+          curl -fsSL --retry 3 --retry-all-errors 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0395-pack-handshake-fix-test/Realm-AI-v0.39.5-PACK-FIX-TEST.apk' -o test.apk
+          sha256sum live.apk test.apk
+      - name: Compare exact archive membership, compression and contents
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import zipfile,hashlib,os,collections,json
+          def category(n):
+              if n.startswith('lib/'):return 'native libraries'
+              if n.startswith('assets/nodejs-project/node_modules/'):return 'Node dependencies'
+              if n.startswith('assets/nodejs-project/src/'):return 'bot JavaScript'
+              if n.startswith('assets/nodejs-project/'):return 'other bot assets'
+              if n.startswith('classes') and n.endswith('.dex'):return 'Android dex'
+              if n.startswith('res/'):return 'Android res'
+              if n.startswith('META-INF/'):return 'signatures/META-INF'
+              return 'other APK files'
+          def report(name,z):
+              files={i.filename:i for i in z.infolist() if not i.is_dir()}
+              sums=collections.defaultdict(lambda:dict(entries=0,packed=0,unpacked=0))
+              for f in files.values():
+                  key=category(f.filename);sums[key]['entries']+=1;sums[key]['packed']+=f.compress_size;sums[key]['unpacked']+=f.file_size
+              print(name,json.dumps({'bytes':os.path.getsize(name),'files':len(files),'groupSizes':sums},indent=2,default=dict))
+              return files
+          with zipfile.ZipFile('live.apk') as original,zipfile.ZipFile('test.apk') as newer:
+              a=report('live.apk',original);b=report('test.apk',newer)
+              extra_a=sorted(set(a)-set(b));extra_b=sorted(set(b)-set(a))
+              print('ORIGINAL_ONLY_FILES',len(extra_a))
+              for x in extra_a[:120]:print('  ORIGINAL_ONLY',x,'uncompressed',a[x].file_size)
+              print('TEST_ONLY_FILES',len(extra_b))
+              for x in extra_b[:120]:print('  TEST_ONLY',x,'uncompressed',b[x].file_size)
+              shared=sorted(set(a)&set(b))
+              changed=[]
+              for k in shared:
+                  if a[k].file_size!=b[k].file_size or a[k].CRC!=b[k].CRC:
+                      changed.append((k,a[k].file_size,b[k].file_size,a[k].compress_size,b[k].compress_size))
+              print('CHANGED_SHARED_FILES',len(changed))
+              for k,ua,ub,ca,cb in sorted(changed,key=lambda x:abs(x[1]-x[2]),reverse=True)[:85]:
+                  print('  DIFF',k,'uncompressed',ua,'vs',ub,'compressed',ca,'vs',cb)
+              for target in ['lib/arm64-v8a/libnode.so','lib/arm64-v8a/libveilforge_bridge.so','assets/nodejs-project/node_modules/bedrock-protocol/package.json','assets/nodejs-project/src/index.js','assets/nodejs-project/src/realm-packs.js','assets/nodejs-project/src/connection.js','classes.dex','classes2.dex']:
+                  print('CRITICAL',target,'live',a.get(target).file_size if target in a else 'MISSING','test',b.get(target).file_size if target in b else 'MISSING')
+              originals=sum(a[n].compress_size for n in extra_a)
+              newfiles=sum(b[n].compress_size for n in extra_b)
+              print('SUMMARY',json.dumps({'originalOnlyCompressed':originals,'testOnlyCompressed':newfiles,'differentEntries':len(changed)},indent=2))
+          PY
