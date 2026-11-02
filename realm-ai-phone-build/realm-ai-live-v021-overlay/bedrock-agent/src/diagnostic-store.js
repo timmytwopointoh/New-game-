@@ -19,6 +19,8 @@ export function sanitizeDiagnosticReport(input={}){
   report.packStage=phase(input.packStage)
   report.packReason=['none','storage-low','storage-unknown','pack-size-limit','cdn-access-denied','cdn-missing','cdn-unavailable','network-interrupted','pack-integrity','pack-transfer-failed','server-no-pack-data','server-pack-stalled'].includes(input.packReason)?input.packReason:'none'
   report.packFreeMB=number(input.packFreeMB);report.packNeededMB=number(input.packNeededMB);report.packRetryable=input.packRetryable===true
+  report.packCacheStatusIssued=input.packCacheStatusIssued===true;report.packDownloadRequestIssued=input.packDownloadRequestIssued===true
+  for(const name of ['packResponseCount','packServerCount','packCdnCount'])report[name]=number(input[name])
   for(const name of ['packHeaders','packChunks'])report[name]=number(input[name])
   report.failure=failure(input.failure);report.lastFailure=failure(input.lastFailure)
   report.processState=['running','stopped','crashed'].includes(input.processState)?input.processState:'unknown'
