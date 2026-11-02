@@ -77,11 +77,11 @@ export class Navigation{
   if(this.progress.feedback==='progressing'&&this.lastRecoveryPosition&&flatDistance(p.position,this.lastRecoveryPosition)>=1){this.recoveryAttempts=0;this.lastRecoveryPosition=null}
   if(this.job&&!this.flight&&!this.climbing.current&&!this.building.job&&this.progress.stalled(now))this.recover('Server feedback shows no forward progress.',now)
  }
- routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false,avoidHostiles=true,maxDrop=this.job?.maxDrop||(this.job?.kind==='follow'?5:1),allowBridge=this.job?.kind==='follow',allowWater=true}={}){
+ routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false,avoidHostiles=true,maxDrop=this.job?.maxDrop||(this.job?.kind==='follow'?5:1),allowBridge=allowDirt,allowWater=false}={}){
   const now=Date.now(),w=this.world
   const memo=fn=>{const cache=new Map();return p=>{const id=key(p);if(!cache.has(id))cache.set(id,fn(p));return cache.get(id)}}
   const routeWorld={walkable:memo(p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now)),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
-  // Prefer dry routes, but consider short, observed shallow-water crossings.
+  // Water and lava are not automatic travel routes. Plan dry steps or a supported, server-confirmed dirt bridge. Never silently wade.
   const dry=findPath(routeWorld,start,goal,{allowSteps,maxNodes,maxDrop})
   if(dry.ok)return dry
   if(allowWater){
@@ -119,12 +119,12 @@ export class Navigation{
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
   const start=this.world.standPosition()
   if(!start||![goal?.x,goal?.y,goal?.z].every(Number.isSafeInteger)||Math.abs(goal.x-start.x)+Math.abs(goal.z-start.z)+Math.abs(goal.y-start.y)>48)return {accepted:false,queued:false,message:'Choose whole feet-level coordinates within 48 blocks.'}
-  if(!this.world.walkable(start,{allowWater:true})||!this.world.walkable(goal,{allowWater:true}))return {accepted:false,queued:false,message:'Start and destination must be clear, safe, observed standing cells. Use dig for an explicit block target.'}
+  if(!this.world.walkable(start)||!this.world.walkable(goal))return {accepted:false,queued:false,message:'Start and destination must be clear, safe, observed standing cells. Use dig for an explicit block target.'}
   this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.startedAt=Date.now()
   this.job={kind:'solo',goal:{...goal},allowMining,maxDrop};const plan=this.routeTo(goal,start,{allowSteps:true,allowDirt:true})
   if(!plan.ok){
    if(allowMining&&this.recover(plan.reason,this.startedAt))return {accepted:true,queued:true,message:this.reason}
-   this.job=null;return {accepted:false,queued:false,message:plan.reason}
+   this.job=null;return {accepted:false,queued:false,message:(plan.reason||'No safe route')+' Water and lava crossings require a confirmed dry bridge or a detour; I will not walk into fluid.'}
   }
   this.assignRoute(plan)
   return {accepted:true,queued:!!this.route.length,message:this.route.length?`Solo route: ${this.route.length} steps${plan.dirtRequired?`, using ${plan.dirtRequired} server-confirmed dirt placements`:""}. I will try another route if blocked${allowMining?', then consider one natural-looking, easy block if necessary':''}.`:'Already in that block according to the client position.'}
@@ -150,7 +150,7 @@ export class Navigation{
   const candidates=[]
   for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(let dy=-5;dy<=5;dy++){
    const p={x:Math.floor(target.x)+dx,y:start.y+dy,z:Math.floor(target.z)+dz}
-   if(this.world.walkable(p,{allowWater:true}))candidates.push(p)
+   if(this.world.walkable(p))candidates.push(p)
   }
   candidates.sort((a,b)=>Math.hypot(a.x-target.x,a.z-target.z)+Math.abs(a.y-(target.y-1.62))-Math.hypot(b.x-target.x,b.z-target.z)-Math.abs(b.y-(target.y-1.62)))
   if(candidates.length){const goal=candidates[0];if(this.lastFollowGoal!==key(goal)){this.lastFollowGoal=key(goal);this.recoveryAttempts=0}this.job.goal=goal}
