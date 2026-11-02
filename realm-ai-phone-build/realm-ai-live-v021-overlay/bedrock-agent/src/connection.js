@@ -69,7 +69,7 @@ export class Connection extends EventEmitter {
     if(Date.now()-this.lastRejoinAt<10000)return {accepted:false,queued:false,message:'Wait ten seconds before another rejoin attempt.'}
     this.lastRejoinAt=Date.now()
     try{
-      this.close();this.client?.removeAllListeners();this.client=null
+      this.close();this.client?.removeAllListeners();this.client=null;this.manualRecoveryStop=false
       this.connected=false;this.joined=false;this.spawned=false;this.authChallenge=null;this.lastError='';this.lastPhase='starting';this.authState='starting'
       this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason=''
       this.packStatus={stage:'not-reached',message:'Rejoining with saved Microsoft session',done:0,total:0}
@@ -245,6 +245,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
     })
     client.on('close',()=>{
       if(this.client!==client)return
+      const priorLoadingStage=this.loadingLiveness.stage
       if(!this.lastError&&this.packRequestAt){
         const sec=Math.max(0,Math.round((Date.now()-this.packRequestAt)/1000))
         if(!this.packHeadersReceived&&this.packStatus?.stage==='pack-request'){
@@ -257,6 +258,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
       if(!this.lastError)this.lastError='Connection closed at '+this.lastPhase+'; no server reason was sent.'
       this.authChallenge=null;this.authState='disconnected'
+      if(!this.lastFailure&&this.loadingLiveness.stalled()&&!this.manualRecoveryStop)this.scheduleLoadingRecovery(priorLoadingStage,'loading-stalled')
     })
     client.on('end',()=>{
       if(this.client!==client)return
