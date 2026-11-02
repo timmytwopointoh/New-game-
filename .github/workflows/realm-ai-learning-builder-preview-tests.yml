@@ -1,0 +1,35 @@
+name: Realm AI learning and flexible building - independent regression
+on:
+  push:
+    branches: [feature/realm-ai-language-building-autonomy-20261102]
+    paths: ['.github/workflows/realm-ai-learning-builder-preview-tests.yml']
+permissions:
+  contents: read
+jobs:
+  tests-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/package-lock.json
+      - name: Install bot dependencies (no Android APK and no private code)
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --no-fund --no-audit
+      - name: Test multi-sense, recursive definition safety and flexible geometry
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: node --test tests/semantic-building-v2.test.js
+      - name: Entire existing bot regression suite
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: node --test tests/*.test.js
+      - name: Check modified JavaScript syntax
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          node --check src/api.js
+          node --check src/definition-comprehension.js
+          node --check src/survival/building.js
+          node --check src/survival/navigation.js
+          node --check src/survival/command-plans.js
