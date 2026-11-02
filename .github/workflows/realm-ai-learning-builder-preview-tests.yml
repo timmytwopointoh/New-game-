@@ -33,3 +33,5 @@ jobs:
           node --check src/survival/building.js
           node --check src/survival/navigation.js
           node --check src/survival/command-plans.js
+
+# Re-run after updating legacy bounds assertions and dictionary action confirmation.
