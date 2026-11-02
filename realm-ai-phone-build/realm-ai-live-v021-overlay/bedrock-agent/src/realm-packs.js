@@ -45,6 +45,46 @@ export function explainPackFailure(error){
  if(['PACK_SIZE_MISMATCH','CDN_LENGTH_MISMATCH','CDN_RANGE_MISMATCH','PACK_PARTIAL_INVALID','CDN_BAD_RESPONSE','PACK_INTEGRITY_FAILED'].includes(code)||/SHA-256|hash|chunk layout|offset mismatch/i.test(raw))return {reason:'pack-integrity',retryable:false,message:'Realm pack bytes failed the expected size, range or integrity checks. Corrupt files will not be used.'}
  return {reason:'pack-transfer-failed',retryable:false,message:'Realm resource pack transfer failed; export the connection report for the download stage.'}
 }
+
+/**
+ * "Download Required & Join" is not the same as "Download Everything".
+ * Minecraft 1.26.x advertises resource packs in texture_packs, including
+ * resources belonging to add-ons. Older schemas may also supply behavior_packs.
+ * must_accept applies to the whole stack, NOT to each resource pack.
+ *
+ * Per-pack addon_pack/has_scripts identify the assets that need to accompany
+ * the server's add-ons. A non-add-on asset is optional only when that
+ * distinction is actually present; if no pack has any identifying flags and
+ * the server requires the stack, fail safe by accepting the whole stack.
+ * Never infer pack requirements from an add-on's displayed name.
+ */
+export function selectRequiredRealmPacks(packet) {
+  const texture=packet?.texture_packs??[], behavior=packet?.behavior_packs??[]
+  if(!Array.isArray(texture)||!Array.isArray(behavior))throw Error('Invalid Realm pack list')
+  const advertised=[
+    ...texture.map(meta=>({meta,origin:'resource'})),
+    ...behavior.map(meta=>({meta,origin:'behavior'}))
+  ]
+  if(advertised.length>MAX_PACKS)throw Error('Too many Realm packs requested')
+  const addonMarked=advertised.some(({meta})=>meta?.addon_pack===true||meta?.has_scripts===true)
+  // A legacy behavior_packs entry denotes an add-on dependency even if its
+  // metadata lacks the new texture-pack addon_pack flag.
+  const behaviorPresent=behavior.length>0
+  const distinguishable=addonMarked||behaviorPresent
+  const required=advertised.filter(({meta,origin})=>
+    origin==='behavior'||
+    (distinguishable?(meta?.addon_pack===true||meta?.has_scripts===true):
+      packet?.must_accept===true)
+  )
+  return {
+    required,advertised:advertised.length,
+    skippedOptional:advertised.length-required.length,
+    policy:distinguishable?'addon-required':'server-required-fallback',
+    selectionKnown:distinguishable,
+    legacyBehaviorCount:behavior.length
+  }
+}
+
 export function checkPackStorage(cacheDir,requiredBytes,{statfs=fs.statfsSync,reserveBytes=FREE_SPACE_RESERVE}={}){
  try{
   const disk=statfs(cacheDir)
@@ -66,7 +106,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false
-  let totalBytes=0, skippedOptional=0, activeCdn=0
+  let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='server-required-fallback',legacyBehaviorCount=0
   let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0
   const cdnQueue=[]
   // The bundled client schedules radius after 500ms, not after downloads.
@@ -115,7 +155,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packLegacyBehaviorCount:legacyBehaviorCount,...extra})
   }
 
   const response = (name,ids=[]) => {
@@ -216,15 +256,13 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   client.on('resource_packs_info',packet=>{
     try{
       if(packs.size || finished || failed)return
-      const textures=packet.texture_packs||[],behaviors=packet.behavior_packs||[]
-      if(!Array.isArray(textures)||!Array.isArray(behaviors))throw Error('Invalid Realm pack list')
-      const incoming=[...textures,...behaviors]
-      if(incoming.length>MAX_PACKS)throw Error('Too many Realm packs requested')
+      const selection=selectRequiredRealmPacks(packet)
+      skippedOptional=selection.skippedOptional
+      advertisedPacks=selection.advertised
+      packSelectionPolicy=selection.policy
+      legacyBehaviorCount=selection.legacyBehaviorCount
       totalBytes=0
-      for(const meta of incoming){
-        // A server-required stack is mandatory. Otherwise retain only packs
-        // flagged as addon/script dependencies; optional cosmetics are skipped.
-        if(packet.must_accept===false&&!meta.addon_pack&&!meta.has_scripts){skippedOptional++;continue}
+      for(const {meta,origin} of selection.required){
         const key=packKey(meta)
         if(packs.has(key))throw Error('Duplicate Realm pack')
         const size=safeNumber(meta.size,MAX_PACK_BYTES)
@@ -234,13 +272,13 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         const basename=crypto.createHash('sha256').update(key).digest('hex')+'.mcpack'
         const cdn=String(meta.cdn_url||'').trim()
         if(cdn)checkCdnUrl(cdn)
-        packs.set(key,{key,uuid,size,basename,ready:false,cdn})
+        packs.set(key,{key,uuid,size,basename,ready:false,cdn,origin})
         if(byUuid.has(uuid))throw Error('Ambiguous Realm packs with duplicate IDs')
         byUuid.set(uuid,key)
       }
       if(!packs.size){
         response('have_all_packs')
-        emit('packs-none',skippedOptional?'Required-only downloads selected; skipped '+skippedOptional+' optional cosmetic pack(s)':'No Realm download packs required',0,0)
+        emit('packs-none',skippedOptional?'Required-only downloads selected; skipped '+skippedOptional+' optional pack(s)':'No Realm download packs required',0,0)
       }else{
         fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
         let required=0
@@ -254,10 +292,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
           }
         }
         const storage=checkStorage(cacheDir,required)
-        emit('pack-storage','Realm packs need '+storage.neededMB+' MB; '+storage.freeMB+' MB available with '+storage.reserveMB+' MB reserved',0,packs.size,storage)
+        emit('pack-storage','Required Realm add-on packs need '+storage.neededMB+' MB; '+storage.freeMB+' MB available; '+skippedOptional+' optional skipped',0,packs.size,storage)
         // Send exactly one request: duplicates can reset server transfer state.
         response('send_packs',[...packs.keys()])
-        emit('pack-request','Request sent for '+packs.size+' required Realm pack(s); awaiting server headers',0,packs.size)
+        emit('pack-request','Download Required & Join: requested '+packs.size+' pack(s); '+skippedOptional+' optional skipped; awaiting server response',0,packs.size)
         if(pendingServerPacks()){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of packs.values())if(p.cdn)cdnQueue.push(p)
         pumpCdn()
@@ -322,7 +360,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
-  return {snapshot:()=>({policy:'required-only',radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'required-only',selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
