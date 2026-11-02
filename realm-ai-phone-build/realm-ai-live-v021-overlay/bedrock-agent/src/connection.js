@@ -6,6 +6,7 @@ import bedrock from 'bedrock-protocol'
 import {buildClientOptions} from './options.js'
 import {root} from '../tools/config.js'
 import {attachRealmPacks} from './realm-packs.js'
+import {JoinLoadingLiveness,recoveryDecision} from './join-loading-liveness.js'
 import path from 'node:path'
 import {SurvivalController} from './survival/controller.js'
 export function safeDisconnectMessage(packet){
@@ -19,16 +20,50 @@ export class Connection extends EventEmitter {
   constructor(config,log=console.log){
     super()
     this.config=config;this.log=log
-    this.client=null;this.connected=false;this.joined=false;this.spawned=false
+    this.client=null;this.connected=false;this.joined=false;this.spawned=false;this.loadingLiveness=new JoinLoadingLiveness();this.recoveryAttempts=0;this.recoveryTimer=null;this.recoveryNextAt=0;this.manualRecoveryStop=false;this.loadingTicker=setInterval(()=>this.checkLoading(),5000);this.loadingTicker.unref?.()
     this.survival=new SurvivalController(this,{plansDirectory:path.join(root,'private','command-plans'),scope:this.config.minecraft.realmId?String(this.config.minecraft.realmId):null});this.lastRejoinAt=0
     this.chatDiagnostics={textPackets:0,playerChatPackets:0,aiRequests:0,ownerRequests:0,nonOwnerRequests:0,ignoredSelf:0,replyAttempts:0,replyQueued:0,replyFailures:0,lastPacketAt:null,lastCommandAt:null,lastRejection:'none',lastReplyError:'none'}
     this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
   }
-  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packReason:this.packStatus.reason||'none',packFreeMB:this.packStatus.freeMB??0,packNeededMB:this.packStatus.neededMB??0,packRetryable:this.packStatus.retryable===true,packCacheStatusIssued:this.packStatus.cacheStatusIssued===true,packDownloadRequestIssued:this.packStatus.downloadRequestIssued===true,packResponseCount:this.packStatus.packResponseCount??0,packServerCount:this.packStatus.serverPackCount??0,packCdnCount:this.packStatus.cdnPackCount??0,packAdvertisedCount:this.packStatus.packAdvertisedCount??0,packSkippedOptional:this.packStatus.packSkippedOptional??0,packSelectionPolicy:this.packStatus.packSelectionPolicy??'unknown',packLegacyBehaviorCount:this.packStatus.packLegacyBehaviorCount??0,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
+  cancelAutoRecovery(){
+    this.manualRecoveryStop=true
+    if(this.recoveryTimer){clearTimeout(this.recoveryTimer);this.recoveryTimer=null}
+    this.recoveryNextAt=0
+  }
+  scheduleLoadingRecovery(stage,reason){
+    const choice=recoveryDecision({stage,reason,attempts:this.recoveryAttempts,spawned:this.spawned,authPending:!!this.authChallenge?.userCode||this.authState==='sign-in-required',manualStop:this.manualRecoveryStop})
+    if(!choice.retry||this.recoveryTimer||!this.client)return false
+    this.recoveryAttempts++
+    this.recoveryNextAt=Date.now()+choice.delayMs
+    this.lastError='Loading stalled ('+reason+'). Bounded automatic rejoin '+this.recoveryAttempts+'/2 scheduled; saved login kept.'
+    this.log('Realm join stalled at '+stage+'; retry '+this.recoveryAttempts+'/2 scheduled in '+Math.round(choice.delayMs/1000)+'s. No authentication files removed.')
+    const generation=this.client
+    this.recoveryTimer=setTimeout(()=>{
+      this.recoveryTimer=null;this.recoveryNextAt=0
+      if(this.spawned||this.manualRecoveryStop||this.client!==generation)return
+      const result=this.reconnect({automatic:true})
+      this.log('Automatic Realm rejoin: '+String(result?.message||'unknown result').slice(0,170))
+    },choice.delayMs)
+    this.recoveryTimer.unref?.()
+    return true
+  }
+  checkLoading(){
+    if(!this.client||this.spawned||this.manualRecoveryStop||this.recoveryTimer||this.authChallenge?.userCode)return
+    if(!this.loadingLiveness.stalled())return
+    // World loading and pack preparation can legitimately take >15 minutes.
+    // Never use repeated keepalive/status as a progress reset.
+    const stage=this.loadingLiveness.stage
+    if(stage==='world-started'||stage==='world-data'||stage==='packs-ready'){
+      this.lastPhase=stage;this.authState='loading-stalled'
+      this.scheduleLoadingRecovery(stage,'loading-stalled')
+    }
+  }
+  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packReason:this.packStatus.reason||'none',packFreeMB:this.packStatus.freeMB??0,packNeededMB:this.packStatus.neededMB??0,packRetryable:this.packStatus.retryable===true,packCacheStatusIssued:this.packStatus.cacheStatusIssued===true,packDownloadRequestIssued:this.packStatus.downloadRequestIssued===true,packResponseCount:this.packStatus.packResponseCount??0,packServerCount:this.packStatus.serverPackCount??0,packCdnCount:this.packStatus.cdnPackCount??0,packAdvertisedCount:this.packStatus.packAdvertisedCount??0,packSkippedOptional:this.packStatus.packSkippedOptional??0,packSelectionPolicy:this.packStatus.packSelectionPolicy??'unknown',packLegacyBehaviorCount:this.packStatus.packLegacyBehaviorCount??0,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,...this.loadingLiveness.snapshot(),loadingRecoveryAttempts:this.recoveryAttempts,loadingRecoveryScheduled:!!this.recoveryTimer,loadingNextRetrySeconds:this.recoveryNextAt?Math.max(0,Math.ceil((this.recoveryNextAt-Date.now())/1000)):0,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
   status(){return {chatDiagnostics:{...this.chatDiagnostics},support:this.trace?.summary(),diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
       packWaitSeconds:this.packRequestAt&&!this.spawned?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,
       packHeadersReceived:this.packHeadersReceived,packChunksReceived:this.packChunksReceived,authState:this.authState,packStatus:this.packStatus,lastCommand:this.lastCommand,recentMessages:this.recentMessages.slice(-8),authChallenge:this.authChallenge}}
-  reconnect(){
+  reconnect({automatic=false}={}){
+    if(!automatic){this.cancelAutoRecovery();this.manualRecoveryStop=false;this.recoveryAttempts=0}
     if(this.spawned)return {accepted:true,queued:false,message:'Already joined. Use look around or survival status.'}
     if(this.client&&!this.client._closed&&!this.lastError)return {accepted:true,queued:false,message:'A join or sign-in is already in progress. Check the Microsoft code shown in the app.'}
     if(Date.now()-this.lastRejoinAt<10000)return {accepted:false,queued:false,message:'Wait ten seconds before another rejoin attempt.'}
@@ -38,11 +73,13 @@ export class Connection extends EventEmitter {
       this.connected=false;this.joined=false;this.spawned=false;this.authChallenge=null;this.lastError='';this.lastPhase='starting';this.authState='starting'
       this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason=''
       this.packStatus={stage:'not-reached',message:'Rejoining with saved Microsoft session',done:0,total:0}
+      this.loadingLiveness.reset()
       this.start()
       return {accepted:true,queued:true,message:'Rejoining the Realm with the existing saved session. No login cache was deleted. Complete Microsoft sign-in only if the app requests it.'}
     }catch(e){this.lastError=String(e.message||e);this.authState='error';return {accepted:false,queued:false,message:'Rejoin failed: '+this.lastError}}
   }
   start(){
+    this.loadingLiveness.reset()
     this.lastFailure=null;this.titleTokenRecoveryAttempted=false
     const m=this.config.minecraft
     const options=buildClientOptions(m,root,data=>{
@@ -99,12 +136,16 @@ export class Connection extends EventEmitter {
     this.survival.attach(client)
     // These listeners run before the pack handler and record counts only.
     // Never persist pack URLs, auth data, or raw Minecraft packets to logs.
-    client.on('resource_pack_data_info',()=>{this.packHeadersReceived++})
+    client.on('resource_pack_data_info',p=>{this.packHeadersReceived++;this.loadingLiveness.note('resource_pack_data_info',String(p?.pack_id||'no-id'))})
     client.on('resource_pack_chunk_data',p=>{
       this.packChunksReceived++
-      this.packBytesReceived+=Math.max(0,Number(p?.payload?.length||0))
+      const size=Math.max(0,Number(p?.payload?.length||0));this.packBytesReceived+=size
+      this.loadingLiveness.note('resource_pack_chunk_data',String(p?.pack_id||'no-id')+':'+String(p?.chunk_index??'unknown'),size)
     })
     this.packHandler=attachRealmPacks(client,path.join(root,'private','realm-packs'),state=>{
+      if(this.client!==client)return
+      this.loadingLiveness.setStage(state.stage)
+      if(Number.isFinite(state.receivedMB))this.loadingLiveness.noteTransferBytes(state.receivedMB*1024*1024)
       if(state.stage==='pack-request'){
         this.packRequestAt=Date.now()
         this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0
@@ -115,6 +156,7 @@ export class Connection extends EventEmitter {
         this.authState='error'
         this.lastError='Resource pack ('+(state.reason||'failed')+'): '+state.message
         this.log('Resource pack transfer failed: '+state.message)
+        if(['server-no-pack-data','server-pack-stalled'].includes(state.reason))this.scheduleLoadingRecovery(state.stage,state.reason)
       }else if(state.stage==='packs-ready'){
         this.joined=true;this.authState='packs-ready'
         this.log('Resource pack handshake completed; waiting for the Minecraft spawn event.')
@@ -125,6 +167,10 @@ export class Connection extends EventEmitter {
     })
     // The library reports authentication/transport separately from the game join.
     // Do not log tokens, automatically retry or infer that the game has spawned.
+    client.on('resource_packs_info',p=>this.loadingLiveness.note('resource_packs_info',String(p?.texture_packs?.length??0)+':'+String(p?.behavior_packs?.length??0)))
+    client.on('resource_pack_stack',p=>this.loadingLiveness.note('resource_pack_stack',String(p?.resource_packs?.length??0)))
+    client.on('level_chunk',p=>this.loadingLiveness.note('level_chunk',String(p?.x??'')+','+String(p?.z??'')))
+    client.on('sub_chunk',p=>this.loadingLiveness.note('sub_chunk',String(p?.dimension??'')+','+String(p?.origin?.x??p?.x??'')+','+String(p?.origin?.z??p?.z??'')+','+String(p?.origin?.y??p?.y??'')))
     client.on('session',()=>{
       this.authChallenge=null;this.lastPhase='authenticated';this.authState='authenticated';this.lastError=''
       this.log('Minecraft session established; joining the Realm.')
@@ -148,7 +194,7 @@ export class Connection extends EventEmitter {
       }
 this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='negotiating-packs';this.log('Bedrock handshake accepted; negotiating required Realm packs.')})
     client.on('spawn',()=>{
-      this.spawned=true;this.lastPhase='spawned'
+      this.spawned=true;this.loadingLiveness.waiting=false;this.recoveryAttempts=0;this.cancelAutoRecovery();this.manualRecoveryStop=false;this.lastPhase='spawned'
       this.authChallenge=null;this.authState='spawned';this.lastError=''
       this.username=client.profile?.name||client.username||m.botPlayerName
       this.log('Spawn event received. Display name reported: '+this.username)
@@ -185,17 +231,20 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
     }
     client.on('play_status',p=>{
       const state=String(p?.status||'')
+      this.loadingLiveness.note('play_status',state)
       if(state==='login_success')this.lastPhase='minecraft-login-ok'
       else if(state && state!=='player_spawn')failure('Minecraft login status',{message:state})
     })
-    client.on('start_game',()=>{this.lastPhase='world-started';this.log('Minecraft start_game received; awaiting spawn.')})
+    client.on('start_game',()=>{this.loadingLiveness.note('start_game','initial');this.lastPhase='world-started';this.log('Minecraft start_game received; awaiting spawn.')})
     client.on('kick',p=>failure('Server rejected join',p))
     client.on('error',e=>failure('Bedrock protocol error',e))
     client.on('disconnect',p=>{
+      if(this.client!==client)return
       failure('Server disconnect',p)
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
     })
     client.on('close',()=>{
+      if(this.client!==client)return
       if(!this.lastError&&this.packRequestAt){
         const sec=Math.max(0,Math.round((Date.now()-this.packRequestAt)/1000))
         if(!this.packHeadersReceived&&this.packStatus?.stage==='pack-request'){
@@ -210,6 +259,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       this.authChallenge=null;this.authState='disconnected'
     })
     client.on('end',()=>{
+      if(this.client!==client)return
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
       if(!this.lastError)this.lastError='Connection ended at '+this.lastPhase+'; no server reason was sent.'
       this.authChallenge=null;this.authState='disconnected'
@@ -238,5 +288,5 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
     try{this.queueChat('[VF AI] '+String(message).slice(0,185));this.chatDiagnostics.replyQueued++;return true}
     catch(err){this.chatDiagnostics.replyFailures++;this.chatDiagnostics.lastReplyError=String(err.message||err).slice(0,100);this.lastError=String(err.message||err);return false}
   }
-  close(){try{this.survival.close();this.packHandler?.cleanup();this.client?.close()}catch(_){} }
+  close(){try{this.cancelAutoRecovery();this.survival.close();this.packHandler?.cleanup();this.client?.close()}catch(_){} }
 }
