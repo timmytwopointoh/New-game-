@@ -88,7 +88,7 @@ test('placement timeout, mismatched update and Stop preserve world state and sto
  const f=fixture();assert(f.n.build(design()).accepted);f.n.stop();f.n.step();assert.equal(f.sent.filter(([name])=>name==='inventory_transaction').length,0);assert.equal(f.n.building.job,null);f.n.detach()
 })
 test('building descriptors are explicit executable jobs and remain separate from supply previews',()=>{
- const text='build wall 2 by 3 with dirt at 2 64 0',d=parseDescriptor(text);assert.equal(d.id,'build_wall');assert.equal(renderDescriptor(d),text);assert.equal(parseDescriptor('plan build wall 2 by 3 with dirt').id,'wall');assert.equal(parseDescriptor('mine 1 64 0').id,'dig');assert.throws(()=>parseDescriptor('mine'),/Dig one block/);assert.throws(()=>validateDescriptor({id:'build_wall',values:{material:'dirt',width:2,height:4,x:0,y:64,z:0}}));assert.equal(renderDescriptor(parseDescriptor('build shelter with dirt at 2 64 0')),'build shelter with dirt at 2 64 0')
+ const text='build wall 2 by 3 with dirt at 2 64 0',d=parseDescriptor(text);assert.equal(d.id,'build_wall');assert.equal(renderDescriptor(d),text);assert.equal(parseDescriptor('plan build wall 2 by 3 with dirt').id,'wall');assert.equal(parseDescriptor('mine 1 64 0').id,'dig');assert.throws(()=>parseDescriptor('mine'),/Dig one block/);assert.throws(()=>validateDescriptor({id:'build_wall',values:{material:'dirt',width:2,height:33,x:0,y:64,z:0}}));assert.equal(renderDescriptor(parseDescriptor('build shelter with dirt at 2 64 0')),'build shelter with dirt at 2 64 0')
 })
 
 test('effective held tool is faster than empty hand or held dirt, and input remains held after estimated completion until server air',()=>{
