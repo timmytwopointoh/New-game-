@@ -106,3 +106,5 @@ jobs:
           retention-days: 3
 
 # Recheck updated CDN and watchdog canonical wire-name regression assertions.
+
+# Rebuild after migrating legacy pack location test assertions to categorized cache paths.
