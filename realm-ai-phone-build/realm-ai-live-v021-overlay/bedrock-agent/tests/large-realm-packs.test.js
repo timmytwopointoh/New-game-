@@ -8,6 +8,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import {attachRealmPacks,checkPackStorage,explainPackFailure} from '../src/realm-packs.js'
 import {downloadRealmCdn} from '../src/cdn-download.js'
+import {packFilePath} from '../src/pack-storage.js'
 const data=Buffer.from('long-realm-pack-data')
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex')
 function harness(downloadCdn,checkStorage){
@@ -51,7 +52,7 @@ test('interrupted CDN download retries using saved bytes and checks final file',
  assert(h.events.some(e=>e.stage==='pack-retry'))
  assert(h.events.some(e=>e.message.includes('resumed')))
  assert.equal(h.handler.snapshot().failed,false)
- assert.equal(readFileSync(path.join(h.dir,hash('world-textures_1.0.0')+'.mcpack')).toString(),data.toString())
+ assert.equal(readFileSync(packFilePath(h.dir,'resource',hash('world-textures_1.0.0')+'.mcpack')).toString(),data.toString())
 })
 test('cancelled session retains CDN partial, never reports all packs received',async t=>{
  let cancel
