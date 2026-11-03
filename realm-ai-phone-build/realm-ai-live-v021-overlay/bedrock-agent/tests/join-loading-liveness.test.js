@@ -100,3 +100,10 @@ test('pack handler default inactivity grace is 17 minutes and a resumed cache ca
  assert.equal(events.at(-1).reason,'server-no-pack-data')
  assert.equal(explainPackFailure({code:'PACK_NO_SERVER_DATA'}).retryable,true)
 })
+
+test('silent transport close after pack request schedules only bounded rejoin, never auth or explicit kick',()=>{
+ assert.deepEqual(recoveryDecision({stage:'pack-request',reason:'early-transport-close',attempts:0}),{retry:true,delayMs:15000,reason:'bounded-rejoin'})
+ assert.deepEqual(recoveryDecision({stage:'pack-request',reason:'early-transport-close',attempts:1}),{retry:true,delayMs:45000,reason:'bounded-rejoin'})
+ for(const options of [{attempts:2},{manualStop:true},{authPending:true},{spawned:true}])assert.equal(recoveryDecision({stage:'pack-request',reason:'early-transport-close',...options}).retry,false)
+ assert.equal(recoveryDecision({stage:'pack-request',reason:'server-kick'}).retry,false)
+})
