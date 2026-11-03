@@ -22,6 +22,9 @@ export function sanitizeDiagnosticReport(input={}){
   report.packCacheStatusIssued=input.packCacheStatusIssued===true;report.packDownloadRequestIssued=input.packDownloadRequestIssued===true
   for(const name of ['packResponseCount','packServerCount','packCdnCount','packAdvertisedCount','packSkippedOptional','packLegacyBehaviorCount','packWireCode','packWireBytes','packWireIds','packResourceClassifiedCount','packBehaviorClassifiedCount','packAddonClassifiedCount','packHeadersSeenByHandler','packChunksSeenByHandler'])report[name]=number(input[name])
   report.packWireEncoded=input.packWireEncoded===true;report.packWireVerified=input.packWireVerified===true;report.packTransportConnectedAtRequest=input.packTransportConnectedAtRequest===true
+  for(const name of ['transportReliableWrites','transportReliableWritesOpen','transportReliableWritesClosed','transportReliableAfterPackRequest','transportClosedAfterRequestSeconds'])report[name]=number(input[name])
+  for(const name of ['transportJoinObserved','transportObservedPackRequest','transportPackRequestOpen','transportClosed'])report[name]=input[name]===true
+  report.transportCloseKind=['none','server-disconnect','protocol-error','transport-close','transport-end'].includes(input.transportCloseKind)?input.transportCloseKind:'unknown'
   report.packWireVersion=['1.26.60','1.26.51','1.26.50'].includes(input.packWireVersion)?input.packWireVersion:'unknown'
   report.packWireMode=['modern-1-to-4','unchanged-version'].includes(input.packWireMode)?input.packWireMode:'unknown'
   report.packWireText=['cancel','downloading','downloadingfinished','resourcepackstackfinished'].includes(input.packWireText)?input.packWireText:'unknown'
