@@ -67,13 +67,13 @@ test('1.26.60 pack request is byte-correct, decoded with all pack identifiers, w
  const client={options:{version:'1.26.60'},connection:{connected:true},
   serializer:createSerializer('1.26.60'),deserializer:createDeserializer('1.26.60')}
  const ids=['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa_1.0.0','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb_1.0.0']
- const packet={response_status:'send_packs',response_status_name:'downloading',resourcepackids:ids}
+ const packet={response_status:'send_packs',response_status_name:'Downloading',resourcepackids:ids}
  const observation=inspectPackResponseWire(client,packet)
  assert.equal(observation.available,true)
  assert.equal(observation.verified,true)
  assert.equal(observation.packetId,8)
  assert.equal(observation.statusCode,2)
- assert.equal(observation.wireText,'downloading')
+ assert.equal(observation.wireText,'Downloading')
  assert.equal(observation.packIdCount,2)
  assert.equal(observation.transportConnected,true)
  assert.equal(JSON.stringify(observation).includes('aaaaaaaa'),false)
@@ -81,12 +81,12 @@ test('1.26.60 pack request is byte-correct, decoded with all pack identifiers, w
  // Independent protocol fixture: packet 8, status 2, 11-byte lowercase
  // response string then count of pack IDs.
  assert.deepEqual([...bytes.subarray(0,3)],[8,2,11])
- assert.equal(bytes.subarray(3,14).toString('utf8'),'downloading')
+ assert.equal(bytes.subarray(3,14).toString('utf8'),'Downloading')
  assert.equal(bytes[14],2)
 })
 
 test('unsupported serializer enum fails before attempting to transmit pack response',()=>{
  const c={options:{version:'1.26.60'},serializer:{createPacketBuffer:()=>Buffer.from([8,1])},
   deserializer:{parsePacketBuffer:()=>({data:{name:'resource_pack_client_response',params:{}}})}}
- assert.throws(()=>inspectPackResponseWire(c,{response_status:'send_packs',response_status_name:'downloading',resourcepackids:['x_1.0.0']}),/wrong on-wire status/)
+ assert.throws(()=>inspectPackResponseWire(c,{response_status:'send_packs',response_status_name:'Downloading',resourcepackids:['x_1.0.0']}),/wrong on-wire status/)
 })
