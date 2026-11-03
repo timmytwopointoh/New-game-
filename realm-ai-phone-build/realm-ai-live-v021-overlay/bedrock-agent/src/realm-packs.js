@@ -7,6 +7,7 @@ import crypto from 'node:crypto'
 import {downloadRealmCdn,checkCdnUrl} from './cdn-download.js'
 import {classifyPack,packDirectory,packFilePath,priorPackLocations,PACK_CATEGORIES} from './pack-storage.js'
 import {inspectPackResponseWire} from './pack-protocol-observer.js'
+import {markPackTransportRequest} from './transport-evidence.js'
 
 const MAX_PACKS = 64
 const MAX_PACK_BYTES = 512 * 1024 * 1024
@@ -166,6 +167,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       resourcepackids:ids
     }
     const observation=inspectPackResponseWire(client,packet)
+    if(name==='send_packs')markPackTransportRequest(client)
     client.write('resource_pack_client_response',packet)
     packResponseCount++
     if(name==='send_packs'){downloadRequestIssued=true;packRequestWire=observation}
