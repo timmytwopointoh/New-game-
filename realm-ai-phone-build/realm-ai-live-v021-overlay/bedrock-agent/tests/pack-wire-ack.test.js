@@ -34,32 +34,32 @@ test('cache is sent immediately before Downloading and never queued a duplicate'
  assert.equal(h.queued.length,0)
  assert.equal(h.writes[0].packet.enabled,false)
  assert.equal(h.writes[1].packet.response_status,'send_packs')
- assert.equal(h.writes[1].packet.response_status_name,'downloading')
+ assert.equal(h.writes[1].packet.response_status_name,'Downloading')
  assert.deepEqual(h.writes[1].packet.resourcepackids,['aabbccdd-1234-4567-89ab-aabbccddeeff_1.0.0'])
  assert.equal(h.stages.at(-1).cacheStatusIssued,true)
  assert.equal(h.stages.at(-1).downloadRequestIssued,true)
  assert.equal(h.stages.at(-1).packResponseCount,1)
 })
 test('real Bedrock 1.26.60 serializer encodes Downloading response variant, string and pack IDs',()=>{
- const src={response_status:'send_packs',response_status_name:'downloading',
+ const src={response_status:'send_packs',response_status_name:'Downloading',
   resourcepackids:['aabbccdd-1234-4567-89ab-aabbccddeeff_1.0.0']}
  const encoded=serializer.createPacketBuffer({name:'resource_pack_client_response',params:src})
  // 8 is pack response packet ID; following 2 is the 1.26.60 Downloading variant selector.
  assert.equal(encoded[0]&0x7f,8)
  assert.equal(encoded[1],2)
  assert.equal(encoded[2],11)
- assert.equal(encoded.subarray(3,14).toString('utf8'),'downloading')
+ assert.equal(encoded.subarray(3,14).toString('utf8'),'Downloading')
  const decoded=deserializer.parsePacketBuffer(encoded)
  assert.equal(decoded.data.name,'resource_pack_client_response')
  assert.equal(decoded.data.params.response_status,'send_packs')
- assert.equal(decoded.data.params.response_status_name,'downloading')
+ assert.equal(decoded.data.params.response_status_name,'Downloading')
  assert.deepEqual(decoded.data.params.resourcepackids,src.resourcepackids)
 })
 test('empty required-pack world issues both immediate finish signals in order',t=>{
  const h=harness({packs:[]});t.after(()=>h.close());h.begin()
  h.client.emit('resource_pack_stack',{resource_packs:[]})
  const codes=h.writes.filter(x=>x.name==='resource_pack_client_response').map(x=>x.packet.response_status_name)
- assert.deepEqual(codes,['downloadingfinished','resourcepackstackfinished'])
+ assert.deepEqual(codes,['DownloadingFinished','ResourcePackStackFinished'])
  assert.equal(h.queued.length,0)
  assert.equal(h.packsHandler.snapshot().finished,true)
 })
