@@ -31,7 +31,7 @@ final class ConnectionDiagnostics {
             result.put("packRetryable",Boolean.TRUE.equals(input.opt("packRetryable")));
             String packChoice=input.optString("packSelectionPolicy","unknown");
             result.put("packSelectionPolicy",packChoice.equals("all-advertised")||packChoice.equals("addon-required")||packChoice.equals("server-required-fallback")?packChoice:"unknown");
-            String handshakeMode=input.optString("packHandshakeMode","unknown");result.put("packHandshakeMode",Arrays.asList("native-queue","no-cache-status","cache-first").contains(handshakeMode)?handshakeMode:"unknown");
+            String handshakeMode=input.optString("packHandshakeMode","unknown");result.put("packHandshakeMode",Arrays.asList("original-working","native-queue","no-cache-status","cache-first").contains(handshakeMode)?handshakeMode:"unknown");
             result.put("packCacheStatusIssued",Boolean.TRUE.equals(input.opt("packCacheStatusIssued")));
             result.put("packDownloadRequestIssued",Boolean.TRUE.equals(input.opt("packDownloadRequestIssued")));
             result.put("packInfoReceived",Boolean.TRUE.equals(input.opt("packInfoReceived")));
