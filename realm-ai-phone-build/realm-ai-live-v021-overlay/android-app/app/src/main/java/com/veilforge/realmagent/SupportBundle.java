@@ -80,8 +80,11 @@ final class SupportBundle {
   JSONObject pack=new JSONObject().put("schema",1)
     .put("status",connection.optString("packStage","unknown"))
     .put("reason",connection.optString("packReason","none"));
-  for(String k:new String[]{"packHeaders","packChunks","packAdvertisedCount","packSkippedOptional","packServerCount","packCdnCount","packResponseCount","loadingElapsedSeconds","loadingNoProgressSeconds","loadingUniqueSignals","loadingRepeatedSignals","loadingReceivedBytes","loadingRecoveryAttempts","loadingNextRetrySeconds"})pack.put(k,count(connection,k));
-  for(String k:new String[]{"packCacheStatusIssued","packDownloadRequestIssued","loadingRecoveryScheduled","loadingActive"})pack.put(k,connection.optBoolean(k));
+  for(String k:new String[]{"packHeaders","packChunks","packAdvertisedCount","packSkippedOptional","packServerCount","packCdnCount","packResponseCount","packWireCode","packWireBytes","packWireIds","packResourceClassifiedCount","packBehaviorClassifiedCount","packAddonClassifiedCount","transportReliableWrites","transportReliableWritesOpen","transportReliableWritesClosed","transportReliableAfterPackRequest","transportClosedAfterRequestSeconds","loadingElapsedSeconds","loadingNoProgressSeconds","loadingUniqueSignals","loadingRepeatedSignals","loadingReceivedBytes","loadingRecoveryAttempts","loadingNextRetrySeconds"})pack.put(k,count(connection,k));
+  for(String k:new String[]{"packCacheStatusIssued","packDownloadRequestIssued","packWireEncoded","packWireVerified","packTransportConnectedAtRequest","transportJoinObserved","transportObservedPackRequest","transportPackRequestOpen","transportClosed","loadingRecoveryScheduled","loadingActive"})pack.put(k,connection.optBoolean(k));
+  pack.put("transportCloseKind",connection.optString("transportCloseKind","unknown"))
+    .put("packWireText",connection.optString("packWireText","unknown"))
+    .put("packWireVersion",connection.optString("packWireVersion","unknown"));
   pack.put("packSelectionPolicy",connection.optString("packSelectionPolicy","unknown"))
     .put("loadingStage",connection.optString("loadingStage","unknown"))
     .put("loadingLastSignal",connection.optString("loadingLastSignal","none"));
