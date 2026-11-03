@@ -108,3 +108,5 @@ jobs:
 # Recheck updated CDN and watchdog canonical wire-name regression assertions.
 
 # Rebuild after migrating legacy pack location test assertions to categorized cache paths.
+
+# Verify old CDN-resume test now checks the categorized private partial path.
