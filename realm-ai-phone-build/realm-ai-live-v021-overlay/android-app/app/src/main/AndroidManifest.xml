@@ -19,6 +19,9 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-initiated companion maintains a live connection to an online game while the user plays"/>
         </service>
+        <provider android:name="com.veilforge.realmagent.ReportContentProvider"
+            android:authorities="${applicationId}.reports"
+            android:exported="false" android:grantUriPermissions="true"/>
         <receiver android:name="com.veilforge.realmagent.UpdateInstallerReceiver" android:exported="false"/>
     </application>
 </manifest>
