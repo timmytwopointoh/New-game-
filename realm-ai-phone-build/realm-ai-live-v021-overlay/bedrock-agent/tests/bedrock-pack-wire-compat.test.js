@@ -22,21 +22,21 @@ test('1.26.60 Downloading packet goes onto the wire with enum 2, not legacy 1',(
  const deserializer=createDeserializer('1.26.60')
  const ids=['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa_1.0.0','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb_1.0.0']
  const buffer=serializer.createPacketBuffer({name:'resource_pack_client_response',params:{
-  response_status:'send_packs',response_status_name:'downloading',resourcepackids:ids
+  response_status:'send_packs',response_status_name:'Downloading',resourcepackids:ids
  }})
  assert.equal(buffer[0],8,'resource_pack_client_response packet ID')
  assert.equal(buffer[1],2,'1.26.60 must encode Downloading as 2, not the old 1')
  const parsed=deserializer.parsePacketBuffer(buffer).data
  assert.equal(parsed.name,'resource_pack_client_response')
  assert.equal(parsed.params.response_status,'send_packs')
- assert.equal(parsed.params.response_status_name,'downloading')
+ assert.equal(parsed.params.response_status_name,'Downloading')
  assert.deepEqual(parsed.params.resourcepackids,ids)
 })
 
 test('1.26.60 completed responses use wire status 3/4 and no pack ID array',()=>{
  preparePackResponseWire({version:'1.26.60'})
  const serialize=createSerializer('1.26.60')
- for(const [status,title,code] of [['have_all_packs','downloadingfinished',3],['completed','resourcepackstackfinished',4]]){
+ for(const [status,title,code] of [['have_all_packs','DownloadingFinished',3],['completed','ResourcePackStackFinished',4]]){
   const bytes=serialize.createPacketBuffer({name:'resource_pack_client_response',params:{response_status:status,response_status_name:title,resourcepackids:[]}})
   assert.equal(bytes[1],code)
  }
@@ -47,7 +47,7 @@ test('1.26.51 protocol retains its historical 0-3 response codes',()=>{
  assert.equal(wire.mode,'unchanged-version')
  const serialize=createSerializer('1.26.51')
  const packet=serialize.createPacketBuffer({name:'resource_pack_client_response',params:{
-  response_status:'send_packs',response_status_name:'downloading',resourcepackids:['any_1.0.0']
+  response_status:'send_packs',response_status_name:'Downloading',resourcepackids:['any_1.0.0']
  }})
  assert.equal(packet[1],1)
 })
