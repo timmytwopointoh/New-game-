@@ -37,7 +37,7 @@ final class ConnectionDiagnostics {
                 result.put(field,nonnegative(input,field));
             for(String field:new String[]{"packHeaders","packChunks","recordedAt","loadingElapsedSeconds","loadingNoProgressSeconds","loadingUniqueSignals","loadingRepeatedSignals","loadingReceivedBytes","loadingGraceSeconds","loadingRecoveryAttempts","loadingNextRetrySeconds"})result.put(field,nonnegative(input,field));
             for(String field:new String[]{"packWireEncoded","packWireVerified","packTransportConnectedAtRequest","transportJoinObserved","transportObservedPackRequest","transportPackRequestOpen","transportClosed"})result.put(field,Boolean.TRUE.equals(input.opt(field)));
-            String wireText=input.optString("packWireText","unknown");result.put("packWireText",Arrays.asList("cancel","downloading","downloadingfinished","resourcepackstackfinished").contains(wireText)?wireText:"unknown");
+            String wireText=input.optString("packWireText","unknown");result.put("packWireText",Arrays.asList("Cancel","Downloading","DownloadingFinished","ResourcePackStackFinished").contains(wireText)?wireText:"unknown");
             String wireVersion=input.optString("packWireVersion","unknown");result.put("packWireVersion",Arrays.asList("1.26.60","1.26.51","1.26.50").contains(wireVersion)?wireVersion:"unknown");
             String closeKind=input.optString("transportCloseKind","unknown");result.put("transportCloseKind",Arrays.asList("none","server-disconnect","protocol-error","transport-close","transport-end").contains(closeKind)?closeKind:"unknown");
             result.put("loadingActive",Boolean.TRUE.equals(input.opt("loadingActive")));
