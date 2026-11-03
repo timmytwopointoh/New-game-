@@ -5,6 +5,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import {downloadRealmCdn,checkCdnUrl} from './cdn-download.js'
+import {classifyPack,packDirectory,packFilePath,priorPackLocations,PACK_CATEGORIES} from './pack-storage.js'
+import {inspectPackResponseWire} from './pack-protocol-observer.js'
 
 const MAX_PACKS = 64
 const MAX_PACK_BYTES = 512 * 1024 * 1024
@@ -60,7 +62,7 @@ export function explainPackFailure(error){
  * per-chunk hashes and private storage rules. No add-on scripts are run.
  */
 export function selectRequiredRealmPacks(packet) {
-  const texture=packet?.texture_packs??[], behavior=packet?.behavior_packs??[]
+  const texture=packet?.texture_packs??packet?.resource_packs??[], behavior=packet?.behavior_packs??[]
   if(!Array.isArray(texture)||!Array.isArray(behavior))throw Error('Invalid Realm pack list')
   const advertised=[
     ...texture.map(meta=>({meta,origin:'resource'})),
@@ -106,6 +108,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   const originalQueue=client.queue,originalWrite=client.write
   let gameStarted=false,pendingRadius=null,radiusDeferred=0,cacheQueued=false
   let cacheStatusIssued=false,downloadRequestIssued=false,packResponseCount=0
+  let packRequestWire={available:false,verified:false,packIdCount:0,statusCode:0,byteLength:0,version:'unknown',wireText:'unknown',transportConnected:false}
   const canRequestTerrain=()=>finished&&gameStarted&&!failed
   function gate(method,queued=false){return function(name,packet,...args){
     if(queued&&name==='client_cache_status'){if(cacheQueued)return;cacheQueued=true}
@@ -147,23 +150,25 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packLegacyBehaviorCount:legacyBehaviorCount,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
   }
 
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
     // buffer critical handshake acknowledgements in the 20ms gameplay queue.
     // cacheFirst already sent client_cache_status in a separate packet.
-    client.write('resource_pack_client_response', {
+    const packet={
       response_status:name,
-      // Modern Bedrock's response text differs from Prismarine enum labels.
-      // Variant tags are 0..3; wire response strings are lowercase (Gophertunnel reference).
+      // Bedrock response text is lower-case on the wire. For 1.26.60,
+      // the numeric Downloading value is 2. Verify both before sending.
       response_status_name:({refused:'cancel',send_packs:'downloading',
         have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'})[name]||name,
       resourcepackids:ids
-    })
+    }
+    const observation=inspectPackResponseWire(client,packet)
+    client.write('resource_pack_client_response',packet)
     packResponseCount++
-    if(name==='send_packs')downloadRequestIssued=true
+    if(name==='send_packs'){downloadRequestIssued=true;packRequestWire=observation}
   }
   const failure = err => {
     if(failed) return
@@ -199,7 +204,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     while(activeCdn<2&&cdnQueue.length&&!failed&&!cancellation.signal.aborted){const p=cdnQueue.shift();activeCdn++;startCdn(p).finally(()=>{activeCdn--;pumpCdn()})}
   }
   async function startCdn(p){
-    p.file=path.join(cacheDir,p.basename);p.tmp=p.file+'.download'
+    p.file=priorPackLocations(cacheDir,p.basename,p.category).find(f=>fs.existsSync(f)&&fs.existsSync(f+'.sha256'))||packFilePath(cacheDir,p.category,p.basename)
+    fs.mkdirSync(path.dirname(p.file),{recursive:true,mode:0o700})
+    p.tmp=p.file+'.download'
     const marker=p.file+'.sha256'
     try{
       if(fs.existsSync(p.file)&&fs.existsSync(marker)){
@@ -264,7 +271,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         const basename=crypto.createHash('sha256').update(key).digest('hex')+'.mcpack'
         const cdn=String(meta.cdn_url||'').trim()
         if(cdn)checkCdnUrl(cdn)
-        packs.set(key,{key,uuid,size,basename,ready:false,cdn,origin})
+        packs.set(key,{key,uuid,size,basename,ready:false,cdn,origin,flags:{addon_pack:meta.addon_pack===true,has_scripts:meta.has_scripts===true},category:classifyPack({origin,metadata:meta})})
         if(byUuid.has(uuid))throw Error('Ambiguous Realm packs with duplicate IDs')
         byUuid.set(uuid,key)
       }
@@ -273,9 +280,11 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         emit('packs-none','No Realm packs advertised; continuing join',0,0)
       }else{
         fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
+        for(const category of PACK_CATEGORIES)fs.mkdirSync(packDirectory(cacheDir,category),{recursive:true,mode:0o700})
         let required=0
         for(const p of packs.values()){
-          const file=path.join(cacheDir,p.basename),partial=file+'.download'
+          const file=priorPackLocations(cacheDir,p.basename,p.category).find(f=>fs.existsSync(f)&&fs.statSync(f).size===p.size&&(p.cdn?fs.existsSync(f+'.sha256'):true))||packFilePath(cacheDir,p.category,p.basename)
+          const partial=file+'.download'
           const cached=fs.existsSync(file)&&fs.statSync(file).size===p.size&&(p.cdn?fs.existsSync(file+'.sha256'):true)
           if(!cached){
             const partialSize=p.cdn&&fs.existsSync(partial)?fs.statSync(partial).size:0
@@ -310,15 +319,22 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       p.expected=safeNumber(packet.size,MAX_PACK_BYTES)
       if(p.expected>p.size || p.chunkSize<1 || p.count<1 || p.count*p.chunkSize<p.expected || (p.count-1)*p.chunkSize>=p.expected)throw Error('Invalid Realm pack chunk layout')
       p.hash=packHash(packet.hash)
-      p.file=path.join(cacheDir,p.basename)
-      p.tmp=p.file+'.download'
-      if(fs.existsSync(p.file)){
-        const stat=fs.statSync(p.file)
-        if(stat.size===p.expected && crypto.createHash('sha256').update(fs.readFileSync(p.file)).digest('hex')===p.hash){
-          p.ready=true;emit('pack-cached','Verified previously downloaded Realm pack');progress();return
+      // Transfer header is authoritative about pack kind. The modern info
+      // packet combines resources and addons into a single announced list.
+      p.category=classifyPack({origin:p.origin,metadata:p.flags,serverType:packet.pack_type})
+      p.file=packFilePath(cacheDir,p.category,p.basename)
+      for(const candidate of priorPackLocations(cacheDir,p.basename,p.category)){
+        if(!fs.existsSync(candidate))continue
+        const stat=fs.statSync(candidate)
+        if(stat.size!==p.expected)continue
+        if(crypto.createHash('sha256').update(fs.readFileSync(candidate)).digest('hex')===p.hash){
+          p.file=candidate;p.ready=true
+          emit('pack-cached','Verified previously downloaded '+p.category+' Realm pack');progress();return
         }
       }
       checkStorage(cacheDir,p.expected)
+      fs.mkdirSync(path.dirname(p.file),{recursive:true,mode:0o700})
+      p.tmp=p.file+'.download'
       p.fd=fs.openSync(p.tmp,'w',0o600)
       p.hashContext=crypto.createHash('sha256')
       p.next=0;p.written=0;p.requested=true
@@ -352,7 +368,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
-  return {snapshot:()=>({policy:'all-advertised',selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'all-advertised',selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
