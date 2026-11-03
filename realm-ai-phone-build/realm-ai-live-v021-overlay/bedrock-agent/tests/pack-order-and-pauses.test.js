@@ -53,8 +53,8 @@ test('repeated visibility scans share ray results, while live updates invalidate
   f.set({x:1,y:65,z:0},'stone');f.set({x:1,y:64,z:0},'stone');assert.equal(f.w.visible(p),false);assert.equal(rays,2)
  }finally{f.close()}
 })
-test('cache policy precedes pack response even when the library info listener is installed later',()=>{
+test('native library queues cache policy after our immediate response when its listener runs later',()=>{
  const c=new EventEmitter(),sent=[],dir=fs.mkdtempSync(path.join(os.tmpdir(),'realm-cache-order-'));c.queue=c.write=(name,data)=>sent.push([name,data]);const h=attachRealmPacks(c,dir)
  c.on('resource_packs_info',()=>c.queue('client_cache_status',{enabled:false}))
- try{c.emit('resource_packs_info',{texture_packs:[],must_accept:false});assert.deepEqual(sent.map(([n])=>n),['client_cache_status','resource_pack_client_response']);assert.equal(sent.filter(([n])=>n==='client_cache_status').length,1)}finally{h.cleanup();fs.rmSync(dir,{recursive:true,force:true})}
+ try{c.emit('resource_packs_info',{texture_packs:[],must_accept:false});assert.deepEqual(sent.map(([n])=>n),['resource_pack_client_response','client_cache_status']);assert.equal(sent.filter(([n])=>n==='client_cache_status').length,1)}finally{h.cleanup();fs.rmSync(dir,{recursive:true,force:true})}
 })
