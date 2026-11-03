@@ -118,3 +118,5 @@ jobs:
 # Verify old CDN-resume test now checks the categorized private partial path.
 
 # Re-run after expanding fixed ZIP-file manifest and forensic privacy regression coverage.
+
+# Re-run after replacing legacy diagnostic-screen test expectations with one ZIP report checks.
