@@ -97,7 +97,9 @@ async function hashStoredFile(filename){
 }
 export function attachRealmPacks(client, cacheDir, report = () => {},
   {downloadCdn=downloadRealmCdn,checkStorage=checkPackStorage,
-   serverPackIdleMs=17*60*1000,heartbeatMs=2000,now=()=>Date.now()} = {}) {
+   serverPackIdleMs=17*60*1000,heartbeatMs=2000,now=()=>Date.now(),handshakeMode='cache-first'} = {}) {
+  // Strictly bounded A/B protocol probes; never accept arbitrary packet behavior.
+  if(!['native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false
@@ -112,7 +114,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let packRequestWire={available:false,verified:false,packIdCount:0,statusCode:0,byteLength:0,version:'unknown',wireText:'unknown',transportConnected:false}
   const canRequestTerrain=()=>finished&&gameStarted&&!failed
   function gate(method,queued=false){return function(name,packet,...args){
-    if(queued&&name==='client_cache_status'){if(cacheQueued)return;cacheQueued=true}
+    if(queued&&name==='client_cache_status'){
+      if(handshakeMode==='no-cache-status'||cacheQueued)return
+      cacheQueued=true;cacheStatusIssued=true
+    }
     if(name==='request_chunk_radius'&&!canRequestTerrain()){pendingRadius={method,packet,args};radiusDeferred++;return}
     return method.call(this,name,packet,...args)
   }}
@@ -133,7 +138,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       cacheStatusIssued=true
     }catch(error){cacheQueued=false;throw error}
   }
-  client.prependListener('resource_packs_info',cacheFirst)
+  if(handshakeMode==='cache-first')client.prependListener('resource_packs_info',cacheFirst)
   const cancellation = new AbortController()
   // CDN downloads have their own idle timeout; only watch missing server chunk data.
   const pendingServerPacks=()=>[...packs.values()].some(p=>!p.cdn&&!p.ready)
@@ -151,13 +156,15 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
   }
 
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
     // buffer critical handshake acknowledgements in the 20ms gameplay queue.
-    // cacheFirst already sent client_cache_status in a separate packet.
+    // cache-first writes cache status here; native-queue lets the bundled
+    // client enqueue it after the request, as in the earlier working build.
+    // no-cache-status checks the protocol's optional-cache negotiation path.
     const packet={
       response_status:name,
       // Mojang Bedrock 1.26.60 declares title-cased response text on the wire. For 1.26.60,
@@ -370,7 +377,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
-  return {snapshot:()=>({policy:'all-advertised',selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'all-advertised',handshakeMode,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
