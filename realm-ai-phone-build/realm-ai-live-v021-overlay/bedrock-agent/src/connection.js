@@ -9,6 +9,7 @@ import {attachRealmPacks} from './realm-packs.js'
 import {preparePackResponseWire} from './bedrock-pack-wire-compat.js'
 import {JoinLoadingLiveness,recoveryDecision} from './join-loading-liveness.js'
 import {observeBedrockTransport,transportEvidenceSummary} from './transport-evidence.js'
+import {createPackHandshakeForensics} from './pack-handshake-forensics.js'
 import path from 'node:path'
 import {SurvivalController} from './survival/controller.js'
 export function safeDisconnectMessage(packet){
@@ -25,7 +26,7 @@ export class Connection extends EventEmitter {
     this.client=null;this.connected=false;this.joined=false;this.spawned=false;this.loadingLiveness=new JoinLoadingLiveness();this.recoveryAttempts=0;this.recoveryTimer=null;this.recoveryNextAt=0;this.manualRecoveryStop=false;this.loadingTicker=setInterval(()=>this.checkLoading(),5000);this.loadingTicker.unref?.()
     this.survival=new SurvivalController(this,{plansDirectory:path.join(root,'private','command-plans'),scope:this.config.minecraft.realmId?String(this.config.minecraft.realmId):null});this.lastRejoinAt=0
     this.chatDiagnostics={textPackets:0,playerChatPackets:0,aiRequests:0,ownerRequests:0,nonOwnerRequests:0,ignoredSelf:0,replyAttempts:0,replyQueued:0,replyFailures:0,lastPacketAt:null,lastCommandAt:null,lastRejection:'none',lastReplyError:'none'}
-    this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.transportCloseKind='none';this.transportEvidence=null;this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
+    this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.transportCloseKind='none';this.transportEvidence=null;this.packHandshakeAudit=null;this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
   }
   cancelAutoRecovery(){
     this.manualRecoveryStop=true
@@ -139,6 +140,7 @@ export class Connection extends EventEmitter {
     this.client=client
     this.trace?.attachClient(client)
     this.survival.attach(client)
+    this.packHandshakeAudit=createPackHandshakeForensics(client,path.join(root,'private','diagnostics','pack-handshake.json'))
     // These listeners run before the pack handler and record counts only.
     // Never persist pack URLs, auth data, or raw Minecraft packets to logs.
     client.on('resource_pack_data_info',p=>{this.packHeadersReceived++;this.loadingLiveness.note('resource_pack_data_info',String(p?.pack_id||'no-id'))})
@@ -191,6 +193,7 @@ export class Connection extends EventEmitter {
         transport.__veilforgeCloseObserved=true
         const previous=transport.onCloseConnection
         transport.onCloseConnection=(reason)=>{
+          this.packHandshakeAudit?.record('transport-closed')
           const msg=safeDisconnectMessage(reason)
           if(msg){
             this.transportCloseReason=msg
