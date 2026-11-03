@@ -8,6 +8,7 @@ import {root} from '../tools/config.js'
 import {attachRealmPacks} from './realm-packs.js'
 import {preparePackResponseWire} from './bedrock-pack-wire-compat.js'
 import {JoinLoadingLiveness,recoveryDecision} from './join-loading-liveness.js'
+import {observeBedrockTransport,transportEvidenceSummary} from './transport-evidence.js'
 import path from 'node:path'
 import {SurvivalController} from './survival/controller.js'
 export function safeDisconnectMessage(packet){
@@ -24,7 +25,7 @@ export class Connection extends EventEmitter {
     this.client=null;this.connected=false;this.joined=false;this.spawned=false;this.loadingLiveness=new JoinLoadingLiveness();this.recoveryAttempts=0;this.recoveryTimer=null;this.recoveryNextAt=0;this.manualRecoveryStop=false;this.loadingTicker=setInterval(()=>this.checkLoading(),5000);this.loadingTicker.unref?.()
     this.survival=new SurvivalController(this,{plansDirectory:path.join(root,'private','command-plans'),scope:this.config.minecraft.realmId?String(this.config.minecraft.realmId):null});this.lastRejoinAt=0
     this.chatDiagnostics={textPackets:0,playerChatPackets:0,aiRequests:0,ownerRequests:0,nonOwnerRequests:0,ignoredSelf:0,replyAttempts:0,replyQueued:0,replyFailures:0,lastPacketAt:null,lastCommandAt:null,lastRejection:'none',lastReplyError:'none'}
-    this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
+    this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.transportCloseKind='none';this.transportEvidence=null;this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[]
   }
   cancelAutoRecovery(){
     this.manualRecoveryStop=true
@@ -59,7 +60,7 @@ export class Connection extends EventEmitter {
       this.scheduleLoadingRecovery(stage,'loading-stalled')
     }
   }
-  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packReason:this.packStatus.reason||'none',packFreeMB:this.packStatus.freeMB??0,packNeededMB:this.packStatus.neededMB??0,packRetryable:this.packStatus.retryable===true,packCacheStatusIssued:this.packStatus.cacheStatusIssued===true,packDownloadRequestIssued:this.packStatus.downloadRequestIssued===true,packResponseCount:this.packStatus.packResponseCount??0,packServerCount:this.packStatus.serverPackCount??0,packCdnCount:this.packStatus.cdnPackCount??0,packAdvertisedCount:this.packStatus.packAdvertisedCount??0,packSkippedOptional:this.packStatus.packSkippedOptional??0,packSelectionPolicy:this.packStatus.packSelectionPolicy??'unknown',packLegacyBehaviorCount:this.packStatus.packLegacyBehaviorCount??0,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,...this.loadingLiveness.snapshot(),loadingRecoveryAttempts:this.recoveryAttempts,loadingRecoveryScheduled:!!this.recoveryTimer,loadingNextRetrySeconds:this.recoveryNextAt?Math.max(0,Math.ceil((this.recoveryNextAt-Date.now())/1000)):0,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,packWireProtocol:this.packWire?.version||'not-initialized',packWireMode:this.packWire?.mode||'unknown',packWireEncoded:this.packStatus.packWireEncoded===true,packWireVerified:this.packStatus.packWireVerified===true,packWireVersion:this.packStatus.packWireVersion||'unknown',packWireCode:this.packStatus.packWireCode||0,packWireBytes:this.packStatus.packWireBytes||0,packWireIds:this.packStatus.packWireIds||0,packWireText:this.packStatus.packWireText||'unknown',packTransportConnectedAtRequest:this.packStatus.packTransportConnectedAtRequest===true,packResourceClassifiedCount:this.packStatus.packResourceClassifiedCount||0,packBehaviorClassifiedCount:this.packStatus.packBehaviorClassifiedCount||0,packAddonClassifiedCount:this.packStatus.packAddonClassifiedCount||0,packHeadersSeenByHandler:this.packStatus.packHeadersSeenByHandler||0,packChunksSeenByHandler:this.packStatus.packChunksSeenByHandler||0,savedAuthentication:'kept'}}
+  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packReason:this.packStatus.reason||'none',packFreeMB:this.packStatus.freeMB??0,packNeededMB:this.packStatus.neededMB??0,packRetryable:this.packStatus.retryable===true,packCacheStatusIssued:this.packStatus.cacheStatusIssued===true,packDownloadRequestIssued:this.packStatus.downloadRequestIssued===true,packResponseCount:this.packStatus.packResponseCount??0,packServerCount:this.packStatus.serverPackCount??0,packCdnCount:this.packStatus.cdnPackCount??0,packAdvertisedCount:this.packStatus.packAdvertisedCount??0,packSkippedOptional:this.packStatus.packSkippedOptional??0,packSelectionPolicy:this.packStatus.packSelectionPolicy??'unknown',packLegacyBehaviorCount:this.packStatus.packLegacyBehaviorCount??0,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,...this.loadingLiveness.snapshot(),loadingRecoveryAttempts:this.recoveryAttempts,loadingRecoveryScheduled:!!this.recoveryTimer,loadingNextRetrySeconds:this.recoveryNextAt?Math.max(0,Math.ceil((this.recoveryNextAt-Date.now())/1000)):0,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,...transportEvidenceSummary(this.client),transportCloseKind:this.transportCloseKind||'none',packWireProtocol:this.packWire?.version||'not-initialized',packWireMode:this.packWire?.mode||'unknown',packWireEncoded:this.packStatus.packWireEncoded===true,packWireVerified:this.packStatus.packWireVerified===true,packWireVersion:this.packStatus.packWireVersion||'unknown',packWireCode:this.packStatus.packWireCode||0,packWireBytes:this.packStatus.packWireBytes||0,packWireIds:this.packStatus.packWireIds||0,packWireText:this.packStatus.packWireText||'unknown',packTransportConnectedAtRequest:this.packStatus.packTransportConnectedAtRequest===true,packResourceClassifiedCount:this.packStatus.packResourceClassifiedCount||0,packBehaviorClassifiedCount:this.packStatus.packBehaviorClassifiedCount||0,packAddonClassifiedCount:this.packStatus.packAddonClassifiedCount||0,packHeadersSeenByHandler:this.packStatus.packHeadersSeenByHandler||0,packChunksSeenByHandler:this.packStatus.packChunksSeenByHandler||0,savedAuthentication:'kept'}}
   status(){return {chatDiagnostics:{...this.chatDiagnostics},support:this.trace?.summary(),diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
       packWaitSeconds:this.packRequestAt&&!this.spawned?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,
       packHeadersReceived:this.packHeadersReceived,packChunksReceived:this.packChunksReceived,authState:this.authState,packStatus:this.packStatus,lastCommand:this.lastCommand,recentMessages:this.recentMessages.slice(-8),authChallenge:this.authChallenge}}
@@ -72,7 +73,7 @@ export class Connection extends EventEmitter {
     try{
       this.close();this.client?.removeAllListeners();this.client=null;this.manualRecoveryStop=false
       this.connected=false;this.joined=false;this.spawned=false;this.authChallenge=null;this.lastError='';this.lastPhase='starting';this.authState='starting'
-      this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason=''
+      this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.transportCloseKind='none';this.transportEvidence=null
       this.packStatus={stage:'not-reached',message:'Rejoining with saved Microsoft session',done:0,total:0}
       this.loadingLiveness.reset()
       this.start()
@@ -179,8 +180,10 @@ export class Connection extends EventEmitter {
       this.authChallenge=null;this.lastPhase='authenticated';this.authState='authenticated';this.lastError=''
       this.log('Minecraft session established; joining the Realm.')
     })
-    client.on('connect',()=>{this.connected=true;this.authChallenge=null;this.lastPhase='transport-connected';this.authState='connecting';this.log('Bedrock transport connected.')})
+    // The bundled Bedrock client does not emit a public 'connect' event.
+    // Its 'join' event is emitted after server handshake completion instead.
     client.on('join',()=>{
+      this.connected=true;this.transportEvidence=observeBedrockTransport(client)
       // The transport can close silently without a Minecraft kick packet.
       // Capture its reason BEFORE bedrock-protocol calls close().
       const transport=client.connection
@@ -240,16 +243,18 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       else if(state && state!=='player_spawn')failure('Minecraft login status',{message:state})
     })
     client.on('start_game',()=>{this.loadingLiveness.note('start_game','initial');this.lastPhase='world-started';this.log('Minecraft start_game received; awaiting spawn.')})
-    client.on('kick',p=>failure('Server rejected join',p))
-    client.on('error',e=>failure('Bedrock protocol error',e))
+    client.on('kick',p=>{this.transportCloseKind='server-disconnect';failure('Server rejected join',p)})
+    client.on('error',e=>{this.transportCloseKind='protocol-error';failure('Bedrock protocol error',e)})
     client.on('disconnect',p=>{
       if(this.client!==client)return
+      this.transportCloseKind='server-disconnect'
       failure('Server disconnect',p)
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
     })
     client.on('close',()=>{
       if(this.client!==client)return
       const priorLoadingStage=this.loadingLiveness.stage
+      if(this.transportCloseKind==='none')this.transportCloseKind='transport-close'
       if(!this.lastError&&this.packRequestAt){
         const sec=Math.max(0,Math.round((Date.now()-this.packRequestAt)/1000))
         if(!this.packHeadersReceived&&this.packStatus?.stage==='pack-request'){
@@ -266,6 +271,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
     })
     client.on('end',()=>{
       if(this.client!==client)return
+      if(this.transportCloseKind==='none')this.transportCloseKind='transport-end'
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
       if(!this.lastError)this.lastError='Connection ended at '+this.lastPhase+'; no server reason was sent.'
       this.authChallenge=null;this.authState='disconnected'
