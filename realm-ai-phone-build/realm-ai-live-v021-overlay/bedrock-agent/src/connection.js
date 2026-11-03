@@ -6,6 +6,7 @@ import bedrock from 'bedrock-protocol'
 import {buildClientOptions} from './options.js'
 import {root} from '../tools/config.js'
 import {attachRealmPacks} from './realm-packs.js'
+import {preparePackResponseWire} from './bedrock-pack-wire-compat.js'
 import {JoinLoadingLiveness,recoveryDecision} from './join-loading-liveness.js'
 import path from 'node:path'
 import {SurvivalController} from './survival/controller.js'
@@ -58,7 +59,7 @@ export class Connection extends EventEmitter {
       this.scheduleLoadingRecovery(stage,'loading-stalled')
     }
   }
-  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packReason:this.packStatus.reason||'none',packFreeMB:this.packStatus.freeMB??0,packNeededMB:this.packStatus.neededMB??0,packRetryable:this.packStatus.retryable===true,packCacheStatusIssued:this.packStatus.cacheStatusIssued===true,packDownloadRequestIssued:this.packStatus.downloadRequestIssued===true,packResponseCount:this.packStatus.packResponseCount??0,packServerCount:this.packStatus.serverPackCount??0,packCdnCount:this.packStatus.cdnPackCount??0,packAdvertisedCount:this.packStatus.packAdvertisedCount??0,packSkippedOptional:this.packStatus.packSkippedOptional??0,packSelectionPolicy:this.packStatus.packSelectionPolicy??'unknown',packLegacyBehaviorCount:this.packStatus.packLegacyBehaviorCount??0,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,...this.loadingLiveness.snapshot(),loadingRecoveryAttempts:this.recoveryAttempts,loadingRecoveryScheduled:!!this.recoveryTimer,loadingNextRetrySeconds:this.recoveryNextAt?Math.max(0,Math.ceil((this.recoveryNextAt-Date.now())/1000)):0,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,savedAuthentication:'kept'}}
+  diagnostics(){return {schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,packStage:this.packStatus.stage,packReason:this.packStatus.reason||'none',packFreeMB:this.packStatus.freeMB??0,packNeededMB:this.packStatus.neededMB??0,packRetryable:this.packStatus.retryable===true,packCacheStatusIssued:this.packStatus.cacheStatusIssued===true,packDownloadRequestIssued:this.packStatus.downloadRequestIssued===true,packResponseCount:this.packStatus.packResponseCount??0,packServerCount:this.packStatus.serverPackCount??0,packCdnCount:this.packStatus.cdnPackCount??0,packAdvertisedCount:this.packStatus.packAdvertisedCount??0,packSkippedOptional:this.packStatus.packSkippedOptional??0,packSelectionPolicy:this.packStatus.packSelectionPolicy??'unknown',packLegacyBehaviorCount:this.packStatus.packLegacyBehaviorCount??0,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,...this.loadingLiveness.snapshot(),loadingRecoveryAttempts:this.recoveryAttempts,loadingRecoveryScheduled:!!this.recoveryTimer,loadingNextRetrySeconds:this.recoveryNextAt?Math.max(0,Math.ceil((this.recoveryNextAt-Date.now())/1000)):0,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,packWireProtocol:this.packWire?.version||'not-initialized',packWireMode:this.packWire?.mode||'unknown',savedAuthentication:'kept'}}
   status(){return {chatDiagnostics:{...this.chatDiagnostics},support:this.trace?.summary(),diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
       packWaitSeconds:this.packRequestAt&&!this.spawned?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,
       packHeadersReceived:this.packHeadersReceived,packChunksReceived:this.packChunksReceived,authState:this.authState,packStatus:this.packStatus,lastCommand:this.lastCommand,recentMessages:this.recentMessages.slice(-8),authChallenge:this.authChallenge}}
@@ -130,6 +131,9 @@ export class Connection extends EventEmitter {
       setPhase:phase=>{this.lastPhase=phase;if(!this.lastError)this.authState=phase;this.emit('connection-diagnostics',this.diagnostics())},
       onTitleRecovery:()=>{this.titleTokenRecoveryAttempted=true;this.emit('connection-diagnostics',this.diagnostics())}
     })
+    // Fix 1.26.60's stale third-party pack response enum before serializer compilation.
+    // This changes only the pack handshake's status code, not authentication.
+    this.packWire=preparePackResponseWire(options)
     const client=bedrock.createClient(options)
     this.client=client
     this.trace?.attachClient(client)
