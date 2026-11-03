@@ -99,7 +99,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   {downloadCdn=downloadRealmCdn,checkStorage=checkPackStorage,
    serverPackIdleMs=17*60*1000,heartbeatMs=2000,now=()=>Date.now(),handshakeMode='cache-first',noPackGraceMs=0} = {}) {
   // Strictly bounded A/B protocol probes; never accept arbitrary packet behavior.
-  if(!['native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
+  if(!['original-working','native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
@@ -107,8 +107,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='all-advertised',legacyBehaviorCount=0
   let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0
   const cdnQueue=[]
-  // The bundled client schedules radius after 500ms, not after downloads.
-  // Strict Realms reject this gameplay packet during the pack exchange.
+  // Original-working mode allows the bundled client to manage its own
+  // cache-status and early terrain-radius packets as the proven v0.26 did.
   const originalQueue=client.queue,originalWrite=client.write
   let gameStarted=false,pendingRadius=null,radiusDeferred=0,cacheQueued=false
   let cacheStatusIssued=false,downloadRequestIssued=false,packResponseCount=0
@@ -123,8 +123,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     return method.call(this,name,packet,...args)
   }}
   const gatedWrite=gate(originalWrite),gatedQueue=originalQueue?gate(originalQueue,true):null
-  client.write=gatedWrite;if(gatedQueue)client.queue=gatedQueue
-  function flushRadius(){if(pendingRadius&&canRequestTerrain()){const request=pendingRadius;pendingRadius=null;(originalQueue||originalWrite).call(client,'request_chunk_radius',request.packet,...request.args)}}
+  if(handshakeMode!=='original-working'){
+    client.write=gatedWrite;if(gatedQueue)client.queue=gatedQueue
+  }
+  function flushRadius(){if(handshakeMode==='original-working')return;if(pendingRadius&&canRequestTerrain()){const request=pendingRadius;pendingRadius=null;(originalQueue||originalWrite).call(client,'request_chunk_radius',request.packet,...request.args)}}
   const onStartGame=()=>{gameStarted=true;flushRadius()}
   client.on('start_game',onStartGame)
   // createClient installs its own info listener asynchronously after this one.
@@ -170,11 +172,12 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       response_status:name,
       // Mojang Bedrock 1.26.60 declares title-cased response text on the wire. For 1.26.60,
       // the numeric Downloading value is 2. Verify both before sending.
-      response_status_name:({refused:'Cancel',send_packs:'Downloading',
-        have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
+      response_status_name:(handshakeMode==='original-working'?
+        {refused:'cancel',send_packs:'downloading',have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'}:
+        {refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
       resourcepackids:ids
     }
-    const observation=inspectPackResponseWire(client,packet)
+    const observation=inspectPackResponseWire(client,packet,{strategy:handshakeMode==='original-working'?'original-working':'modern'})
     if(name==='send_packs')markPackTransportRequest(client)
     client.write('resource_pack_client_response',packet)
     packResponseCount++
