@@ -30,12 +30,16 @@ final class ConnectionDiagnostics {
             result.put("packFreeMB",nonnegative(input,"packFreeMB"));result.put("packNeededMB",nonnegative(input,"packNeededMB"));
             result.put("packRetryable",Boolean.TRUE.equals(input.opt("packRetryable")));
             String packChoice=input.optString("packSelectionPolicy","unknown");
-            result.put("packSelectionPolicy",packChoice.equals("addon-required")||packChoice.equals("server-required-fallback")?packChoice:"unknown");
+            result.put("packSelectionPolicy",packChoice.equals("all-advertised")||packChoice.equals("addon-required")||packChoice.equals("server-required-fallback")?packChoice:"unknown");
             result.put("packCacheStatusIssued",Boolean.TRUE.equals(input.opt("packCacheStatusIssued")));
             result.put("packDownloadRequestIssued",Boolean.TRUE.equals(input.opt("packDownloadRequestIssued")));
-            for(String field:new String[]{"packResponseCount","packServerCount","packCdnCount","packAdvertisedCount","packSkippedOptional","packLegacyBehaviorCount"})
+            for(String field:new String[]{"packResponseCount","packServerCount","packCdnCount","packAdvertisedCount","packSkippedOptional","packLegacyBehaviorCount","packWireCode","packWireBytes","packWireIds","packResourceClassifiedCount","packBehaviorClassifiedCount","packAddonClassifiedCount","packHeadersSeenByHandler","packChunksSeenByHandler","transportReliableWrites","transportReliableWritesOpen","transportReliableWritesClosed","transportReliableAfterPackRequest","transportClosedAfterRequestSeconds"})
                 result.put(field,nonnegative(input,field));
             for(String field:new String[]{"packHeaders","packChunks","recordedAt","loadingElapsedSeconds","loadingNoProgressSeconds","loadingUniqueSignals","loadingRepeatedSignals","loadingReceivedBytes","loadingGraceSeconds","loadingRecoveryAttempts","loadingNextRetrySeconds"})result.put(field,nonnegative(input,field));
+            for(String field:new String[]{"packWireEncoded","packWireVerified","packTransportConnectedAtRequest","transportJoinObserved","transportObservedPackRequest","transportPackRequestOpen","transportClosed"})result.put(field,Boolean.TRUE.equals(input.opt(field)));
+            String wireText=input.optString("packWireText","unknown");result.put("packWireText",Arrays.asList("cancel","downloading","downloadingfinished","resourcepackstackfinished").contains(wireText)?wireText:"unknown");
+            String wireVersion=input.optString("packWireVersion","unknown");result.put("packWireVersion",Arrays.asList("1.26.60","1.26.51","1.26.50").contains(wireVersion)?wireVersion:"unknown");
+            String closeKind=input.optString("transportCloseKind","unknown");result.put("transportCloseKind",Arrays.asList("none","server-disconnect","protocol-error","transport-close","transport-end").contains(closeKind)?closeKind:"unknown");
             result.put("loadingActive",Boolean.TRUE.equals(input.opt("loadingActive")));
             result.put("loadingRecoveryScheduled",Boolean.TRUE.equals(input.opt("loadingRecoveryScheduled")));
             String loadingStage=input.optString("loadingStage","unknown");
