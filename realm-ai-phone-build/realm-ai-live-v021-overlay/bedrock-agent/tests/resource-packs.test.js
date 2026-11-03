@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import {attachRealmPacks} from '../src/realm-packs.js'
+import {packFilePath} from '../src/pack-storage.js'
 function harness() {
   const client=new EventEmitter();const sent=[];const seen=[]
   const dir=mkdtempSync(path.join(os.tmpdir(),'vf-resource-packs-'))
@@ -32,7 +33,7 @@ test('required pack is downloaded, SHA verified, stored, and handshake completed
  h.client.emit('resource_pack_stack',{resource_packs:[meta()]})
  assert.equal(h.sent[4][1].response_status,'completed')
  assert.equal(h.handler.snapshot().finished,true)
- assert.equal(readFileSync(path.join(h.dir,crypto.createHash('sha256').update('abc-def_1.0.0').digest('hex')+'.mcpack')).toString(),'foobar')
+ assert.equal(readFileSync(packFilePath(h.dir,'resource',crypto.createHash('sha256').update('abc-def_1.0.0').digest('hex')+'.mcpack')).toString(),'foobar')
 })
 test('bad pack hash fails closed and does not send ready',t=>{
  const h=harness();t.after(h.done)
