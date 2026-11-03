@@ -39,10 +39,31 @@ public class SupportBundleTest {
   assertFalse(files.toString().contains("PRIVATE-"));
  }
  @Test public void malformedOrMissingRuntimeStillExportsReadableAppReport()throws Exception{write("nodejs-project/private/diagnostics/runtime.json","broken");Map<String,String> f=export();assertEquals(0,new JSONObject(f.get("runtime.json")).getJSONArray("events").length());assertEquals(a.getPackageName(),new JSONObject(f.get("app.json")).getString("package"));}
- @Test public void bugReportDialogAndDocumentSaveWorkWithoutStartingBot()throws Exception{
-  a.showBugReports();AlertDialog d=ShadowAlertDialog.getLatestAlertDialog();assertTrue(d.isShowing());assertTrue(d.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString().contains("Export"));d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();Intent i=Shadows.shadowOf(a).getNextStartedActivityForResult().intent;assertEquals(Intent.ACTION_CREATE_DOCUMENT,i.getAction());assertEquals("application/zip",i.getType());assertFalse(a.serviceStarted);
+ @Test public void oneTapDiagnosticShareCreatesOneCompletePrivateZipWithoutStoppingService()throws Exception{
+  a.showBugReports();
+  a.supportIo.submit(()->{}).get(10,java.util.concurrent.TimeUnit.SECONDS);
+  Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+  File[] reports=ReportContentProvider.reportDirectory(a).listFiles((dir,name)->name.endsWith(".zip"));
+  assertNotNull(reports);assertTrue(reports.length>=1);
+  File report=reports[reports.length-1];
+  android.net.Uri uri=ReportContentProvider.uri(a,report);
+  assertEquals("content",uri.getScheme());
+  assertEquals(a.getPackageName()+".reports",uri.getAuthority());
+  assertFalse(a.serviceStarted);
+  try(InputStream in=new FileInputStream(report);ZipInputStream zip=new ZipInputStream(in)){
+    Set<String> entries=new HashSet<>();ZipEntry entry;
+    while((entry=zip.getNextEntry())!=null)entries.add(entry.getName());
+    assertEquals(12,entries.size());assertTrue(entries.contains("pack-handshake.json"));assertTrue(entries.contains("pack-loading.json"));
+  }
  }
- @Test public void updaterIncludesDirectAccessToBugReports(){AppUpdater.show(a);AlertDialog d=ShadowAlertDialog.getLatestAlertDialog();assertEquals("Bug reports",d.getButton(AlertDialog.BUTTON_NEUTRAL).getText().toString());d.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertEquals("Export ONE ZIP",ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).getText().toString());}
+ @Test public void updaterUsesTheSameAllInOneReportAction()throws Exception{
+  AppUpdater.show(a);AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
+  assertEquals("Bug reports",dialog.getButton(AlertDialog.BUTTON_NEUTRAL).getText().toString());
+  dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+  a.supportIo.submit(()->{}).get(10,java.util.concurrent.TimeUnit.SECONDS);
+  File[] reports=ReportContentProvider.reportDirectory(a).listFiles((dir,name)->name.endsWith(".zip"));
+  assertNotNull(reports);assertTrue(reports.length>=1);
+ }
  @Test public void appLogAcceptsOnlyEventCodesAndKeepsABoundedHistory()throws Exception{
   for(int i=0;i<210;i++)SupportLog.record(a,i%2==0?"update_check":"update_current");SupportLog.record(a,"PRIVATE-TOKEN");JSONObject saved=SupportBundle.read(SupportLog.file(a),131072);assertEquals(200,saved.getJSONArray("events").length());assertFalse(saved.toString().contains("PRIVATE"));
  }
