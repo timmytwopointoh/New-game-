@@ -26,5 +26,25 @@ public class ButtonActionsTest {
  @Test public void promptRoutesQuestionsToChatAndActionsRequireCommandPrefix()throws Exception{a.token="e".repeat(64);a.input.setText("move forward 3 blocks");View root=((ViewGroup)a.findViewById(android.R.id.content)).getChildAt(0);a.expect();find(root,"↑").performClick();a.await();assertEquals("/message",a.last().path);assertEquals("move forward 3 blocks",a.last().body.getString("message"));assertEquals("Send question or command",find(root,"↑").getContentDescription());}
  @Test public void typingCommandOpensEverySupportedCommandChoice()throws Exception{a.token="c".repeat(64);a.input.setText("command");View root=((ViewGroup)a.findViewById(android.R.id.content)).getChildAt(0);a.expect();find(root,"↑").performClick();a.await();assertEquals("/catalog",a.last().path);AlertDialog picker=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(picker);assertTrue(a.commandDeck.list.getAdapter().getCount()>0);picker.dismiss();}
  @Test public void learningPanelReadsCurrentRealmStatusWithoutStartingCommands()throws Exception{a.apiConnected=true;a.token="l".repeat(64);AlertDialog d=settings();a.expect();find(d.getWindow().getDecorView(),"Learning").performClick();a.await();assertEquals("/status",a.last().path);AlertDialog report=ShadowAlertDialog.getLatestAlertDialog();String detail=Shadows.shadowOf(report).getMessage().toString();assertTrue(detail.contains("5000 words"));assertTrue(detail.contains("dredge → dig"));assertTrue(detail.contains("Server-confirmed tasks: 3"));assertTrue(detail.contains("a neural language model is not installed"));report.dismiss();d.dismiss();}
- @Test public void diagnosticButtonCopiesOnlyDiagnosticResponse()throws Exception{a.apiConnected=true;a.token="secret-token-must-not-copy";AlertDialog d=settings();a.expect();find(d.getWindow().getDecorView(),"Connection diagnostics").performClick();a.await();assertEquals("/diagnostics",a.last().path);AlertDialog report=ShadowAlertDialog.getLatestAlertDialog();report.getButton(AlertDialog.BUTTON_POSITIVE).performClick();Shadows.shadowOf(Looper.getMainLooper()).idle();ClipboardManager cb=(ClipboardManager)a.getSystemService(android.content.Context.CLIPBOARD_SERVICE);String text=cb.getPrimaryClip().getItemAt(0).getText().toString();assertTrue(text.contains("403"));assertTrue(text.contains("appVersionCode"));assertFalse(text.contains("secret-token"));assertFalse(text.contains("ABC123"));d.dismiss();}
+ @Test public void oneTapReportButtonSavesOnlyCombinedZipWithoutDiagnosticPagesOrAccountTokens()throws Exception{
+  a.apiConnected=false;a.serviceStarted=false;a.token="secret-token-must-not-export";
+  View root=((ViewGroup)a.findViewById(android.R.id.content)).getChildAt(0);
+  View report=find(root,"Report ZIP");assertNotNull(report);report.performClick();
+  a.supportIo.submit(()->{}).get(10,TimeUnit.SECONDS);
+  File[] reports=ReportContentProvider.reportDirectory(a).listFiles((folder,name)->name.endsWith(".zip"));
+  assertNotNull(reports);assertTrue(reports.length>=1);
+  StringBuilder all=new StringBuilder();
+  for(File file:reports)try(java.util.zip.ZipInputStream z=new java.util.zip.ZipInputStream(new java.io.FileInputStream(file))){
+    java.util.zip.ZipEntry e;while((e=z.getNextEntry())!=null){all.append(e.getName());byte[] b=new byte[4096];int n;while((n=z.read(b))!=-1)all.append(new String(b,0,n,java.nio.charset.StandardCharsets.UTF_8));}
+  }
+  assertTrue(all.toString().contains("pack-handshake.json"));
+  assertTrue(all.toString().contains("connection.json"));
+  assertFalse(all.toString().contains("secret-token-must-not-export"));
+  AlertDialog d=settings();View menu=d.getWindow().getDecorView();
+  assertNotNull(find(menu,"All-in-One Diagnostics ZIP"));
+  assertNull(find(menu,"Connection diagnostics"));
+  assertNull(find(menu,"Realm chat diagnostics"));
+  assertNull(find(menu,"Pack handshake timeline"));
+  d.dismiss();
+ }
 }
