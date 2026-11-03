@@ -1,0 +1,71 @@
+name: Realm AI Live v0.40.8 complete source export
+on:
+  push:
+    branches: [fix/realm-ai-live-v0408-pack-sequence-ab-20261103]
+    paths: ['.github/workflows/realm-ai-v0408-source-package.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source version and assemble clean source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          from subprocess import check_output
+          import json
+          repo=Path('.')
+          original=repo/'realm-ai-phone-build/realm-ai-live-v021-overlay'
+          gradle=(original/'android-app/app/build.gradle').read_text()
+          assert 'versionCode 200037' in gradle
+          assert "versionName '0.40.8-handshake-ab'" in gradle
+          package=repo/'Realm-AI-Live-v0.40.8-COMPLETE-SOURCE.zip'
+          included=[]
+          def permitted(p):
+              parts=p.relative_to(repo).parts
+              lower=[part.lower() for part in parts]
+              if any(x in ('private','.git','node_modules','build','.gradle','__pycache__','local.properties') for x in lower):return False
+              if any(x in ('config.json','.env','signing.properties','key.properties') for x in lower):return False
+              suffixes={'.p12','.pfx','.jks','.keystore','.pem','.key','.der','.cer','.crt','.apk','.aab'}
+              if p.suffix.lower() in suffixes:return False
+              if p.name.lower().startswith(('.env.','secret','credentials')):return False
+              return p.is_file() and not p.is_symlink()
+          candidates=[p for p in original.rglob('*') if permitted(p)]
+          candidates.append(repo/'.github/workflows/realm-ai-v0408-handshake-ab-original-update.yml')
+          candidates.append(repo/'.github/workflows/realm-ai-v0408-source-package.yml')
+          for f in sorted(candidates):
+              if not f.exists():raise FileNotFoundError(str(f))
+          commit=check_output(['git','rev-parse','HEAD'],text=True).strip()
+          with ZipFile(package,'w',ZIP_DEFLATED,compresslevel=8) as z:
+              for p in sorted(candidates):
+                  if not permitted(p):continue
+                  rel=p.relative_to(repo).as_posix()
+                  z.write(p,'Realm-AI-Live-v0.40.8-SOURCE/'+rel)
+                  included.append(rel)
+              manifest={'project':'Realm AI Live','version':'0.40.8-handshake-ab','versionCode':200037,
+              'repository':'timmytwopointoh/New-game-','branch':'fix/realm-ai-live-v0408-pack-sequence-ab-20261103',
+              'commit':commit,'file_count':len(included),'excluded':['Microsoft sign-in cache','private config','APK signing keys','built APK','node_modules'],
+              'build_note':'Native runtime, Node dependencies and Android SDK are fetched by GitHub workflow before packaging. APK signing requires the separate original private signing certificate.'}
+              z.writestr('Realm-AI-Live-v0.40.8-SOURCE/SOURCE_EXPORT_MANIFEST.json',json.dumps(manifest,indent=2))
+          assert len(included)>200,len(included)
+          print('Source files:',len(included),'ZIP bytes:',package.stat().st_size,'commit:',commit)
+          PY
+          sha256sum Realm-AI-Live-v0.40.8-COMPLETE-SOURCE.zip > Realm-AI-Live-v0.40.8-COMPLETE-SOURCE.sha256
+      - name: Upload source files for private distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: Realm-AI-Live-v0.40.8-source-export
+          path: |
+            Realm-AI-Live-v0.40.8-COMPLETE-SOURCE.zip
+            Realm-AI-Live-v0.40.8-COMPLETE-SOURCE.sha256
+          retention-days: 7
+          if-no-files-found: error
