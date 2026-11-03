@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
         LinearLayout account=new LinearLayout(this);body.addView(account,space(8));account.addView(button("Start bot",this::startBot),new LinearLayout.LayoutParams(0,d(56),1));Button signIn=button("Microsoft sign-in code",this::showAuth);signIn.setContentDescription("Show Microsoft sign-in code");account.addView(signIn,new LinearLayout.LayoutParams(0,d(56),1));
         body.addView(sectionLabel("SESSION"),space(18));LinearLayout modes=new LinearLayout(this);body.addView(modes,space(7));modes.addView(button("Survival",()->modeAction("survival")),new LinearLayout.LayoutParams(0,d(48),1));modes.addView(button("Creative",()->modeAction("creative")),new LinearLayout.LayoutParams(0,d(48),1));
         body.addView(button("Saved plans",this::showPlans),space(7));body.addView(button("Stop bot service",this::stopServiceNow),space(7));
-        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("All-in-one Bug Report ZIP",this::showBugReports),space(7));body.addView(button("Connection diagnostics",this::showDiagnostics),space(7));body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
+        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("All-in-one Bug Report ZIP",this::showBugReports),space(7));body.addView(button("Connection diagnostics",this::showDiagnostics),space(7));body.addView(button("Pack handshake timeline",this::showHandshakeForensics),space(7));body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
         body.addView(txt("Share only a file you choose in Android's picker.",12,MUTED),space(14));Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(5));
         AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();settingsDialog=dialog;dialog.setOnDismissListener(x->{if(settingsDialog==dialog)settingsDialog=null;for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
     }
@@ -113,6 +113,14 @@ public class MainActivity extends Activity {
     String diagnosticText(JSONObject report,String source,boolean reachable){
         JSONObject safe=ConnectionDiagnostics.sanitize(report);
         try{safe.put("reportSource",source);safe.put("localApiReachable",reachable);safe.put("serviceRequested",serviceStarted);safe.put("startup",SupportBundle.startup(this));safe.put("applicationId",getPackageName());safe.put("configuredLoginPlatform","Nintendo Switch");safe.put("appVersionCode",getPackageManager().getPackageInfo(getPackageName(),0).versionCode);safe.put("copiedAt",System.currentTimeMillis());safe.put("reportAvailable",report!=null);return safe.toString(2);}catch(Exception ignored){return "Connection diagnostics are unavailable. Saved login has not been changed.";}
+    }
+    void showHandshakeForensics(){
+        JSONObject audit=HandshakeDiagnostics.read(new File(getFilesDir(),"nodejs-project/private/diagnostics/pack-handshake.json"));
+        String detail=HandshakeDiagnostics.describe(audit);
+        new AlertDialog.Builder(this).setTitle("Pack handshake timeline")
+          .setMessage(detail)
+          .setPositiveButton("Export diagnostic ZIP",(a,b)->exportBugReport())
+          .setNegativeButton("Close",null).show();
     }
     void showChatDiagnostics(){
         if(!serviceStarted&&!apiConnected){new AlertDialog.Builder(this).setTitle("Realm chat diagnostics").setMessage("Start the bot first. Then send !ai ping in Realm chat.").setPositiveButton("Close",null).show();return;}
