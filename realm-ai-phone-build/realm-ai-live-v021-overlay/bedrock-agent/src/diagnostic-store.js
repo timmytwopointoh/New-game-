@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import {readPrivateJson,writePrivateJson} from './survival/private-json.js'
 import {classifyConnectionFailure} from './connection-diagnostics.js'
 
-const phases=new Set('starting realm-discovery minecraft-authentication microsoft-device-code microsoft-token-refresh microsoft-session xbox-authentication xbox-user-token xbox-device-token xbox-title-token xbox-security-token xbox-sisu-authentication sign-in-required realm-selecting realm-selected realm-join-retry authenticated transport-connected bedrock-login-accepted minecraft-login-ok world-started spawned error disconnected connecting closed not-started unavailable unknown not-reached negotiating-packs pack-request pack-storage pack-retry downloading-packs pack-cached packs-ready pack-error'.split(' '))
+const phases=new Set('starting realm-discovery minecraft-authentication microsoft-device-code microsoft-token-refresh microsoft-session xbox-authentication xbox-user-token xbox-device-token xbox-title-token xbox-security-token xbox-sisu-authentication sign-in-required realm-selecting realm-selected realm-join-retry authenticated transport-connected bedrock-login-accepted minecraft-login-ok world-started spawned error disconnected connecting closed not-started unavailable unknown not-reached negotiating-packs pack-request packs-none pack-storage pack-retry downloading-packs pack-cached packs-ready pack-error'.split(' '))
 const phase=value=>phases.has(value)?value:'unknown'
 const number=value=>Number.isSafeInteger(value)&&value>=0?value:0
 function failure(value){
