@@ -27,7 +27,7 @@ public class SupportBundleTest {
  }
  @Test public void handshakeTimelineRetainsPacketOrderButNeverExportsSecrets()throws Exception{
   write("nodejs-project/private/diagnostics/pack-handshake.json",
-    "{\\"schema\\":1,\\"accessToken\\":\\"PRIVATE-AUTH\\",\\"sessions\\":[{\\"state\\":\\"closed\\",\\"rawAddress\\":\\"PRIVATE-IP\\",\\"events\\":[{\\"kind\\":\\"received\\",\\"packet\\":\\"resource_packs_info\\",\\"ms\\":150,\\"packCount\\":9,\\"rawUrl\\":\\"PRIVATE-URL\\"},{\\"kind\\":\\"write-attempt\\",\\"packet\\":\\"resource_pack_client_response\\",\\"status\\":\\"Downloading\\",\\"ms\\":170,\\"packCount\\":9,\\"rawId\\":\\"PRIVATE-ID\\"},{\\"kind\\":\\"client-closed\\",\\"ms\\":310,\\"reason\\":\\"PRIVATE-CLOSE\\"}]}]}");
+    "{\"schema\":1,\"accessToken\":\"PRIVATE-AUTH\",\"sessions\":[{\"state\":\"closed\",\"rawAddress\":\"PRIVATE-IP\",\"events\":[{\"kind\":\"received\",\"packet\":\"resource_packs_info\",\"ms\":150,\"packCount\":9,\"rawUrl\":\"PRIVATE-URL\"},{\"kind\":\"write-attempt\",\"packet\":\"resource_pack_client_response\",\"status\":\"Downloading\",\"ms\":170,\"packCount\":9,\"rawId\":\"PRIVATE-ID\"},{\"kind\":\"client-closed\",\"ms\":310,\"reason\":\"PRIVATE-CLOSE\"}]}]}");
   Map<String,String> files=export();
   assertTrue(files.containsKey("pack-handshake.json"));
   JSONObject record=new JSONObject(files.get("pack-handshake.json"));
