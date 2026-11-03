@@ -160,10 +160,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     // cacheFirst already sent client_cache_status in a separate packet.
     const packet={
       response_status:name,
-      // Bedrock response text is lower-case on the wire. For 1.26.60,
+      // Mojang Bedrock 1.26.60 declares title-cased response text on the wire. For 1.26.60,
       // the numeric Downloading value is 2. Verify both before sending.
-      response_status_name:({refused:'cancel',send_packs:'downloading',
-        have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'})[name]||name,
+      response_status_name:({refused:'Cancel',send_packs:'Downloading',
+        have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
       resourcepackids:ids
     }
     const observation=inspectPackResponseWire(client,packet)
