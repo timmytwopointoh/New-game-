@@ -134,3 +134,5 @@ jobs:
 # Rebuild after restoring Java fluent JSONObject chaining in one-tap ZIP export.
 
 # Validates the direct no-pack stack fast path, the timed ACK fallback, and SHA-verified cache-only requests.
+
+# Final rebuild: preserve original lowercase pack-response names in the one-tap diagnostic export.
