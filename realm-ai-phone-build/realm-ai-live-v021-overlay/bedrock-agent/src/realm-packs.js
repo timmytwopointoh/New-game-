@@ -112,7 +112,17 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let packRequestWire={available:false,verified:false,packIdCount:0,statusCode:0,byteLength:0,version:'unknown',wireText:'unknown',transportConnected:false}
   const canRequestTerrain=()=>finished&&gameStarted&&!failed
   function gate(method,queued=false){return function(name,packet,...args){
-    if(queued&&name==='client_cache_status'){if(cacheQueued)return;cacheQueued=true}
+    if(queued&&name==='client_cache_status'){
+      if(cacheQueued)return
+      cacheQueued=true
+      // Restore the working pre-0.39.5 timing: the normal Bedrock library
+      // queues cache status AFTER this handler's immediate download response.
+      // Do not insert a custom cache packet ahead of the pack response.
+      const value=method.call(this,name,packet,...args)
+      cacheStatusIssued=true
+      queueMicrotask(()=>{if(!failed&&downloadRequestIssued)emit('pack-request','Requested '+packs.size+' Realm packs; native Bedrock cache status queued')})
+      return value
+    }
     if(name==='request_chunk_radius'&&!canRequestTerrain()){pendingRadius={method,packet,args};radiusDeferred++;return}
     return method.call(this,name,packet,...args)
   }}
@@ -121,19 +131,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   function flushRadius(){if(pendingRadius&&canRequestTerrain()){const request=pendingRadius;pendingRadius=null;(originalQueue||originalWrite).call(client,'request_chunk_radius',request.packet,...request.args)}}
   const onStartGame=()=>{gameStarted=true;flushRadius()}
   client.on('start_game',onStartGame)
-  // createClient installs its own info listener asynchronously after this one.
-  // Announce cache policy FIRST and suppress the later queued duplicate.
-  const cacheFirst=()=>{
-    if(!gatedQueue||cacheQueued)return
-    // Send cache policy *before* a direct Downloading response, not in a
-    // queued batch which might be flushed after the response.
-    cacheQueued=true
-    try{
-      client.write('client_cache_status',{enabled:false})
-      cacheStatusIssued=true
-    }catch(error){cacheQueued=false;throw error}
-  }
-  client.prependListener('resource_packs_info',cacheFirst)
+  // Let bedrock-protocol itself send client_cache_status through its normal
+  // resource_packs_info listener. This matches the earlier successful
+  // handshake and prevents our custom pre-ack cache packet racing the Realm.
   const cancellation = new AbortController()
   // CDN downloads have their own idle timeout; only watch missing server chunk data.
   const pendingServerPacks=()=>[...packs.values()].some(p=>!p.cdn&&!p.ready)
@@ -157,7 +157,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
     // buffer critical handshake acknowledgements in the 20ms gameplay queue.
-    // cacheFirst already sent client_cache_status in a separate packet.
+    // The library will queue client_cache_status after this immediate ack.
     const packet={
       response_status:name,
       // Mojang Bedrock 1.26.60 declares title-cased response text on the wire. For 1.26.60,
@@ -371,7 +371,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   })
   client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
   return {snapshot:()=>({policy:'all-advertised',selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
-    pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
+    pendingRadius=null;client.off('start_game',onStartGame)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
     clearInterval(packWatchdog)
