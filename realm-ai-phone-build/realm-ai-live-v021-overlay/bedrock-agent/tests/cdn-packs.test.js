@@ -24,11 +24,11 @@ test('CDN pack downloads and completes handshake only after download',async t=>{
   return {bytes:7,sha256:crypto.createHash('sha256').update(archive).digest('hex')}
  });t.after(()=>h.clear())
  h.client.emit('resource_packs_info',{texture_packs:[meta]})
- assert.equal(h.sent[0][1].response_status_name,'Downloading')
+ assert.equal(h.sent[0][1].response_status_name,'downloading')
  await tick(()=>h.h.snapshot().verified===1)
  h.client.emit('resource_pack_stack',{resource_packs:[meta]})
  await tick(()=>h.h.snapshot().finished)
- assert.equal(h.sent.at(-1)[1].response_status_name,'ResourcePackStackFinished')
+ assert.equal(h.sent.at(-1)[1].response_status_name,'resourcepackstackfinished')
  assert.equal(h.h.snapshot().failed,false)
 })
 test('CDN packs cached privately, second join does not re-download',async t=>{
