@@ -123,3 +123,5 @@ jobs:
 # Re-run after expanding fixed ZIP-file manifest and forensic privacy regression coverage.
 
 # UI regression suite updated for the single ZIP export entry point.
+
+# Rebuild after restoring Java fluent JSONObject chaining in one-tap ZIP export.
