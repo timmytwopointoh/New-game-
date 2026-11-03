@@ -1,0 +1,108 @@
+name: Realm AI Live v0.40.4 behavior pack storage and wire audit original APK
+on:
+  push:
+    branches: [fix/realm-ai-live-v0404-pack-type-storage-wire-trace-20261103]
+    paths: ['.github/workflows/realm-ai-v0404-pack-types-wire-original-update.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify original Android identity, unchanged Switch profile and new fix
+        run: |
+          set -euo pipefail
+          ROOT=realm-ai-phone-build/realm-ai-live-v021-overlay
+          grep -q "applicationId 'com.veilforge.realmagent.live'" "$ROOT/android-app/app/build.gradle"
+          grep -q 'versionCode 200033' "$ROOT/android-app/app/build.gradle"
+          grep -q "versionName '0.40.4-pack-wire-storage'" "$ROOT/android-app/app/build.gradle"
+          grep -q "authTitle:'00000000441cc96b',deviceType:'Nintendo',deviceOS:12,flow:'live'" "$ROOT/bedrock-agent/src/options.js"
+          grep -q 'preparePackResponseWire(options)' "$ROOT/bedrock-agent/src/connection.js"
+          echo 'Identity, original saved-auth path and v0.40.4 source checks passed.'
+      - name: Restore exact verified Bedrock Live runtime dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          npm ci --omit=dev --no-fund --no-audit
+          curl -fsSL --retry 3 --retry-all-errors 'https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0395-pack-order-and-timing/Realm-AI-Live.apk' -o /tmp/previous-live.apk
+          echo 'e3e8b829e1b3c7113f9a8a23fa243a74c7c0dd3aba41a036af74d01bc9affebf  /tmp/previous-live.apk' | sha256sum -c -
+          python3 - <<'PY'
+          import zipfile,shutil,pathlib
+          target=pathlib.Path('node_modules');shutil.rmtree(target,ignore_errors=True);target.mkdir()
+          prefix='assets/nodejs-project/node_modules/'
+          count=0
+          with zipfile.ZipFile('/tmp/previous-live.apk') as z:
+              for item in z.infolist():
+                  if not item.filename.startswith(prefix) or item.is_dir():continue
+                  relative=pathlib.PurePosixPath(item.filename[len(prefix):])
+                  if relative.is_absolute() or '..' in relative.parts:raise RuntimeError('Unsafe path')
+                  out=target.joinpath(*relative.parts);out.parent.mkdir(parents=True,exist_ok=True)
+                  with z.open(item) as src,open(out,'wb') as dest:shutil.copyfileobj(src,dest)
+                  count+=1
+          assert count>=11000,count
+          assert (target/'bedrock-protocol/src/client/realmJoin503Retry.js').exists()
+          PY
+      - name: Test exact packet wire encoding and all bot code
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          npm run check
+          node --test tests/*.test.js
+      - name: Restore verified Android ARM64 Node runtime
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay
+        run: python3 tools/fetch_native_runtime.py
+      - name: Test Android app UI, service and offline ZIP diagnostics
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Compile unsigned original-app APK
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Verify package/version and embedded patched protocol code
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$BT/apksigner" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+          SRC=realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$SRC"
+          mkdir -p "$RUNNER_TEMP/realm-v0404"
+          "$BT/zipalign" -P 16 -f 4 "$SRC" "$RUNNER_TEMP/realm-v0404/Realm-AI-Live-v0.40.4-ALIGNED-UNSIGNED.apk"
+          "$BT/zipalign" -c -P 16 4 "$RUNNER_TEMP/realm-v0404/Realm-AI-Live-v0.40.4-ALIGNED-UNSIGNED.apk"
+          "$BT/aapt" dump badging "$RUNNER_TEMP/realm-v0404/Realm-AI-Live-v0.40.4-ALIGNED-UNSIGNED.apk" | tee "$RUNNER_TEMP/realm-v0404/package-report.txt"
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200033'" "$RUNNER_TEMP/realm-v0404/package-report.txt"
+          python3 - <<'PY'
+          import zipfile
+          path=__import__('os').environ['RUNNER_TEMP']+'/realm-v0404/Realm-AI-Live-v0.40.4-ALIGNED-UNSIGNED.apk'
+          with zipfile.ZipFile(path) as z:
+              assert z.testzip() is None
+              code=z.read('assets/nodejs-project/src/bedrock-pack-wire-compat.js')
+              conn=z.read('assets/nodejs-project/src/connection.js')
+              assert b"MODERN_VERSION='1.26.60'" in code
+              assert b"'2':'send_packs'" in code
+              assert b'preparePackResponseWire(options)' in conn
+              assert 'assets/nodejs-project/src/pack-storage.js' in z.namelist()
+              assert 'assets/nodejs-project/src/pack-protocol-observer.js' in z.namelist()
+              assert 'lib/arm64-v8a/libnode.so' in z.namelist()
+          print('Original-ID APK embeds exact 1.26.60 wire fix and native runtime')
+          PY
+          sha256sum "$RUNNER_TEMP/realm-v0404/Realm-AI-Live-v0.40.4-ALIGNED-UNSIGNED.apk" > "$RUNNER_TEMP/realm-v0404/SHA256SUMS.txt"
+      - name: Retain unsigned original for private same-key signing (no keys in CI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: realm-ai-live-v0404-private-signing
+          path: ${{ runner.temp }}/realm-v0404/
+          if-no-files-found: error
+          retention-days: 3
+
+# Recheck updated CDN and watchdog canonical wire-name regression assertions.
