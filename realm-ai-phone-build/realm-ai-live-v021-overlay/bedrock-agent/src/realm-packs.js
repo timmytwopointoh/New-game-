@@ -158,8 +158,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       response_status:name,
       // Modern Bedrock's response text differs from Prismarine enum labels.
       // Variant tags are 0..3; wire response strings are lowercase (Gophertunnel reference).
-      response_status_name:({refused:'Cancel',send_packs:'Downloading',
-        have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
+      response_status_name:({refused:'cancel',send_packs:'downloading',
+        have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'})[name]||name,
       resourcepackids:ids
     })
     packResponseCount++
