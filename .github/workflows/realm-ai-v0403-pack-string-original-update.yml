@@ -1,8 +1,8 @@
 name: Realm AI Live v0.40.3 fix modded pack response enum - original ID APK
 on:
   push:
-    branches: [fix/realm-ai-live-v0403-pack-wire-enum-20261103]
-    paths: ['.github/workflows/realm-ai-v0403-pack-wire-original-update.yml']
+    branches: [fix/realm-ai-live-v0403-lowercase-pack-responses-20261103]
+    paths: ['.github/workflows/realm-ai-v0403-pack-string-original-update.yml']
 permissions:
   contents: read
 jobs:
