@@ -29,8 +29,8 @@ final class SupportSnapshot {
    p.put("stage",ConnectionDiagnostics.phase(pack==null?"":pack.optString("stage")));
    String reason=pack==null?"":pack.optString("reason");
    p.put("reason",Arrays.asList("none","server-no-pack-data","server-pack-stalled","network-interrupted","pack-transfer-failed","storage-low","storage-unknown","pack-integrity","cdn-unavailable","cdn-missing","cdn-access-denied","pack-size-limit").contains(reason)?reason:"none");
-   counts(p,pack,"headers chunks requested verified advertised optionalSkipped serverPacks cdnPacks");
-   flags(p,pack,"downloadRequestIssued");safe.put("pack",p);
+   counts(p,pack,"headers chunks requested verified advertised optionalSkipped serverPacks cdnPacks resourcePacks behaviorPacks addonPacks wireCode wireIds");
+   flags(p,pack,"downloadRequestIssued wireVerified transportConnectedAtRequest");safe.put("pack",p);
    JSONObject loading=input.optJSONObject("loading"),l=new JSONObject();
    String stage=loading==null?"":loading.optString("stage","");
    l.put("stage",Arrays.asList("pack-request","pack-storage","pack-retry","downloading-packs","pack-cached","packs-ready","world-started","world-data","bedrock-login-accepted","connecting").contains(stage)?stage:"unknown");
