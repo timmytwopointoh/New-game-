@@ -97,13 +97,13 @@ async function hashStoredFile(filename){
 }
 export function attachRealmPacks(client, cacheDir, report = () => {},
   {downloadCdn=downloadRealmCdn,checkStorage=checkPackStorage,
-   serverPackIdleMs=17*60*1000,heartbeatMs=2000,now=()=>Date.now(),handshakeMode='cache-first'} = {}) {
+   serverPackIdleMs=17*60*1000,heartbeatMs=2000,now=()=>Date.now(),handshakeMode='cache-first',noPackGraceMs=0} = {}) {
   // Strictly bounded A/B protocol probes; never accept arbitrary packet behavior.
   if(!['native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
   const packs = new Map()
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
-  let verifiedCacheCount=0,missingPackCount=0
+  let verifiedCacheCount=0,missingPackCount=0,noPackAckTimer=null,noPackAckIssued=false,noPackDirectStack=false
   let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='all-advertised',legacyBehaviorCount=0
   let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0
   const cdnQueue=[]
@@ -157,7 +157,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
   }
 
   const response = (name,ids=[]) => {
@@ -289,10 +289,25 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       }
       if(!packs.size){
         missingPackCount=0
-        // The Realm explicitly advertised ZERO packs. There is nothing
-        // to request or download. Await the server's resource_pack_stack.
-        response('have_all_packs')
-        emit('packs-none','No Realm pack download needed (zero advertised); awaiting world stack',0,0)
+        // Servers may send the empty pack stack directly without requiring
+        // either client response. In the live app, briefly observe before
+        // acknowledging; default zero grace preserves legacy test behavior.
+        emit('packs-none','Realm advertised zero packs; waiting for stack or handshake acknowledgment',0,0)
+        if(noPackGraceMs>0){
+          noPackAckTimer=setTimeout(()=>{
+            noPackAckTimer=null
+            if(failed||finished||stackReceived||cancellation.signal.aborted)return
+            try{
+              noPackAckIssued=true
+              response('have_all_packs')
+              emit('packs-none','Realm requested empty-pack acknowledgment; awaiting world stack',0,0)
+            }catch(error){failure(error)}
+          },noPackGraceMs)
+          noPackAckTimer.unref?.()
+        }else{
+          noPackAckIssued=true
+          response('have_all_packs')
+        }
         return
       }
       fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
@@ -410,15 +425,24 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   client.on('resource_pack_stack',()=>{
     if(failed)return
     stackReceived=true
+    if(!packs.size&&noPackGraceMs>0&&!noPackAckIssued){
+      // This server chose the official direct-stack no-packs pathway.
+      // No download request, DownloadingFinished or Completed packet.
+      if(noPackAckTimer){clearTimeout(noPackAckTimer);noPackAckTimer=null}
+      noPackDirectStack=true;finished=true
+      emit('packs-ready','Realm provided empty pack stack directly; proceeding to world start',0,0)
+      return
+    }
     if([...packs.values()].every(p=>p.ready)) complete()
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
-  client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
-  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
+  client.once('close',()=>{clearInterval(packWatchdog);if(noPackAckTimer)clearTimeout(noPackAckTimer);cancellation.abort()})
+  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
     clearInterval(packWatchdog)
+    if(noPackAckTimer)clearTimeout(noPackAckTimer)
     cancellation.abort()
     for(const p of packs.values()){
       if(p.fd!==undefined){try{fs.closeSync(p.fd)}catch{}}
