@@ -62,7 +62,8 @@ export class JoinLoadingLiveness {
 export function recoveryDecision({stage='',reason='',attempts=0,spawned=false,authPending=false,manualStop=false}={}){
  if(spawned||authPending||manualStop||attempts>=MAX_AUTO_RECOVERIES)return {retry:false,reason:'guarded'}
  const recoverable=['server-no-pack-data','server-pack-stalled'].includes(reason)||
-   ['pack-request','downloading-packs','packs-ready','world-started','world-data'].includes(stage)&&reason==='loading-stalled'
+   ['pack-request','pack-storage','pack-retry','downloading-packs','pack-cached','packs-ready','world-started','world-data'].includes(stage)&&
+   ['loading-stalled','transport-closed'].includes(reason)
  if(!recoverable)return {retry:false,reason:'not-transient'}
  return {retry:true,delayMs:attempts===0?15000:45000,reason:'bounded-rejoin'}
 }
