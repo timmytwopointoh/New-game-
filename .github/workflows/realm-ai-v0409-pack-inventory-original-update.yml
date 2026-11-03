@@ -99,6 +99,8 @@ jobs:
               assert b"handshakeMode='cache-first'" in packs
               assert b"'native-queue','no-cache-status','cache-first'" in packs
               assert b'packVerifiedCacheCount' in packs
+              assert b'noPackGraceMs' in packs
+              assert b'packNoPackDirectStack' in z.read('assets/nodejs-project/src/diagnostic-store.js')
               assert b"missing.map(p=>p.key)" in packs
               assert b"p.file+'.sha256'" in packs
               assert b"packHandshakeMode" in z.read('assets/nodejs-project/src/diagnostic-store.js')
@@ -128,3 +130,5 @@ jobs:
 # UI regression suite updated for the single ZIP export entry point.
 
 # Rebuild after restoring Java fluent JSONObject chaining in one-tap ZIP export.
+
+# Validates the direct no-pack stack fast path, the timed ACK fallback, and SHA-verified cache-only requests.
