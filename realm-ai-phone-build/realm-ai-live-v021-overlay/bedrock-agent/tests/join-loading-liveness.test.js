@@ -68,6 +68,14 @@ test('two bounded auto rejoin attempts, no Microsoft sign-in loop, no restart af
   assert.equal(recoveryDecision({stage:'pack-request',reason:'server-no-pack-data',...options}).retry,false)
  }
 })
+test('a quick closed pack transport is eligible for bounded recovery; auth prompts and manual STOP remain guarded',()=>{
+ assert.equal(recoveryDecision({stage:'pack-request',reason:'transport-closed',attempts:0}).retry,true)
+ assert.equal(recoveryDecision({stage:'downloading-packs',reason:'transport-closed',attempts:1}).retry,true)
+ assert.equal(recoveryDecision({stage:'pack-request',reason:'transport-closed',attempts:2}).retry,false)
+ assert.equal(recoveryDecision({stage:'pack-request',reason:'transport-closed',manualStop:true}).retry,false)
+ assert.equal(recoveryDecision({stage:'pack-request',reason:'transport-closed',authPending:true}).retry,false)
+ assert.equal(recoveryDecision({stage:'realm-discovery',reason:'transport-closed'}).retry,false)
+})
 test('privacy-safe diagnostics include loading-state counters but never raw signal or auth secrets',()=>{
  const out=sanitizeDiagnosticReport({
   phase:'pack-request',loadingActive:true,loadingStage:'world-data',loadingLastSignal:'sub_chunk',
