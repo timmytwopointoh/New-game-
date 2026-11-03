@@ -12,14 +12,15 @@ function readVarUint(buf,offset){
  throw Error('Bad Bedrock packet varuint')
 }
 const CODE_BY_STATUS_12660={refused:1,send_packs:2,have_all_packs:3,completed:4}
-export function inspectPackResponseWire(client,packet){
+const CODE_BY_STATUS_ORIGINAL={refused:0,send_packs:1,have_all_packs:2,completed:3}
+export function inspectPackResponseWire(client,packet,{strategy='modern'}={}){
  const output={available:false,verified:false,status:packet.response_status,packIdCount:Array.isArray(packet.resourcepackids)?packet.resourcepackids.length:0,
   version:String(client?.options?.version||'unavailable'),transportConnected:client?.connection?.connected===true}
  if(typeof client?.serializer?.createPacketBuffer!=='function')return output // lightweight unit harness
  const frame=client.serializer.createPacketBuffer({name:'resource_pack_client_response',params:packet})
  const id=readVarUint(frame,0),status=readVarUint(frame,id.next)
  if(id.value!==8)throw Error('Pack response encoded with unexpected Bedrock packet ID')
- if(output.version==='1.26.60' && status.value!==CODE_BY_STATUS_12660[packet.response_status]){
+ if(output.version==='1.26.60' && status.value!==(strategy==='original-working'?CODE_BY_STATUS_ORIGINAL:CODE_BY_STATUS_12660)[packet.response_status]){
   throw Error('Bedrock 1.26.60 pack response has wrong on-wire status code')
  }
  if(typeof client?.deserializer?.parsePacketBuffer!=='function')throw Error('Cannot verify Bedrock pack response locally')
