@@ -9,11 +9,11 @@ import {attachRealmPacks} from '../src/realm-packs.js'
 import {packFilePath} from '../src/pack-storage.js'
 
 const meta=(id='one')=>({uuid:id,version:'1.0.0',size:6})
-function setup(dir=mkdtempSync(path.join(os.tmpdir(),'realm-cache-probe-'))){
+function setup(dir=mkdtempSync(path.join(os.tmpdir(),'realm-cache-probe-')),options={}){
  const client=new EventEmitter(),sent=[],events=[]
  client.write=(name,data)=>{sent.push({name,data})}
  client.queue=client.write
- const handler=attachRealmPacks(client,dir,e=>events.push(e),{handshakeMode:'native-queue',checkStorage:()=>({freeMB:6000,neededMB:0,reserveMB:256})})
+ const handler=attachRealmPacks(client,dir,e=>events.push(e),{...options,handshakeMode:'native-queue',checkStorage:()=>({freeMB:6000,neededMB:0,reserveMB:256})})
  return {client,handler,sent,events,dir,stop:()=>{handler.cleanup();rmSync(dir,{recursive:true,force:true})}}
 }
 function store(h,id,data=Buffer.from('foobar'),marker){
@@ -102,4 +102,27 @@ test('successful server pack transfer saves its verified hash for the next join'
  g.client.emit('resource_packs_info',{texture_packs:[meta('one')]})
  await until(()=>g.handler.snapshot().verifiedCacheCount===1)
  assert.equal(g.sent.some(x=>x.data?.response_status==='send_packs'),false)
+})
+
+test('no-pack Realm can send empty stack immediately with ZERO client pack response',async t=>{
+ const h=setup(undefined,{noPackGraceMs:90});t.after(h.stop)
+ h.client.emit('resource_packs_info',{texture_packs:[]})
+ assert.equal(h.sent.length,0)
+ h.client.emit('resource_pack_stack',{resource_packs:[]})
+ assert.equal(h.handler.snapshot().noPackDirectStack,true)
+ assert.equal(h.handler.snapshot().finished,true)
+ await new Promise(resolve=>setTimeout(resolve,125))
+ assert.equal(h.sent.length,0,'No delayed ACK may escape after direct stack')
+ h.client.emit('start_game',{})
+ assert.equal(h.handler.snapshot().gameStarted,true)
+})
+test('no-pack Realm waiting for client ACK receives fallback without Downloading',async t=>{
+ const h=setup(undefined,{noPackGraceMs:30});t.after(h.stop)
+ h.client.emit('resource_packs_info',{texture_packs:[]})
+ await until(()=>h.sent.some(x=>x.data?.response_status==='have_all_packs'))
+ assert.equal(h.handler.snapshot().noPackDirectStack,false)
+ assert.equal(h.sent.some(x=>x.data?.response_status==='send_packs'),false)
+ h.client.emit('resource_pack_stack',{resource_packs:[]})
+ assert.equal(h.handler.snapshot().finished,true)
+ assert.deepEqual(h.sent.map(x=>x.data.response_status),['have_all_packs','completed'])
 })
