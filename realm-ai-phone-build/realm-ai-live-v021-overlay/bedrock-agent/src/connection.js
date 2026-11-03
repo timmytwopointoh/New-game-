@@ -135,7 +135,7 @@ export class Connection extends EventEmitter {
     })
     // Fix 1.26.60's stale third-party pack response enum before serializer compilation.
     // This changes only the pack handshake's status code, not authentication.
-    this.packWire=preparePackResponseWire(options)
+    this.packWire=preparePackResponseWire(options,undefined,{strategy:'original-working'})
     const client=bedrock.createClient(options)
     this.client=client
     this.trace?.attachClient(client)
@@ -152,7 +152,7 @@ export class Connection extends EventEmitter {
     // First try the library's native cache-status ordering (the older working behavior).
     // Retry without optional cache status, then replay the v0.40.7 order as a
     // control. The 3 attempts are bounded and preserve Microsoft credentials.
-    const handshakeMode=['native-queue','no-cache-status','cache-first'][Math.min(2,this.recoveryAttempts)]
+    const handshakeMode='original-working' // fixed baseline; no changing behavior between attempts
     this.packHandler=attachRealmPacks(client,path.join(root,'private','realm-packs'),state=>{
       if(this.client!==client)return
       this.loadingLiveness.setStage(state.stage)
@@ -175,7 +175,7 @@ export class Connection extends EventEmitter {
         this.authState=state.stage
         this.log('Realm pack stage: '+state.message)
       }
-    },{handshakeMode,noPackGraceMs:350})
+    },{handshakeMode,noPackGraceMs:0})
     // The library reports authentication/transport separately from the game join.
     // Do not log tokens, automatically retry or infer that the game has spawned.
     client.on('resource_packs_info',p=>this.loadingLiveness.note('resource_packs_info',String(p?.texture_packs?.length??0)+':'+String(p?.behavior_packs?.length??0)))
