@@ -88,7 +88,7 @@ final class SupportBundle {
     .put("packWireText",connection.optString("packWireText","unknown"))
     .put("packWireVersion",connection.optString("packWireVersion","unknown"));
   pack.put("packSelectionPolicy",connection.optString("packSelectionPolicy","unknown"));
-  pack.put("packHandshakeMode",connection.optString("packHandshakeMode","unknown"));
+  pack.put("packHandshakeMode",connection.optString("packHandshakeMode","unknown"))
     .put("loadingStage",connection.optString("loadingStage","unknown"))
     .put("loadingLastSignal",connection.optString("loadingLastSignal","none"));
   JSONObject work=new JSONObject().put("schema",1)
