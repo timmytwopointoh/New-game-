@@ -33,10 +33,21 @@ export function correctPackResponseSchema(version,protocol){
  return {version:MODERN_VERSION,mode:'modern-1-to-4',patched:true}
 }
 
-export function preparePackResponseWire(options,loadData=require('minecraft-data')){
+// Restore the serializer map from v0.26, which previously joined the Realm.
+// This changes only the pack-response packet and never patches global data.
+export function preparePackResponseWire(options,loadData=require('minecraft-data'),{strategy='modern'}={}){
  const installedVersion=require('bedrock-protocol/src/options').CURRENT_VERSION
  const version=String(options?.version||installedVersion)
  const data=loadData('bedrock_'+version)
  if(!data?.protocol)throw Error('Missing Bedrock protocol schema for '+version)
+ if(strategy==='original-working'){
+  const fields=data.protocol?.types?.packet_resource_pack_client_response
+  const row=fields?.[0]==='container'?fields[1].find(f=>f.name==='response_status'):null
+  const map=row?.type?.[0]==='mapper'?row.type[1]?.mappings:null
+  if(version===MODERN_VERSION&&!sameMappings(map,OLD))
+   throw Error('Original pack serializer mapping not available; no unsafe fallback')
+  return {version,mode:'original-working',patched:false}
+ }
+ if(strategy!=='modern')throw Error('Unsupported fixed pack wire strategy')
  return correctPackResponseSchema(version,data.protocol)
 }
