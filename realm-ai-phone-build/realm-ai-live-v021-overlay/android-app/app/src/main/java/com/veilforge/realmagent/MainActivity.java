@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
         powerButton=button("●",this::toggleBotService);powerButton.setPadding(0,0,0,0);header.addView(powerButton,new LinearLayout.LayoutParams(d(42),d(42)));renderPowerButton();
         Button updates=button("Updates",()->AppUpdater.show(this));updates.setContentDescription("Check companion updates");header.addView(updates,new LinearLayout.LayoutParams(d(94),d(44)));
         View headerSpacer=new View(this);header.addView(headerSpacer,new LinearLayout.LayoutParams(0,d(44),1));
+        Button allReport=button("Report ZIP",this::shareAllDiagnostics);allReport.setContentDescription("One-tap complete sanitized diagnostics ZIP");header.addView(allReport,new LinearLayout.LayoutParams(d(112),d(44)));
         Button settings=button("⚙",this::showSettings);settings.setContentDescription("Settings");settings.setPadding(0,0,0,0);header.addView(settings,new LinearLayout.LayoutParams(d(42),d(44)));
         connection=txt("Not running",12,MUTED);connection.setMaxLines(4);connection.setPadding(d(12),d(9),d(12),d(9));connection.setBackground(shape(PANEL));connection.setVisibility(View.VISIBLE);root.addView(connection,space(2));
         retryButton=button("Try Again",this::retryBlocked);retryButton.setContentDescription("Retry a blocked task after checking terrain, without adding a duplicate");retryButton.setVisibility(View.GONE);root.addView(retryButton,space(3));
@@ -75,7 +76,7 @@ public class MainActivity extends Activity {
         LinearLayout account=new LinearLayout(this);body.addView(account,space(8));account.addView(button("Start bot",this::startBot),new LinearLayout.LayoutParams(0,d(56),1));Button signIn=button("Microsoft sign-in code",this::showAuth);signIn.setContentDescription("Show Microsoft sign-in code");account.addView(signIn,new LinearLayout.LayoutParams(0,d(56),1));
         body.addView(sectionLabel("SESSION"),space(18));LinearLayout modes=new LinearLayout(this);body.addView(modes,space(7));modes.addView(button("Survival",()->modeAction("survival")),new LinearLayout.LayoutParams(0,d(48),1));modes.addView(button("Creative",()->modeAction("creative")),new LinearLayout.LayoutParams(0,d(48),1));
         body.addView(button("Saved plans",this::showPlans),space(7));body.addView(button("Stop bot service",this::stopServiceNow),space(7));
-        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("All-in-one Bug Report ZIP",this::showBugReports),space(7));body.addView(button("Connection diagnostics",this::showDiagnostics),space(7));body.addView(button("Pack handshake timeline",this::showHandshakeForensics),space(7));body.addView(button("Realm chat diagnostics",this::showChatDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
+        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("All-in-One Diagnostics ZIP",this::shareAllDiagnostics),space(7));body.addView(button("Learning",this::showLearning),space(7));
         body.addView(txt("Share only a file you choose in Android's picker.",12,MUTED),space(14));Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(5));
         AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();settingsDialog=dialog;dialog.setOnDismissListener(x->{if(settingsDialog==dialog)settingsDialog=null;for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
     }
@@ -150,8 +151,39 @@ public class MainActivity extends Activity {
         final long revision=serviceRevision;
         io.submit(()->{try{JSONObject report=request("GET","/diagnostics",null);ui.post(()->{if(revision!=serviceRevision)return;markControllerAvailable();rememberDiagnostics(report);text[0]=diagnosticText(savedDiagnostics(),"live",true);if(dialog.isShowing())dialog.setMessage(text[0]);});}catch(Exception e){ui.post(()->{text[0]=diagnosticText(savedDiagnostics(),savedDiagnostics()==null?"app-only":"saved",false);if(dialog.isShowing())dialog.setMessage(text[0]);});}});
     }
+    /** ONE tap from the main screen or Settings. Build every safe report, then
+     * open Android's share sheet; no second diagnostic picker, no auto upload,
+     * and no stopping the Minecraft service or clearing saved Microsoft auth.
+     */
+    void shareAllDiagnostics(){
+        supportIo.submit(()->{
+            JSONObject live=null;
+            if(serviceStarted&&token!=null&&!token.isEmpty())
+                try{live=request("GET","/support/snapshot",null);}catch(Exception ignored){}
+            try{
+                File directory=ReportContentProvider.reportDirectory(this);
+                File report=new File(directory,"Realm-AI-Live-ALL-DIAGNOSTICS-"+System.currentTimeMillis()+".zip");
+                try(OutputStream destination=new FileOutputStream(report)){SupportBundle.export(this,destination,live);}
+                Uri uri=ReportContentProvider.uri(this,report);
+                ui.post(()->{
+                    try{
+                        Intent send=new Intent(Intent.ACTION_SEND);
+                        send.setType("application/zip");
+                        send.putExtra(Intent.EXTRA_STREAM,uri);
+                        send.setClipData(ClipData.newUri(getContentResolver(),"Realm AI Live full diagnostic",uri));
+                        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(Intent.createChooser(send,"Share ONE diagnostic ZIP"));
+                        SupportLog.record(this,"report_exported");
+                    }catch(Exception e){bubble("Progress","The report is prepared, but no sharing app is available. You can try again without stopping the bot.",false);}
+                });
+            }catch(Exception e){
+                SupportLog.record(this,"report_failed");
+                ui.post(()->bubble("Progress","Unable to prepare the combined ZIP; saved Microsoft login and Realm data remain unchanged.",false));
+            }
+        });
+    }
     static final int REQUEST_EXPORT_REPORT=41022;
-    void showBugReports(){new AlertDialog.Builder(this).setTitle("All-in-one Bug Report ZIP").setMessage(SupportBundle.issues(this)).setPositiveButton("Export ONE ZIP",(d,w)->exportBugReport()).setNegativeButton("Close",null).show();}
+    void showBugReports(){shareAllDiagnostics();}
     void exportBugReport(){Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/zip");save.putExtra(Intent.EXTRA_TITLE,"Realm-AI-Live-ALL-DIAGNOSTICS-"+System.currentTimeMillis()+".zip");try{startActivityForResult(save,REQUEST_EXPORT_REPORT);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open a save location for the report.",false);}}
     void writeBugReport(Uri destination){supportIo.submit(()->{
         JSONObject live=null;
