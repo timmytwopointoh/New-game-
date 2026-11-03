@@ -61,7 +61,7 @@ test('cancelled session retains CDN partial, never reports all packs received',a
  h.client.emit('resource_packs_info',{texture_packs:[metadata]})
  await until(()=>typeof cancel==='function')
  h.client.emit('close')
- await until(()=>existsSync(path.join(h.dir,hash('world-textures_1.0.0')+'.mcpack.download')))
+ await until(()=>existsSync(packFilePath(h.dir,'resource',hash('world-textures_1.0.0')+'.mcpack')+'.download'))
  assert.equal(h.handler.snapshot().verified,0)
  assert(!h.sent.some(([,p])=>p.response_status==='have_all_packs'))
 })
