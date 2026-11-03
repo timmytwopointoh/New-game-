@@ -36,6 +36,7 @@ final class ConnectionDiagnostics {
             result.put("packDownloadRequestIssued",Boolean.TRUE.equals(input.opt("packDownloadRequestIssued")));
             result.put("packInfoReceived",Boolean.TRUE.equals(input.opt("packInfoReceived")));
             result.put("packStackReceived",Boolean.TRUE.equals(input.opt("packStackReceived")));
+            result.put("packNoPackDirectStack",Boolean.TRUE.equals(input.opt("packNoPackDirectStack")));
             for(String field:new String[]{"packResponseCount","packServerCount","packCdnCount","packAdvertisedCount","packVerifiedCacheCount","packMissingCount","packSkippedOptional","packLegacyBehaviorCount","packWireCode","packWireBytes","packWireIds","packResourceClassifiedCount","packBehaviorClassifiedCount","packAddonClassifiedCount","packHeadersSeenByHandler","packChunksSeenByHandler","transportReliableWrites","transportReliableWritesOpen","transportReliableWritesClosed","transportReliableAfterPackRequest","transportClosedAfterRequestSeconds"})
                 result.put(field,nonnegative(input,field));
             for(String field:new String[]{"packHeaders","packChunks","recordedAt","loadingElapsedSeconds","loadingNoProgressSeconds","loadingUniqueSignals","loadingRepeatedSignals","loadingReceivedBytes","loadingGraceSeconds","loadingRecoveryAttempts","loadingNextRetrySeconds"})result.put(field,nonnegative(input,field));
