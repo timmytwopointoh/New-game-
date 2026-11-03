@@ -38,8 +38,8 @@ export class Connection extends EventEmitter {
     if(!choice.retry||this.recoveryTimer||!this.client)return false
     this.recoveryAttempts++
     this.recoveryNextAt=Date.now()+choice.delayMs
-    this.lastError='Loading stalled ('+reason+'). Bounded automatic rejoin '+this.recoveryAttempts+'/2 scheduled; saved login kept.'
-    this.log('Realm join stalled at '+stage+'; retry '+this.recoveryAttempts+'/2 scheduled in '+Math.round(choice.delayMs/1000)+'s. No authentication files removed.')
+    this.lastError='Realm reconnect ('+reason+'). Bounded automatic rejoin '+this.recoveryAttempts+'/2 scheduled; saved login kept.'
+    this.log('Realm join retry at '+stage+'; retry '+this.recoveryAttempts+'/2 scheduled in '+Math.round(choice.delayMs/1000)+'s. No authentication files removed.')
     const generation=this.client
     this.recoveryTimer=setTimeout(()=>{
       this.recoveryTimer=null;this.recoveryNextAt=0
@@ -269,6 +269,14 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
 
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
       if(!this.lastError)this.lastError='Connection closed at '+this.lastPhase+'; no server reason was sent.'
+      // The previous recovery path waited 17 minutes even after transport closed
+      // in under a second. A closed transport cannot download any pack bytes.
+      // Retry only the silent, pre-header pack close; never retry a server kick,
+      // protocol error, explicit stop, sign-in prompt, or successful spawn.
+      const earlyPackClose=this.transportCloseKind==='transport-close'&&
+        this.packRequestAt>0&&Date.now()-this.packRequestAt<10000&&
+        this.packHeadersReceived===0&&!this.manualRecoveryStop
+      if(earlyPackClose)this.scheduleLoadingRecovery('pack-request','early-transport-close')
       this.authChallenge=null;this.authState='disconnected'
       if(!this.lastFailure&&this.loadingLiveness.stalled()&&!this.manualRecoveryStop)this.scheduleLoadingRecovery(priorLoadingStage,'loading-stalled')
     })
