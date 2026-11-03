@@ -102,3 +102,5 @@ jobs:
           path: ${{ runner.temp }}/realm-v0403/
           if-no-files-found: error
           retention-days: 3
+
+# Recheck updated CDN and watchdog canonical wire-name regression assertions.
