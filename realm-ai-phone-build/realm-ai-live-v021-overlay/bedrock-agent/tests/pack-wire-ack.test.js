@@ -28,14 +28,15 @@ function harness({packs}={}){
     client.queue('client_cache_status',{enabled:false})
  },close(){packsHandler.cleanup();rmSync(dir,{recursive:true,force:true})}}
 }
-test('cache is sent immediately before Downloading and never queued a duplicate',t=>{
+test('restore old order: immediate Downloading first, Bedrock native cache queued after',async t=>{
  const h=harness();t.after(()=>h.close());h.begin()
- assert.deepEqual(h.writes.map(x=>x.name),['client_cache_status','resource_pack_client_response'])
- assert.equal(h.queued.length,0)
- assert.equal(h.writes[0].packet.enabled,false)
- assert.equal(h.writes[1].packet.response_status,'send_packs')
- assert.equal(h.writes[1].packet.response_status_name,'Downloading')
- assert.deepEqual(h.writes[1].packet.resourcepackids,['aabbccdd-1234-4567-89ab-aabbccddeeff_1.0.0'])
+ assert.deepEqual(h.writes.map(x=>x.name),['resource_pack_client_response'])
+ assert.deepEqual(h.queued.map(x=>x.name),['client_cache_status'])
+ assert.equal(h.queued[0].packet.enabled,false)
+ assert.equal(h.writes[0].packet.response_status,'send_packs')
+ assert.equal(h.writes[0].packet.response_status_name,'Downloading')
+ assert.deepEqual(h.writes[0].packet.resourcepackids,['aabbccdd-1234-4567-89ab-aabbccddeeff_1.0.0'])
+ await new Promise(resolve=>setImmediate(resolve))
  assert.equal(h.stages.at(-1).cacheStatusIssued,true)
  assert.equal(h.stages.at(-1).downloadRequestIssued,true)
  assert.equal(h.stages.at(-1).packResponseCount,1)
@@ -60,7 +61,7 @@ test('empty required-pack world issues both immediate finish signals in order',t
  h.client.emit('resource_pack_stack',{resource_packs:[]})
  const codes=h.writes.filter(x=>x.name==='resource_pack_client_response').map(x=>x.packet.response_status_name)
  assert.deepEqual(codes,['DownloadingFinished','ResourcePackStackFinished'])
- assert.equal(h.queued.length,0)
+ assert.equal(h.queued.length,1)
  assert.equal(h.packsHandler.snapshot().finished,true)
 })
 test('pre-flight storage error never sends Downloading or falsely signals join',t=>{
