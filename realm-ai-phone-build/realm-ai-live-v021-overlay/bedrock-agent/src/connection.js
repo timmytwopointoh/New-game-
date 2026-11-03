@@ -38,7 +38,7 @@ export class Connection extends EventEmitter {
     if(!choice.retry||this.recoveryTimer||!this.client)return false
     this.recoveryAttempts++
     this.recoveryNextAt=Date.now()+choice.delayMs
-    this.lastError='Loading stalled ('+reason+'). Bounded automatic rejoin '+this.recoveryAttempts+'/2 scheduled; saved login kept.'
+    this.lastError='Realm disconnected or stalled ('+reason+'). Bounded automatic rejoin '+this.recoveryAttempts+'/2 scheduled; saved login kept.'
     this.log('Realm join stalled at '+stage+'; retry '+this.recoveryAttempts+'/2 scheduled in '+Math.round(choice.delayMs/1000)+'s. No authentication files removed.')
     const generation=this.client
     this.recoveryTimer=setTimeout(()=>{
@@ -56,7 +56,7 @@ export class Connection extends EventEmitter {
     // World loading and pack preparation can legitimately take >15 minutes.
     // Never use repeated keepalive/status as a progress reset.
     const stage=this.loadingLiveness.stage
-    if(stage==='world-started'||stage==='world-data'||stage==='packs-ready'){
+    if(['pack-request','pack-storage','pack-retry','downloading-packs','pack-cached','world-started','world-data','packs-ready'].includes(stage)){
       this.lastPhase=stage;this.authState='loading-stalled'
       this.scheduleLoadingRecovery(stage,'loading-stalled')
     }
@@ -270,7 +270,12 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
       if(!this.lastError)this.lastError='Connection closed at '+this.lastPhase+'; no server reason was sent.'
       this.authChallenge=null;this.authState='disconnected'
-      if(!this.lastFailure&&this.loadingLiveness.stalled()&&!this.manualRecoveryStop)this.scheduleLoadingRecovery(priorLoadingStage,'loading-stalled')
+      // A transport closure during pack negotiation is not slow loading.
+      // Retry with the preserved auth session (bounded to two attempts).
+      if(!this.manualRecoveryStop&&this.packRequestAt&&!this.spawned)
+        this.scheduleLoadingRecovery(priorLoadingStage,'transport-closed')
+      else if(!this.lastFailure&&this.loadingLiveness.stalled()&&!this.manualRecoveryStop)
+        this.scheduleLoadingRecovery(priorLoadingStage,'loading-stalled')
     })
     client.on('end',()=>{
       if(this.client!==client)return
@@ -278,6 +283,8 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
       if(!this.lastError)this.lastError='Connection ended at '+this.lastPhase+'; no server reason was sent.'
       this.authChallenge=null;this.authState='disconnected'
+      if(!this.manualRecoveryStop&&this.packRequestAt&&!this.spawned)
+        this.scheduleLoadingRecovery(this.loadingLiveness.stage,'transport-closed')
     })
     return client
   }
