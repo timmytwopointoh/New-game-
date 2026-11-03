@@ -20,8 +20,12 @@ export function sanitizeDiagnosticReport(input={}){
   report.packReason=['none','storage-low','storage-unknown','pack-size-limit','cdn-access-denied','cdn-missing','cdn-unavailable','network-interrupted','pack-integrity','pack-transfer-failed','server-no-pack-data','server-pack-stalled'].includes(input.packReason)?input.packReason:'none'
   report.packFreeMB=number(input.packFreeMB);report.packNeededMB=number(input.packNeededMB);report.packRetryable=input.packRetryable===true
   report.packCacheStatusIssued=input.packCacheStatusIssued===true;report.packDownloadRequestIssued=input.packDownloadRequestIssued===true
-  for(const name of ['packResponseCount','packServerCount','packCdnCount','packAdvertisedCount','packSkippedOptional','packLegacyBehaviorCount'])report[name]=number(input[name])
-  report.packSelectionPolicy=['addon-required','server-required-fallback'].includes(input.packSelectionPolicy)?input.packSelectionPolicy:'unknown'
+  for(const name of ['packResponseCount','packServerCount','packCdnCount','packAdvertisedCount','packSkippedOptional','packLegacyBehaviorCount','packWireCode','packWireBytes','packWireIds','packResourceClassifiedCount','packBehaviorClassifiedCount','packAddonClassifiedCount','packHeadersSeenByHandler','packChunksSeenByHandler'])report[name]=number(input[name])
+  report.packWireEncoded=input.packWireEncoded===true;report.packWireVerified=input.packWireVerified===true;report.packTransportConnectedAtRequest=input.packTransportConnectedAtRequest===true
+  report.packWireVersion=['1.26.60','1.26.51','1.26.50'].includes(input.packWireVersion)?input.packWireVersion:'unknown'
+  report.packWireMode=['modern-1-to-4','unchanged-version'].includes(input.packWireMode)?input.packWireMode:'unknown'
+  report.packWireText=['cancel','downloading','downloadingfinished','resourcepackstackfinished'].includes(input.packWireText)?input.packWireText:'unknown'
+  report.packSelectionPolicy=['all-advertised','addon-required','server-required-fallback'].includes(input.packSelectionPolicy)?input.packSelectionPolicy:'unknown'
   for(const name of ['packHeaders','packChunks'])report[name]=number(input[name])
   for(const name of ['loadingElapsedSeconds','loadingNoProgressSeconds','loadingUniqueSignals','loadingRepeatedSignals','loadingReceivedBytes','loadingGraceSeconds','loadingRecoveryAttempts','loadingNextRetrySeconds'])report[name]=number(input[name])
   report.loadingActive=input.loadingActive===true;report.loadingRecoveryScheduled=input.loadingRecoveryScheduled===true
