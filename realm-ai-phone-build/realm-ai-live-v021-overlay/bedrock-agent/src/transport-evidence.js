@@ -11,7 +11,7 @@ export function observeBedrockTransport(client,{clock=()=>Date.now()}={}){
   joinObserved:true,joinAt:clock(),closedAt:0,reliableCalls:0,
   reliableCallsWithTransportOpen:0,reliableCallsWithTransportClosed:0,
   packRequestAt:0,packReliableCallsAtRequest:0,packReliableCallsAfterRequest:0,
-  outboundPackResponseObserved:false
+  outboundPackResponseObserved:false,packRequestWasOpen:false
  }
  const original=transport.sendReliable
  transport.sendReliable=function(frame,...args){
@@ -33,6 +33,7 @@ export function markPackTransportRequest(client,{clock=()=>Date.now()}={}){
  if(!evidence)return {joinObserved:false,open:false,reliableCalls:0}
  evidence.packRequestAt=clock();evidence.packReliableCallsAtRequest=evidence.reliableCalls
  evidence.outboundPackResponseObserved=true
+ evidence.packRequestWasOpen=client?._closed!==true&&client?.status!==0&&client?.connection?.connected!==false
  return {joinObserved:true,open:client?._closed!==true&&client?.status!==0&&client?.connection?.connected!==false,
   reliableCalls:number(evidence.reliableCalls)}
 }
@@ -45,7 +46,7 @@ export function transportEvidenceSummary(client,{clock=()=>Date.now()}={}){
   transportReliableWritesClosed:number(e?.reliableCallsWithTransportClosed),
   transportReliableAfterPackRequest:number(e?.packReliableCallsAfterRequest),
   transportObservedPackRequest:e?.outboundPackResponseObserved===true,
-  transportPackRequestOpen:e?.packRequestAt>0&&client?._closed!==true&&client?.status!==0&&client?.connection?.connected!==false,
+  transportPackRequestOpen:e?.packRequestWasOpen===true,
   transportClosed:e?.closedAt>0||client?._closed===true,
   transportClosedAfterRequestSeconds:e?.closedAt>0&&e?.packRequestAt>0?number(Math.floor((e.closedAt-e.packRequestAt)/1000)):0
  }
