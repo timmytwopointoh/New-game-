@@ -29,7 +29,7 @@ export function sanitizeDiagnosticReport(input={}){
   report.packWireMode=['modern-1-to-4','unchanged-version'].includes(input.packWireMode)?input.packWireMode:'unknown'
   report.packWireText=['Cancel','Downloading','DownloadingFinished','ResourcePackStackFinished'].includes(input.packWireText)?input.packWireText:'unknown'
   report.packSelectionPolicy=['all-advertised','addon-required','server-required-fallback'].includes(input.packSelectionPolicy)?input.packSelectionPolicy:'unknown'
-  report.packHandshakeMode=['native-queue','no-cache-status','cache-first'].includes(input.packHandshakeMode)?input.packHandshakeMode:'unknown'
+  report.packHandshakeMode=['original-working','native-queue','no-cache-status','cache-first'].includes(input.packHandshakeMode)?input.packHandshakeMode:'unknown'
   for(const name of ['packHeaders','packChunks'])report[name]=number(input[name])
   for(const name of ['loadingElapsedSeconds','loadingNoProgressSeconds','loadingUniqueSignals','loadingRepeatedSignals','loadingReceivedBytes','loadingGraceSeconds','loadingRecoveryAttempts','loadingNextRetrySeconds'])report[name]=number(input[name])
   report.loadingActive=input.loadingActive===true;report.loadingRecoveryScheduled=input.loadingRecoveryScheduled===true
