@@ -31,6 +31,7 @@ final class ConnectionDiagnostics {
             result.put("packRetryable",Boolean.TRUE.equals(input.opt("packRetryable")));
             String packChoice=input.optString("packSelectionPolicy","unknown");
             result.put("packSelectionPolicy",packChoice.equals("all-advertised")||packChoice.equals("addon-required")||packChoice.equals("server-required-fallback")?packChoice:"unknown");
+            String handshakeMode=input.optString("packHandshakeMode","unknown");result.put("packHandshakeMode",Arrays.asList("native-queue","no-cache-status","cache-first").contains(handshakeMode)?handshakeMode:"unknown");
             result.put("packCacheStatusIssued",Boolean.TRUE.equals(input.opt("packCacheStatusIssued")));
             result.put("packDownloadRequestIssued",Boolean.TRUE.equals(input.opt("packDownloadRequestIssued")));
             for(String field:new String[]{"packResponseCount","packServerCount","packCdnCount","packAdvertisedCount","packSkippedOptional","packLegacyBehaviorCount","packWireCode","packWireBytes","packWireIds","packResourceClassifiedCount","packBehaviorClassifiedCount","packAddonClassifiedCount","packHeadersSeenByHandler","packChunksSeenByHandler","transportReliableWrites","transportReliableWritesOpen","transportReliableWritesClosed","transportReliableAfterPackRequest","transportClosedAfterRequestSeconds"})
