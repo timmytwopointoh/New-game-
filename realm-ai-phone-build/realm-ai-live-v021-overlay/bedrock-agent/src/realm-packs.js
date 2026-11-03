@@ -102,7 +102,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   if(!['native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
   const packs = new Map()
   const byUuid = new Map()
-  let stackReceived=false, finished=false, failed=false
+  let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
+  let verifiedCacheCount=0,missingPackCount=0
   let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='all-advertised',legacyBehaviorCount=0
   let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0
   const cdnQueue=[]
@@ -156,7 +157,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
   }
 
   const response = (name,ids=[]) => {
@@ -195,7 +196,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     if(failed || finished)return
     const done=[...packs.values()].filter(p=>p.ready).length
     emit('downloading-packs',`Realm packs verified: ${done}/${packs.size}`,done)
-    if(packs.size && done===packs.size){
+    if(packs.size && done===packs.size&&!downloadFinishedAcknowledged){
+      downloadFinishedAcknowledged=true
       response('have_all_packs')
       emit('packs-downloaded',`All ${done} Realm packs downloaded and verified`,done)
       if(stackReceived) complete()
@@ -263,7 +265,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   }
   client.on('resource_packs_info',packet=>{
     try{
-      if(packs.size || finished || failed)return
+      if(infoReceived||finished||failed)return
+      infoReceived=true
       const selection=selectRequiredRealmPacks(packet)
       skippedOptional=selection.skippedOptional
       advertisedPacks=selection.advertised
@@ -285,31 +288,63 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         byUuid.set(uuid,key)
       }
       if(!packs.size){
+        missingPackCount=0
+        // The Realm explicitly advertised ZERO packs. There is nothing
+        // to request or download. Await the server's resource_pack_stack.
         response('have_all_packs')
-        emit('packs-none','No Realm packs advertised; continuing join',0,0)
-      }else{
-        fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
-        for(const category of PACK_CATEGORIES)fs.mkdirSync(packDirectory(cacheDir,category),{recursive:true,mode:0o700})
+        emit('packs-none','No Realm pack download needed (zero advertised); awaiting world stack',0,0)
+        return
+      }
+      fs.mkdirSync(cacheDir,{recursive:true,mode:0o700})
+      for(const category of PACK_CATEGORIES)fs.mkdirSync(packDirectory(cacheDir,category),{recursive:true,mode:0o700})
+      const candidates=[]
+      for(const p of packs.values()){
+        // Local size alone is not proof of validity. Require a saved marker
+        // from a previously verified transfer and check the file hash again.
+        const file=priorPackLocations(cacheDir,p.basename,p.category).find(f=>{
+          try{return fs.statSync(f).size===p.size&&fs.existsSync(f+'.sha256')}catch{return false}
+        })
+        if(file)candidates.push({pack:p,file})
+      }
+      const finishProbe=()=>{
+        if(failed||finished||cancellation.signal.aborted)return
+        const missing=[...packs.values()].filter(p=>!p.ready)
+        missingPackCount=missing.length
         let required=0
-        for(const p of packs.values()){
-          const file=priorPackLocations(cacheDir,p.basename,p.category).find(f=>fs.existsSync(f)&&fs.statSync(f).size===p.size&&(p.cdn?fs.existsSync(f+'.sha256'):true))||packFilePath(cacheDir,p.category,p.basename)
-          const partial=file+'.download'
-          const cached=fs.existsSync(file)&&fs.statSync(file).size===p.size&&(p.cdn?fs.existsSync(file+'.sha256'):true)
-          if(!cached){
-            const partialSize=p.cdn&&fs.existsSync(partial)?fs.statSync(partial).size:0
-            const partialBytes=partialSize>0&&partialSize<p.size?partialSize:0
-            required+=p.size-partialBytes
-          }
+        for(const p of missing){
+          const partial=packFilePath(cacheDir,p.category,p.basename)+'.download'
+          const partialSize=p.cdn&&fs.existsSync(partial)?fs.statSync(partial).size:0
+          required+=p.size-(partialSize>0&&partialSize<p.size?partialSize:0)
         }
         const storage=checkStorage(cacheDir,required)
-        emit('pack-storage','Full Realm pack stack needs '+storage.neededMB+' MB; '+storage.freeMB+' MB available',0,packs.size,storage)
-        // Send exactly one request: duplicates can reset server transfer state.
-        response('send_packs',[...packs.keys()])
-        emit('pack-request','Download Full Realm Pack Stack: requested '+packs.size+'/'+advertisedPacks+' advertised pack(s); awaiting server response',0,packs.size)
-        if(pendingServerPacks()){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
-        for(const p of packs.values())if(p.cdn)cdnQueue.push(p)
+        emit('pack-storage','Verified cached packs '+verifiedCacheCount+'/'+packs.size+'; still missing '+missing.length,verifiedCacheCount,packs.size,storage)
+        if(!missing.length){
+          // All advertised files already exist and passed SHA verification.
+          // Never send a redundant Downloading packet.
+          progress()
+          return
+        }
+        // Send a request ONLY for missing packs previously advertised
+        // by this Realm. The server subsequently supplies their bytes.
+        response('send_packs',missing.map(p=>p.key))
+        emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
+        if(missing.some(p=>!p.cdn)){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
+        for(const p of missing)if(p.cdn)cdnQueue.push(p)
         pumpCdn()
       }
+      if(!candidates.length){finishProbe();return}
+      void (async()=>{
+        for(const {pack:p,file} of candidates){
+          if(failed||cancellation.signal.aborted)return
+          try{
+            const digest=fs.readFileSync(file+'.sha256','utf8').trim()
+            if(/^[a-f0-9]{64}$/.test(digest)&&await hashStoredFile(file)===digest){
+              p.file=file;p.ready=true;verifiedCacheCount++
+            }
+          }catch{}
+        }
+        finishProbe()
+      })().catch(failure)
     }catch(e){failure(e)}
   })
   client.on('resource_pack_data_info',packet=>{
@@ -366,7 +401,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       if(p.next<p.count){client.write('resource_pack_chunk_request',{pack_id:p.uuid,chunk_index:p.next});return}
       fs.closeSync(p.fd);p.fd=undefined
       if(p.written!==p.expected || p.hashContext.digest('hex')!==p.hash){const e=Error('Downloaded Realm pack failed SHA-256 verification');e.code='PACK_INTEGRITY_FAILED';throw e}
-      fs.renameSync(p.tmp,p.file);p.tmp=null;p.ready=true
+      fs.renameSync(p.tmp,p.file);p.tmp=null
+      fs.writeFileSync(p.file+'.sha256',p.hash,{mode:0o600})
+      p.ready=true
       progress()
     }catch(e){failure(e)}
   })
@@ -377,7 +414,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);cancellation.abort()})
-  return {snapshot:()=>({policy:'all-advertised',handshakeMode,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
