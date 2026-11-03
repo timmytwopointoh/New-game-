@@ -55,6 +55,7 @@ final class SupportBundle {
   File nodeDir=new File(c.getFilesDir(),"nodejs-project/private/diagnostics");
   File connectionFile=new File(nodeDir,"connection.json"),runtimeFile=new File(nodeDir,"runtime.json");
   JSONObject connection=ConnectionDiagnostics.sanitize(read(connectionFile,32768));
+  JSONObject handshake=HandshakeDiagnostics.read(new File(nodeDir,"pack-handshake.json"));
   JSONObject runtime=trace(read(runtimeFile,524288));
   JSONObject summary=new JSONObject()
     .put("schema",1).put("createdAt",System.currentTimeMillis())
@@ -66,6 +67,7 @@ final class SupportBundle {
     .put("loadingNoProgressSeconds",count(connection,"loadingNoProgressSeconds"))
     .put("resourcePackStage",connection.optString("packStage","unknown"))
     .put("resourcePackReason",connection.optString("packReason","none"))
+    .put("handshakeTraceAvailable",handshake.optJSONArray("sessions").length()>0)
     .put("packHeaders",count(connection,"packHeaders"))
     .put("packChunks",count(connection,"packChunks"))
     .put("runtimeEvents",runtime.optJSONArray("events").length())
@@ -76,7 +78,7 @@ final class SupportBundle {
     .put("liveSnapshotCaptured",liveSource!=null)
     .put("connectionReportFilePresent",connectionFile.isFile())
     .put("runtimeReportFilePresent",runtimeFile.isFile())
-    .put("sections",new JSONArray(Arrays.asList("README.txt","summary.json","manifest.json","app.json","app-events.json","startup.json","connection.json","runtime.json","live-snapshot.json","pack-loading.json","work-learning.json")));
+    .put("sections",new JSONArray(Arrays.asList("README.txt","summary.json","manifest.json","app.json","app-events.json","startup.json","connection.json","runtime.json","live-snapshot.json","pack-loading.json","pack-handshake.json","work-learning.json")));
   JSONObject pack=new JSONObject().put("schema",1)
     .put("status",connection.optString("packStage","unknown"))
     .put("reason",connection.optString("packReason","none"));
@@ -101,6 +103,7 @@ final class SupportBundle {
    entry(zip,"runtime.json",runtime.toString(2));
    entry(zip,"live-snapshot.json",live.toString(2));
    entry(zip,"pack-loading.json",pack.toString(2));
+   entry(zip,"pack-handshake.json",handshake.toString(2));
    entry(zip,"work-learning.json",work.toString(2));
   }
  }
