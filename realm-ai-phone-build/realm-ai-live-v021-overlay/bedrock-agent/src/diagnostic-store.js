@@ -26,8 +26,8 @@ export function sanitizeDiagnosticReport(input={}){
   for(const name of ['transportJoinObserved','transportObservedPackRequest','transportPackRequestOpen','transportClosed'])report[name]=input[name]===true
   report.transportCloseKind=['none','server-disconnect','protocol-error','transport-close','transport-end'].includes(input.transportCloseKind)?input.transportCloseKind:'unknown'
   report.packWireVersion=['1.26.60','1.26.51','1.26.50'].includes(input.packWireVersion)?input.packWireVersion:'unknown'
-  report.packWireMode=['modern-1-to-4','unchanged-version'].includes(input.packWireMode)?input.packWireMode:'unknown'
-  report.packWireText=['Cancel','Downloading','DownloadingFinished','ResourcePackStackFinished'].includes(input.packWireText)?input.packWireText:'unknown'
+  report.packWireMode=['original-working','modern-1-to-4','unchanged-version'].includes(input.packWireMode)?input.packWireMode:'unknown'
+  report.packWireText=['cancel','downloading','downloadingfinished','resourcepackstackfinished','Cancel','Downloading','DownloadingFinished','ResourcePackStackFinished'].includes(input.packWireText)?input.packWireText:'unknown'
   report.packSelectionPolicy=['all-advertised','addon-required','server-required-fallback'].includes(input.packSelectionPolicy)?input.packSelectionPolicy:'unknown'
   report.packHandshakeMode=['original-working','native-queue','no-cache-status','cache-first'].includes(input.packHandshakeMode)?input.packHandshakeMode:'unknown'
   for(const name of ['packHeaders','packChunks'])report[name]=number(input[name])
