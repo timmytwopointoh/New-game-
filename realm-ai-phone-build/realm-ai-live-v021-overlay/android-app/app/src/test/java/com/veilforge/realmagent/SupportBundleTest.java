@@ -60,7 +60,9 @@ public class SupportBundleTest {
   AppUpdater.show(a);AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
   assertEquals("Bug reports",dialog.getButton(AlertDialog.BUTTON_NEUTRAL).getText().toString());
   dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+  Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
   a.supportIo.submit(()->{}).get(10,java.util.concurrent.TimeUnit.SECONDS);
+  Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
   File[] reports=ReportContentProvider.reportDirectory(a).listFiles((dir,name)->name.endsWith(".zip"));
   assertNotNull(reports);assertTrue(reports.length>=1);
  }
