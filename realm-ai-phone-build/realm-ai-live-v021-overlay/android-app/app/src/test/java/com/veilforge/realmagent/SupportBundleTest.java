@@ -23,7 +23,20 @@ public class SupportBundleTest {
   write("nodejs-project/config.json","{\"token\":\"PRIVATE-CONFIG\"}");write("nodejs-project/private/auth/switch/login.json","{\"refresh_token\":\"PRIVATE-LOGIN\"}");
   write("nodejs-project/private/diagnostics/connection.json","{\"phase\":\"spawned\",\"token\":\"PRIVATE-TOKEN\",\"authChallenge\":{\"userCode\":\"PRIVATE-CODE\"}}");
   write("nodejs-project/private/diagnostics/runtime.json","{\"events\":[{\"kind\":\"sample\",\"at\":1,\"state\":{\"mode\":\"survival\",\"position\":{\"x\":1,\"y\":64,\"z\":2},\"chat\":\"PRIVATE-CHAT\",\"lastError\":\"PRIVATE-ERROR\"}}],\"issues\":[{\"code\":\"server_stuck\",\"count\":2,\"token\":\"PRIVATE-ISSUE\"}],\"password\":\"PRIVATE-PASSWORD\"}");
-  Map<String,String> files=export();assertEquals(new HashSet<>(Arrays.asList("README.txt","summary.json","manifest.json","app.json","app-events.json","startup.json","connection.json","runtime.json","live-snapshot.json","pack-loading.json","work-learning.json")),files.keySet());String all=files.toString();assertFalse(all.contains("PRIVATE-"));assertTrue(all.contains("server_stuck"));assertTrue(all.contains("coordinates"));assertFalse(new JSONObject(files.get("app.json")).getBoolean("remoteAccess"));assertTrue(new File(a.getFilesDir(),"nodejs-project/private/auth/switch/login.json").isFile());
+  Map<String,String> files=export();assertEquals(new HashSet<>(Arrays.asList("README.txt","summary.json","manifest.json","app.json","app-events.json","startup.json","connection.json","runtime.json","live-snapshot.json","pack-loading.json","pack-handshake.json","work-learning.json")),files.keySet());String all=files.toString();assertFalse(all.contains("PRIVATE-"));assertTrue(all.contains("server_stuck"));assertTrue(all.contains("coordinates"));assertFalse(new JSONObject(files.get("app.json")).getBoolean("remoteAccess"));assertTrue(new File(a.getFilesDir(),"nodejs-project/private/auth/switch/login.json").isFile());
+ }
+ @Test public void handshakeTimelineRetainsPacketOrderButNeverExportsSecrets()throws Exception{
+  write("nodejs-project/private/diagnostics/pack-handshake.json",
+    "{\\"schema\\":1,\\"accessToken\\":\\"PRIVATE-AUTH\\",\\"sessions\\":[{\\"state\\":\\"closed\\",\\"rawAddress\\":\\"PRIVATE-IP\\",\\"events\\":[{\\"kind\\":\\"received\\",\\"packet\\":\\"resource_packs_info\\",\\"ms\\":150,\\"packCount\\":9,\\"rawUrl\\":\\"PRIVATE-URL\\"},{\\"kind\\":\\"write-attempt\\",\\"packet\\":\\"resource_pack_client_response\\",\\"status\\":\\"Downloading\\",\\"ms\\":170,\\"packCount\\":9,\\"rawId\\":\\"PRIVATE-ID\\"},{\\"kind\\":\\"client-closed\\",\\"ms\\":310,\\"reason\\":\\"PRIVATE-CLOSE\\"}]}]}");
+  Map<String,String> files=export();
+  assertTrue(files.containsKey("pack-handshake.json"));
+  JSONObject record=new JSONObject(files.get("pack-handshake.json"));
+  JSONArray events=record.getJSONArray("sessions").getJSONObject(0).getJSONArray("events");
+  assertEquals(3,events.length());
+  assertEquals("resource_packs_info",events.getJSONObject(0).getString("packet"));
+  assertEquals("Downloading",events.getJSONObject(1).getString("status"));
+  assertEquals("client-closed",events.getJSONObject(2).getString("kind"));
+  assertFalse(files.toString().contains("PRIVATE-"));
  }
  @Test public void malformedOrMissingRuntimeStillExportsReadableAppReport()throws Exception{write("nodejs-project/private/diagnostics/runtime.json","broken");Map<String,String> f=export();assertEquals(0,new JSONObject(f.get("runtime.json")).getJSONArray("events").length());assertEquals(a.getPackageName(),new JSONObject(f.get("app.json")).getString("package"));}
  @Test public void bugReportDialogAndDocumentSaveWorkWithoutStartingBot()throws Exception{
@@ -52,7 +65,7 @@ public class SupportBundleTest {
     files.put(e.getName(),out.toString("UTF-8"));
    }
   }
-  assertEquals(11,files.size());
+  assertEquals(12,files.size());
   JSONObject manifest=new JSONObject(files.get("manifest.json"));
   assertTrue(manifest.getBoolean("liveSnapshotCaptured"));
   assertEquals("one-zip",new JSONObject(files.get("summary.json")).getString("reportFormat"));
