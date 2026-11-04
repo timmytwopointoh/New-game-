@@ -45,9 +45,14 @@ final class ConnectionDiagnostics {
             String wireVersion=input.optString("packWireVersion","unknown");result.put("packWireVersion",Arrays.asList("1.26.60","1.26.51","1.26.50").contains(wireVersion)?wireVersion:"unknown");
             String closeKind=input.optString("transportCloseKind","unknown");result.put("transportCloseKind",Arrays.asList("none","server-disconnect","protocol-error","transport-close","transport-end").contains(closeKind)?closeKind:"unknown");
             String closeLabel=input.optString("transportCloseLabel","unobserved");
-             result.put("transportCloseLabel",Arrays.asList("unobserved","remote-disconnect-notice","raknet-connection-lost","connection-banned","protocol-incompatible","unknown-code").contains(closeLabel)?closeLabel:"unknown-code");
+             result.put("transportCloseLabel",Arrays.asList("unobserved","remote-disconnect-notice","raknet-connection-lost","connection-banned","protocol-incompatible","nethernet-connect-error","nethernet-disconnected","nethernet-closed","unknown-code").contains(closeLabel)?closeLabel:"unknown-code");
              String closeOrigin=input.optString("transportCloseOrigin","unknown");
              result.put("transportCloseOrigin",Arrays.asList("unknown","remote-transport","server-kick","client-disconnect","local-client-close","network-error","app-stop").contains(closeOrigin)?closeOrigin:"unknown");
+             for(String field:new String[]{"transportKind","rtcConnectionState","rtcIceState","rtcReliableState"}){
+                 String val=input.optString(field,"unknown");
+                 String options=field.equals("transportKind")?"nethernet raknet unknown":field.equals("rtcConnectionState")?"new connecting connected disconnected failed closed unknown":field.equals("rtcIceState")?"new checking connected completed disconnected failed closed unknown":"connecting open closing closed unknown";
+                 result.put(field,Arrays.asList(options.split(" ")).contains(val)?val:"unknown");
+             }
              result.put("loadingActive",Boolean.TRUE.equals(input.opt("loadingActive")));
             result.put("loadingRecoveryScheduled",Boolean.TRUE.equals(input.opt("loadingRecoveryScheduled")));
             String loadingStage=input.optString("loadingStage","unknown");
