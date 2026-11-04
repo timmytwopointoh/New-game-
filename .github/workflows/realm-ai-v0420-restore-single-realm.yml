@@ -30,7 +30,7 @@ jobs:
           grep -q "versionName '0.40.20-restore-single-realm'" "$ROOT/android-app/app/build.gradle"
           grep -q "authTitle:'00000000441cc96b',deviceType:'Nintendo',deviceOS:12,flow:'live'" "$ROOT/bedrock-agent/src/options.js"
           grep -Fq "preparePackResponseWire(options,undefined,{strategy:'original-working'})" "$ROOT/bedrock-agent/src/connection.js"
-          grep -Fq 'if(realms.length===1)return realms[0]' "$ROOT/bedrock-agent/src/options.js"
+          grep -Fq 'if(byOwner.length===1)return byOwner[0]' "$ROOT/bedrock-agent/src/options.js"
           echo 'Identity, saved-auth path and restored sole-Realm selection verified.'
       - name: Restore exact verified Bedrock Live runtime dependencies
         working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
