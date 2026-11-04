@@ -27,16 +27,14 @@ function setup(){
  return {c,h,events,originalQueue,cleanup(){h.cleanup();rmSync(dir,{recursive:true,force:true})}}
 }
 
-test('modded Realm sends cache status first, then modern Downloading without duplicate',t=>{
+test('modded Realm sends Downloading before optional cache status, without duplicate',t=>{
  const s=setup();t.after(s.cleanup)
  s.c.emit('resource_packs_info',{texture_packs:[{uuid:'11111111-2222-3333-4444-555555555555',version:'1.0.0',size:10}]})
- assert.deepEqual(s.events.map(e=>e.kind),['write','frame'])
- assert.equal(s.events[0].name,'client_cache_status')
- assert.equal(s.events[0].params.enabled,false)
- assert.equal(s.events[1].frame[1],2)
- assert.equal(s.events[1].immediate,true)
+ assert.deepEqual(s.events.map(e=>e.kind),['frame'])
+ assert.equal(s.events[0].frame[1],2)
+ assert.equal(s.events[0].immediate,true)
  s.c.queue('client_cache_status',{enabled:false})
- assert.equal(s.events.length,2,'must suppress duplicated queued cache status')
+ assert.equal(s.events.length,1,'must suppress queued cache status while packs download')
  assert.equal(s.h.snapshot().requested,1)
 })
 test('unmodded world retains byte-identical native queue behavior',t=>{
@@ -49,15 +47,15 @@ test('unmodded world retains byte-identical native queue behavior',t=>{
  assert.equal(s.events.filter(e=>e.kind==='frame').length,0)
 })
 
-test('nine advertised packs are requested once, after cache status, without premature radius',t=>{
+test('nine advertised packs are requested once before deferred cache status, without premature radius',t=>{
  const s=setup();t.after(s.cleanup)
  const packs=Array.from({length:9},(_,i)=>({uuid:'11111111-2222-3333-4444-'+String(i+1).padStart(12,'0'),version:'1.0.0',size:10}))
  s.c.emit('resource_packs_info',{texture_packs:packs})
- assert.deepEqual(s.events.map(e=>e.kind),['write','frame'])
- assert.equal(s.events[1].frame[1],2)
+ assert.deepEqual(s.events.map(e=>e.kind),['frame'])
+ assert.equal(s.events[0].frame[1],2)
  assert.equal(s.h.snapshot().requested,9)
  assert.equal(s.h.snapshot().wire.packIdCount,9)
  s.c.queue('client_cache_status',{enabled:false})
  s.c.queue('request_chunk_radius',{chunk_radius:12})
- assert.equal(s.events.length,2,'no duplicate cache status or early chunk-radius request')
+ assert.equal(s.events.length,1,'no early cache status or chunk-radius request')
 })
