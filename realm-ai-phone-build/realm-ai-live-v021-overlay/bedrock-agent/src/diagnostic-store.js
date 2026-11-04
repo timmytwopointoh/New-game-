@@ -27,7 +27,8 @@ export function sanitizeDiagnosticReport(input={}){
   report.transportCloseKind=['none','server-disconnect','protocol-error','transport-close','transport-end'].includes(input.transportCloseKind)?input.transportCloseKind:'unknown'
   report.transportCloseCode=number(input.transportCloseCode)
   report.transportCloseOrigin=['unknown','remote-transport','server-kick','client-disconnect','local-client-close','network-error','app-stop'].includes(input.transportCloseOrigin)?input.transportCloseOrigin:'unknown'
-  report.transportCloseLabel=['unobserved','remote-disconnect-notice','raknet-connection-lost','connection-banned','protocol-incompatible','unknown-code'].includes(input.transportCloseLabel)?input.transportCloseLabel:'unknown-code'
+  report.transportCloseLabel=['unobserved','remote-disconnect-notice','raknet-connection-lost','connection-banned','protocol-incompatible','nethernet-connect-error','nethernet-disconnected','nethernet-closed','unknown-code'].includes(input.transportCloseLabel)?input.transportCloseLabel:'unknown-code'
+  for(const [name,allowed] of Object.entries({transportKind:['nethernet','raknet','unknown'],rtcConnectionState:['new','connecting','connected','disconnected','failed','closed','unknown'],rtcIceState:['new','checking','connected','completed','disconnected','failed','closed','unknown'],rtcReliableState:['connecting','open','closing','closed','unknown']}))report[name]=allowed.includes(input[name])?input[name]:'unknown'
   report.transportAckObservable=input.transportAckObservable===true;report.packWaitingForServer=input.packWaitingForServer===true
   report.packWireVersion=['1.26.60','1.26.51','1.26.50'].includes(input.packWireVersion)?input.packWireVersion:'unknown'
   report.packWireMode=['original-working','modern-1-to-4','unchanged-version'].includes(input.packWireMode)?input.packWireMode:'unknown'
