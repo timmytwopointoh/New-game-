@@ -70,7 +70,7 @@ test('after modded pack is received and SHA verified, response selectors 3/4 fin
  inspect(h.sends[1].data,'DownloadingFinished',3)
  inspect(h.sends[2].data,'ResourcePackStackFinished',4)
  assert.equal(h.handler.snapshot().finished,true)
- assert.deepEqual(h.writes.map(w=>w.name),['client_cache_status'],'cache status follows the complete pack stack')
+ assert.deepEqual(h.writes.map(w=>w.name),['resource_pack_chunk_request','client_cache_status'],'cache status follows chunk request and complete pack stack')
 })
 test('no-pack Realm uses exact old v0.40.10 response and does not send rewritten modded buffers',t=>{
  const h=setup();t.after(h.close)
