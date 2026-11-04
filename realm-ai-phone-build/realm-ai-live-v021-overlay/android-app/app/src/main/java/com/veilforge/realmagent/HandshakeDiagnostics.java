@@ -7,10 +7,11 @@ import org.json.*;
 /** Second strict privacy boundary for the local Minecraft packet timeline. */
 final class HandshakeDiagnostics {
     private static final Set<String> STATES=options("closed world-spawned pack-requested server-reply starting");
-    private static final Set<String> KINDS=options("session-start joined client-session received write-attempt queue-attempt send-mcpe client-closed server-disconnect client-error transport-closed world-spawned");
+    private static final Set<String> KINDS=options("session-start joined client-session received write-attempt queue-attempt send-mcpe raw-pack-submit close-origin client-closed server-disconnect client-error transport-closed world-spawned");
     private static final Set<String> PACKETS=options("unknown network_settings server_to_client_handshake play_status resource_packs_info resource_pack_data_info resource_pack_chunk_data resource_pack_stack start_game disconnect client_to_server_handshake client_cache_status resource_pack_client_response request_chunk_radius resource_pack_chunk_request");
     private static final Set<String> RESPONSES=options("none Cancel Downloading DownloadingFinished ResourcePackStackFinished");
     private static final Set<String> TRANSPORTS=options("unknown open closed");
+    private static final Set<String> ORIGINS=options("unknown remote-transport server-kick client-disconnect local-client-close network-error app-stop");
     private static Set<String> options(String values){return new HashSet<>(Arrays.asList(values.split(" ")));}
     private static String choice(JSONObject source,String key,Set<String> choices,String fallback){
         String value=source.optString(key,fallback);
@@ -39,7 +40,11 @@ final class HandshakeDiagnostics {
                       .put("packet",choice(ev,"packet",PACKETS,"unknown"))
                       .put("transport",choice(ev,"transport",TRANSPORTS,"unknown"))
                       .put("status",choice(ev,"status",RESPONSES,"none"))
-                      .put("packCount",Math.min(256,numeric(ev,"packCount"))));
+                      .put("packCount",Math.min(256,numeric(ev,"packCount")))
+                      .put("packetBytes",Math.min(1048576,numeric(ev,"packetBytes")))
+                      .put("selector",Math.min(255,numeric(ev,"selector")))
+                      .put("reasonCode",Math.min(255,numeric(ev,"reasonCode")))
+                      .put("origin",choice(ev,"origin",ORIGINS,"unknown")));
                 }
                 row.put("events",events);safe.put(row);
             }
