@@ -1,4 +1,4 @@
-name: Realm AI v0.40.20 restore sole Realm joining with unchanged packet handshake
+name: Realm AI v0.40.20 owner-filtered duplicate Realm correction
 on:
   push:
     branches: [fix/realm-ai-restore-pre-selection-20261104]
@@ -168,3 +168,5 @@ jobs:
 # Final rebuild: preserve original lowercase pack-response names in the one-tap diagnostic export.
 
 # Final regression run includes revised historical test: only modded worlds wrap early radius, no-mod world queue stays byte-identical.
+
+# Rebuild after real emulator evidence: 5 joined Realm entries, 2 exact-name matches; require owner-based disambiguation.
