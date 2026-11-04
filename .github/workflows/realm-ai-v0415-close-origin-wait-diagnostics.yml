@@ -65,7 +65,7 @@ jobs:
         run: python3 tools/fetch_native_runtime.py
       - name: Test Android app UI, service and offline ZIP diagnostics
         working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
-        run: gradle --no-daemon :app:testDebugUnitTest
+        run: gradle --no-daemon --stacktrace --info :app:testDebugUnitTest
       - name: Compile unsigned original-app APK
         working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
         run: gradle --no-daemon :app:assembleRelease
