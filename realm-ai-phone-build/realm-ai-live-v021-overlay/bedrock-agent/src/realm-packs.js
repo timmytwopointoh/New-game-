@@ -417,11 +417,36 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // For the JavaScript RakNet backend, explicitly flush the queue once
         // after both legitimate modded handshake packets were serialized.
         // This is not used for unmodded worlds or any other packet stream.
+        // Only the following four fixed booleans are written to app-private
+        // diagnostics. No pack IDs, network buffers, URLs or account data.
+        const flushAudit=(supported,invoked,successful,reason)=>{
+          try{
+            const dir=path.resolve(cacheDir,'..','diagnostics')
+            fs.mkdirSync(dir,{recursive:true})
+            fs.writeFileSync(path.join(dir,'raknet-pack-flush.json'),
+              JSON.stringify({schema:1,variant:'W2',recordedAt:Date.now(),
+                supported:supported===true,invoked:invoked===true,
+                successful:successful===true,
+                reason:['sent','unsupported','aborted','exception'].includes(reason)?reason:'unknown'}))
+          }catch{}
+        }
         setTimeout(()=>{
-          if(failed||finished||stackReceived||cancellation.signal.aborted)return
+          if(failed||finished||stackReceived||cancellation.signal.aborted){
+            flushAudit(false,false,false,'aborted')
+            return
+          }
           const transportQueue=client?.connection?.raknet?.connection
-          if(typeof transportQueue?.sendQueue!=='function')return
-          try{transportQueue.sendQueue()}catch(error){failure(error)}
+          if(typeof transportQueue?.sendQueue!=='function'){
+            flushAudit(false,false,false,'unsupported')
+            return
+          }
+          try{
+            transportQueue.sendQueue()
+            flushAudit(true,true,true,'sent')
+          }catch(error){
+            flushAudit(true,true,false,'exception')
+            failure(error)
+          }
         },15).unref?.()
         emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
         if(missing.some(p=>!p.cdn)){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
