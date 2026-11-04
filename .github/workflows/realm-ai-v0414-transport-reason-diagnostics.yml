@@ -101,10 +101,10 @@ jobs:
               assert b"useCurrentModded=handshakeMode==='original-working'" in packs
               assert b"sendCurrentModdedPackResponse(client,packet)" in packs
               assert b"if(packs.size){" in packs and b"installModdedRadiusGuard()" in packs
-    assert b"vf-pack-response-submit" in z.read('assets/nodejs-project/src/modded-pack-response.js')
-    assert b"classifyTransportClose" in z.read('assets/nodejs-project/src/transport-evidence.js')
-    assert b"transportCloseCode" in z.read('assets/nodejs-project/src/connection.js')
-    assert b"transportPackReliableSubmissions" in z.read('assets/nodejs-project/src/diagnostic-store.js')
+          assert b"vf-pack-response-submit" in z.read('assets/nodejs-project/src/modded-pack-response.js')
+          assert b"classifyTransportClose" in z.read('assets/nodejs-project/src/transport-evidence.js')
+          assert b"transportCloseCode" in z.read('assets/nodejs-project/src/connection.js')
+          assert b"transportPackReliableSubmissions" in z.read('assets/nodejs-project/src/diagnostic-store.js')
               assert b"client.write('client_cache_status',{enabled:false})" in packs
               assert b"moddedCacheStatusSent=true" in packs
               assert b"if(name==='client_cache_status'&&moddedCacheStatusSent)return" in packs
