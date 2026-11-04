@@ -47,7 +47,9 @@ function setup(){
 test('only modded Realm uses 1.26.60 Downloading selector 2; packet IDs and reliable send are intact',t=>{
  const h=setup();t.after(h.close)
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
- assert.equal(h.writes.length,0,'do not use legacy write in modded Realm')
+ assert.equal(h.writes.length,1,'only cache-status should use native write in modded Realm')
+ assert.equal(h.writes[0].name,'client_cache_status')
+ assert.equal(h.writes[0].data.enabled,false)
  assert.equal(h.sends.length,1)
  assert.equal(h.sends[0].immediate,true)
  const frame=h.sends[0].data
