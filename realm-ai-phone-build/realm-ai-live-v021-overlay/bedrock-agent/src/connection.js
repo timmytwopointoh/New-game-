@@ -171,7 +171,7 @@ export class Connection extends EventEmitter {
       if(this.client!==client)return
       this.loadingLiveness.setStage(state.stage)
       if(Number.isFinite(state.receivedMB))this.loadingLiveness.noteTransferBytes(state.receivedMB*1024*1024)
-      if(state.stage==='pack-request'){
+      if(state.stage==='pack-request'&&!this.packRequestAt){
         this.packRequestAt=Date.now()
         this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0
       }
@@ -280,6 +280,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
     client.on('close',()=>{
       if(this.client!==client)return
       const priorLoadingStage=this.loadingLiveness.stage
+      if(this.packStatus?.stage==='pack-request'&&this.packHeadersReceived===0)this.packStatus={...this.packStatus,message:'Disconnected before pack data arrived; connection no longer loading.'}
       if(this.transportCloseKind==='none')this.transportCloseKind='transport-close'
       if(!this.lastError&&this.packRequestAt){
         const sec=Math.max(0,Math.round((Date.now()-this.packRequestAt)/1000))
