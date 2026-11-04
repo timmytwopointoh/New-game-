@@ -105,9 +105,9 @@ jobs:
               assert b"classifyTransportClose" in z.read('assets/nodejs-project/src/transport-evidence.js')
               assert b"transportCloseCode" in z.read('assets/nodejs-project/src/connection.js')
               assert b"transportPackReliableSubmissions" in z.read('assets/nodejs-project/src/diagnostic-store.js')
-          assert b"transportCloseOrigin" in z.read('assets/nodejs-project/src/connection.js')
-          assert b"packServerWaitSeconds" in z.read('assets/nodejs-project/src/diagnostic-store.js')
-          assert b"waitingForServer:true" in packs
+              assert b"transportCloseOrigin" in z.read('assets/nodejs-project/src/connection.js')
+              assert b"packServerWaitSeconds" in z.read('assets/nodejs-project/src/diagnostic-store.js')
+              assert b"waitingForServer:true" in packs
               assert b"client.write('client_cache_status',{enabled:false})" in packs
               assert b"moddedCacheStatusSent=true" in packs
               assert b"if(name==='client_cache_status'&&moddedCacheStatusSent)return" in packs
