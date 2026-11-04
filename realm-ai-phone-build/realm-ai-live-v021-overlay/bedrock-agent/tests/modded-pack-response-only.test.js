@@ -44,12 +44,12 @@ function setup(){
  return {...mock,handler,report,close(){handler.cleanup();rmSync(dir,{recursive:true,force:true})}}
 }
 
-test('only modded Realm uses 1.26.60 Downloading selector 2; packet IDs and reliable send are intact',t=>{
+test('only modded Realm uses 1.26.60 Downloading selector 2; packet IDs and queued sender are intact',t=>{
  const h=setup();t.after(h.close)
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
  assert.equal(h.writes.length,0,'do not use legacy write in modded Realm')
  assert.equal(h.sends.length,1)
- assert.equal(h.sends[0].immediate,true)
+ assert.equal(h.sends[0].immediate,false,'candidate C queues modded response through native batching')
  const frame=h.sends[0].data
  inspect(frame,'Downloading',2)
  const decodeLegacy=Buffer.from(frame);decodeLegacy[1]=1
