@@ -106,7 +106,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
   let verifiedCacheCount=0,missingPackCount=0,noPackAckTimer=null,noPackAckIssued=false,noPackDirectStack=false
   let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='all-advertised',legacyBehaviorCount=0
-  let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0
+  let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0,lastWaitNoticeAt=0
   const cdnQueue=[]
   // Original-working mode allows the bundled client to manage its own
   // cache-status and early terrain-radius packets as the proven v0.26 did.
@@ -171,7 +171,15 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // CDN downloads have their own idle timeout; only watch missing server chunk data.
   const pendingServerPacks=()=>[...packs.values()].some(p=>!p.cdn&&!p.ready)
   const packWatchdog=setInterval(()=>{
-    if(failed||finished||!serverWaitSince||!pendingServerPacks())return
+    if(failed||finished||!serverWaitSince||!pendingServerPacks()||client._closed===true)return
+    const elapsed=now()-serverWaitSince
+    // A slow Realm can be alive with no visible pack progress.
+    // Do not restart or reset the timeout for informational updates.
+    if(serverPackHeaders===0&&elapsed>=10000&&now()-lastWaitNoticeAt>=10000){
+      lastWaitNoticeAt=now()
+      emit('pack-request','Still connected, waiting for Realm pack transfer ('+Math.floor(elapsed/1000)+'s); downloads may be uneven',0,packs.size,
+        {waitingForServer:true,serverWaitSeconds:Math.floor(elapsed/1000)})
+    }
     if(now()-lastServerPacketAt<serverPackIdleMs)return
     const code=serverPackHeaders===0?'PACK_NO_SERVER_DATA':'PACK_SERVER_STALLED'
     const error=Error(code==='PACK_NO_SERVER_DATA'?
