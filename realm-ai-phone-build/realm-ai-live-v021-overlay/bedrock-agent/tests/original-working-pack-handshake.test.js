@@ -71,8 +71,10 @@ test('modded Realm requests only server-advertised missing packs using original 
  assert.deepEqual(reply.params.resourcepackids,['needed_1.0.0'])
  assert.equal(v.h.snapshot().handshakeMode,'original-working')
  assert.notEqual(v.c.queue,v.originalQueue,'modded Realm gates premature terrain traffic')
+ const countBeforeNativeQueue=v.sent.length
  v.c.queue('client_cache_status',{enabled:false})
- assert.equal(v.sent.at(-1).name,'client_cache_status','the original cache-status packet still reaches the native queue')
+ assert.equal(v.sent[0].name,'client_cache_status','modded Realm reports cache capability before requesting packs')
+ assert.equal(v.sent.length,countBeforeNativeQueue,'native queued duplicate cache status must be suppressed')
  v.h.cleanup()
  assert.equal(v.c.queue,v.originalQueue,'the original queue is restored on cleanup')
 })
