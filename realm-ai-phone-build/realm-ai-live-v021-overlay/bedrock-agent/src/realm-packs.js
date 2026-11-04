@@ -139,7 +139,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       // The modded-only probe already sent cache policy immediately; suppress
       // the built-in library's queued duplicate without changing empty worlds.
       // Candidate D: optional cache-status packet is suppressed for modded Realm only.
-      if(name==='client_cache_status')return
+      if(name==='client_cache_status'&&cacheStatusIssued)return
       if(name==='request_chunk_radius'&&!canRequestTerrain()){
         pendingRadius={method:originalQueue,packet,args};radiusDeferred++
         return
@@ -402,7 +402,12 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // its cache policy after this response, potentially too late.
         // Candidate E: request ONE of the advertised missing packs in the first response.
         // Once the server returns a header, add bounded sequential requests separately.
-        // Candidate J: send all authenticated server-advertised pack IDs with legacy selector.
+        // Candidate K: restore optional cache policy BEFORE legacy Downloading
+        // response; no other protocol fields or unmodded path change.
+        if(handshakeMode==='original-working'&&!cacheStatusIssued){
+          client.write('client_cache_status',{enabled:false})
+          cacheStatusIssued=true
+        }
         response('send_packs',missing.map(p=>p.key))
         emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
         if(missing.some(p=>!p.cdn)){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
