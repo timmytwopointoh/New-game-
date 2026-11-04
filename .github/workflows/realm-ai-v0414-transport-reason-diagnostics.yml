@@ -1,8 +1,8 @@
 name: Realm AI Live v0.40.14 pack wire evidence and RakNet numeric close; no-mod unchanged
 on:
   push:
-    branches: [fix/realm-ai-live-v0414-modpack-cache-before-response-20261103]
-    paths: ['.github/workflows/realm-ai-v0414-modded-cache-order-release.yml']
+    branches: [fix/realm-ai-live-v0414-transport-diagnostics-20261103]
+    paths: ['.github/workflows/realm-ai-v0414-transport-reason-diagnostics.yml']
 permissions:
   contents: read
 jobs:
