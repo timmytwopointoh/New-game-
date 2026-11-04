@@ -6,3 +6,15 @@ test('Realm join uses invite without host/port',()=>{const o=buildClientOptions(
 test('Realm id takes precedence when present',()=>assert.deepEqual(buildClientOptions({...base,realmId:'123'},'/tmp/bot',()=>{}).realms,{realmId:'123'}))
 test('ordinary server joins by host and port',()=>{const o=buildClientOptions({...base,mode:'server',host:'localhost',port:19132},'/tmp/bot',()=>{});assert.equal(o.host,'localhost');assert.equal(o.port,19132);assert.equal(o.realms,undefined)})
 test('phone client restores Switch authentication with its own persistent cache and keeps touch movement input',()=>{const o=buildClientOptions(base,'/private/bot',()=>{});assert.equal(o.authTitle,'00000000441cc96b');assert.equal(o.deviceType,'Nintendo');assert.equal(o.deviceOS,12);assert.equal(o.flow,'live');assert.deepEqual(o.skinData,{CurrentInputMode:2,DefaultInputMode:2});assert.equal(o.profilesFolder,'/private/bot/private/auth/switch');assert.equal(o.forceRefresh,undefined)})
+
+import {selectJoinedRealm} from '../src/options.js'
+test('single joined Realm is selected even when the saved display name is stale',()=>{
+ const only={id:'real-world-id',name:'Whatever the Realm currently reports'}
+ assert.equal(selectJoinedRealm([only],'My Realm'),only)
+ assert.equal(selectJoinedRealm([only],''),only)
+})
+test('multiple joined Realms still need a unique match',()=>{
+ const a={id:'a',name:'My Realm'};const b={id:'b',name:'Other Realm'}
+ assert.equal(selectJoinedRealm([a,b],'My Realm'),a)
+ assert.throws(()=>selectJoinedRealm([a,b],''),/More than one joined Realm/)
+})
