@@ -1,0 +1,13 @@
+{
+  "sourceFilesChecked": 84,
+  "nativeFilesIdentical": 3,
+  "dependencyFilesIdentical": 11404,
+  "nodeTests": 499,
+  "androidTests": 58,
+  "pcFixtureCheck": "VF-0017 Python passed; external PC verifier still has unrelated VF-0011 mismatch",
+  "build": "actual Gradle assembleRelease; release lint omitted after dependency download stalled",
+  "emulator": "unavailable",
+  "liveModdedJoin": "unverified",
+  "sha256": "30ec2bcb6c7faffdac802ee385f6702b57bb5206c2ffdd65b43b49f43f70591e",
+  "bytes": 91233057
+}
