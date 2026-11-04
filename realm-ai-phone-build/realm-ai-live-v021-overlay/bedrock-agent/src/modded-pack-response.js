@@ -8,6 +8,7 @@
 // the full packet (including exact pack ID list); only the one-byte selector
 // needs correcting before passing the frame to the established Bedrock
 // client's encrypted/reliable sendBuffer path.
+import {inspectTransportState} from './transport-evidence.js'
 const OLD={refused:0,send_packs:1,have_all_packs:2,completed:3}
 const CURRENT={refused:1,send_packs:2,have_all_packs:3,completed:4}
 const TITLES={refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}
@@ -49,7 +50,7 @@ export function encodeCurrentModdedPackResponse(client,packet){
   available:true,verified:true,status,packIdCount:clean.resourcepackids.length,
   version:'1.26.60',statusCode:CURRENT[status],packetId:8,
   byteLength:frame.length,wireText:title,
-  transportConnected:client?.connection?.connected===true
+  transportConnected:inspectTransportState(client).transportReady
  }}
 }
 
