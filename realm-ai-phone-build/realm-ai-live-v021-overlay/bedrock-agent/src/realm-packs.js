@@ -410,7 +410,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // Candidate S: request just one advertised server pack with the
         // verified outer selector 1 + string 'Downloading' and native writer.
         // No other packet field or app/world/account behavior changes.
-        response('send_packs',missing.slice(0,1).map(p=>p.key))
+        // Candidate V: request all 8 advertised packs with cache capability true.
+        response('send_packs',missing.map(p=>p.key))
         if(handshakeMode==='original-working'&&!cacheStatusIssued){
           // Candidate U: advertise native cache capability while using the same
           // verified Downloading request for one server-advertised pack.
