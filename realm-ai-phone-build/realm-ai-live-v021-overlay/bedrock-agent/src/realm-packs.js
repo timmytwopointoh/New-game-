@@ -194,7 +194,14 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // response through bedrock-protocol's normal write/framing/encryption path.
   // Do not modify the serializer globally or change unmodded packets.
   function writeModdedResponseNatively(packet) {
-    const {frame,observation}=encodeCurrentModdedPackResponse(client,packet)
+    const {frame:encoded,observation}=encodeCurrentModdedPackResponse(client,packet)
+    // Candidate M: 1.26.60 selector 2 with lowercase wire label; no other bytes change.
+    const frame=Buffer.from(encoded)
+    const upper=Buffer.from('Downloading','utf8')
+    const offset=frame.indexOf(upper)
+    if(offset<0 || frame.indexOf(upper,offset+1)!==-1)
+      throw Error('Cannot locate exact one modern pack status label')
+    Buffer.from('downloading','utf8').copy(frame,offset)
     const serializer=client.serializer
     const original=serializer.createPacketBuffer
     let used=false
@@ -211,7 +218,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     } finally {
       serializer.createPacketBuffer=original
     }
-    return observation
+    return {...observation,wireText:'downloading'}
   }
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
