@@ -412,7 +412,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // No other packet field or app/world/account behavior changes.
         response('send_packs',missing.slice(0,1).map(p=>p.key))
         if(handshakeMode==='original-working'&&!cacheStatusIssued){
-          client.write('client_cache_status',{enabled:false})
+          // Candidate U: advertise native cache capability while using the same
+          // verified Downloading request for one server-advertised pack.
+          client.write('client_cache_status',{enabled:true})
           cacheStatusIssued=true
         }
         emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
