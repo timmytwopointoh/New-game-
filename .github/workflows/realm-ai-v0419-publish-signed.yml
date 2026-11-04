@@ -1,0 +1,74 @@
+name: Publish signed Realm AI Live v0.40.19 testlab telemetry APK
+on:
+  push:
+    branches: [fix/realm-ai-live-v0419-realm-selection-evidence-20261104]
+    paths: ['.github/workflows/realm-ai-v0419-publish-signed.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-verified-signed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve exact verified v0.40.19 unsigned compiler artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir unsigned
+          gh run download 41823212782 --repo "${{ github.repository }}" --name realm-ai-live-v0419-private-signing --dir unsigned
+          echo 'bc9a1ae4a770157083d110433a8c221c414834e5ef0895df2175928fed4999d8  unsigned/Realm-AI-Live-v0.40.19-ALIGNED-UNSIGNED.apk' | sha256sum -c -
+          test -s unsigned/apksigner.jar
+      - name: Reconstruct exact privately signed APK from public signature block only
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,hashlib,struct,zlib,pathlib
+          root=pathlib.Path('.')
+          u=(root/'unsigned/Realm-AI-Live-v0.40.19-ALIGNED-UNSIGNED.apk').read_bytes()
+          encoded=(root/'realm-ai-phone-build/v0419-public-patch/signed-v0419-sigblock.zlib.b64').read_text().strip()
+          block=zlib.decompress(base64.b64decode(encoded,validate=True))
+          assert len(block)==4784 and hashlib.sha256(block).hexdigest()=='ed60d464455ed4a971eb9241564be50be36575daa89b878eb152020021f70540'
+          assert block[-16:]==b'APK Sig Block 42'
+          eocd=u.rfind(b'PK\x05\x06')
+          assert eocd==len(u)-22 and eocd>0
+          offset=struct.unpack_from('<I',u,eocd+16)[0]
+          assert 0<offset<eocd
+          signed=bytearray(u[:offset]+block+u[offset:])
+          struct.pack_into('<I',signed,eocd+len(block)+16,offset+len(block))
+          result=root/'Realm-AI-Live-v0.40.19.apk'
+          result.write_bytes(signed)
+          digest=hashlib.sha256(signed).hexdigest()
+          assert digest=='e96e75deed3e39e2c978ad4390b4757e70173fd92a930aafd945ad5bce1d506e',digest
+          print('PASS: 0.40.19 signed APK reconstructed using public signature block, no private key in CI')
+          PY
+      - name: Verify certificate, exact APK package identity and provider
+        run: |
+          set -euo pipefail
+          java -jar unsigned/apksigner.jar verify --verbose --print-certs Realm-AI-Live-v0.40.19.apk > certificate-verification.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: 77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' certificate-verification.txt
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/zipalign" -c -P 16 4 Realm-AI-Live-v0.40.19.apk
+          "$BT/aapt" dump badging Realm-AI-Live-v0.40.19.apk > package-verification.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200048'" package-verification.txt
+          sha256sum Realm-AI-Live-v0.40.19.apk > SHA256SUMS.txt
+      - name: Publish signed update APK with explicit no-key public note
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<'TXT'
+          Realm AI Live v0.40.19 — shell-gated, read-only Realm name-match diagnostic counts.
+          Package com.veilforge.realmagent.live, versionCode 200048, original permanent signing certificate.
+          Minecraft packet handshake, Nintendo Switch profile and unmodded Realm behavior unchanged from v0.40.17.
+          Only local ADB shell can query sanitized Realm-selection counts and connection information.
+          Original user authentication and Realm pack caches preserved by Android install-in-place.
+          Diagnostic feature, NOT a verified fix for a modded Realm join.
+          Public APK signature block + SHA-256 reconstruct exact privately signed APK.
+          No keystore, password or private key uploaded to GitHub.
+          TXT
+          gh release create realm-ai-live-v0419-realm-selector-diagnostics Realm-AI-Live-v0.40.19.apk SHA256SUMS.txt \
+            --repo "${{ github.repository }}" --target "$GITHUB_SHA" \
+            --title 'Realm AI Live v0.40.19 — Signed Test Lab APK' --notes-file release-notes.txt
