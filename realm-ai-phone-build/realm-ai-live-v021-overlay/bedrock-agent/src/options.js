@@ -38,6 +38,6 @@ export function selectJoinedRealm(realms,name='',owner=''){
     String(r.state||'').toUpperCase()==='OPEN'&&r.expired!==true)
   if(eligible.length===1)return eligible[0]
   // Do not silently join an unrelated Realm: a bad selection might expose game activity.
-  if(named.length>1)throw new Error('Duplicate Realm names; owner and open-state filters did not uniquely identify the requested Realm.')
+  if(named.length>1)throw new Error(wantedName?'Duplicate Realm names; owner and open-state filters did not uniquely identify the requested Realm.':'More than one joined Realm is available; configure the owner or exact name.')
   throw new Error('No Realm matched the configured owner/name. Verify the invited bot account.')
 }
