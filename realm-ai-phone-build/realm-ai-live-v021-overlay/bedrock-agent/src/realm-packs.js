@@ -197,7 +197,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     // Candidate F: isolate the legacy selector (1 instead of 2) while keeping
     // the identical one-pack ID list, string label, batching and transport.
     const frame=client.serializer.createPacketBuffer({name:'resource_pack_client_response',params:packet})
-    client.sendBuffer(frame,false)
+    // Candidate H: immediate reliable send with legacy selector and one pack ID.
+    client.sendBuffer(frame,true)
     return {available:true,verified:true,status:packet.response_status,
       packIdCount:packet.resourcepackids.length,version:'1.26.60',statusCode:1,
       packetId:8,byteLength:frame.length,wireText:packet.response_status_name,
