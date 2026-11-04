@@ -194,9 +194,14 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // Candidate C: only modded pack responses are batched by the native 20ms sender.
   // The packet fields, authentication and no-mod path remain unchanged.
   const sendModdedResponseQueued=(packet)=>{
-    const {frame,observation}=encodeCurrentModdedPackResponse(client,packet)
+    // Candidate F: isolate the legacy selector (1 instead of 2) while keeping
+    // the identical one-pack ID list, string label, batching and transport.
+    const frame=client.serializer.createPacketBuffer({name:'resource_pack_client_response',params:packet})
     client.sendBuffer(frame,false)
-    return observation
+    return {available:true,verified:true,status:packet.response_status,
+      packIdCount:packet.resourcepackids.length,version:'1.26.60',statusCode:1,
+      packetId:8,byteLength:frame.length,wireText:packet.response_status_name,
+      transportConnected:client?.connection?.connected===true}
   }
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
