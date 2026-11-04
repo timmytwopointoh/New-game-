@@ -124,3 +124,30 @@ test('unchanged unmodded stack still passes through library native ACK',t=>{
  assert.equal(fake.writes.filter(x=>x.data?.response_status==='completed').length,3)
  assert.equal(fake.sends.length,0)
 })
+
+test('candidate B: modded cache status is written exactly once before Downloading packet',t=>{
+ const h=setup();t.after(h.close)
+ const order=[]
+ const native=h.c.write,originalSend=h.c.sendBuffer
+ h.c.write=function(name,packet){order.push(name);return native(name,packet)}
+ h.c.sendBuffer=function(frame,immediate){order.push('reliable-packet');return originalSend(frame,immediate)}
+ h.c.emit('resource_packs_info',{texture_packs:[{uuid:'mod-entry',version:'1.0.0',size:6}]})
+ h.c.queue('client_cache_status',{enabled:false})
+ assert.deepEqual(order.slice(0,2),['client_cache_status','reliable-packet'])
+ assert.equal(order.filter(x=>x==='client_cache_status').length,1)
+ assert.equal(h.report.at(-1).packCacheStatusIssued,true)
+ assert.equal(h.sends[0].data[1],2)
+ assert.equal(h.handler.snapshot().advertised,1)
+})
+
+test('candidate B: an empty/unmodded pack list retains original cache queue behavior',t=>{
+ const h=setup();t.after(h.close)
+ const native=h.c.queue
+ h.c.emit('resource_packs_info',{texture_packs:[],behavior_packs:[]})
+ assert.equal(h.c.queue,native)
+ h.c.queue('client_cache_status',{enabled:false})
+ assert.equal(h.writes.filter(x=>x.name==='client_cache_status').length,1)
+ assert.equal(h.writes.find(x=>x.name==='client_cache_status').queued,true)
+ assert.equal(h.handler.snapshot().advertised,0)
+ assert.equal(h.sends.length,0)
+})
