@@ -97,6 +97,7 @@ public class SupportBundleTest {
   assertEquals(22,c.getInt("transportCloseCode"));
   assertEquals("raknet-connection-lost",c.getString("transportCloseLabel"));
   assertEquals("remote-transport",c.getString("transportCloseOrigin"));
+  assertEquals("unknown",c.getString("transportKind"));
   assertEquals(2,c.getInt("transportPackReliableSubmissions"));
   JSONArray events=new JSONObject(out.get("pack-handshake.json")).getJSONArray("sessions").getJSONObject(0).getJSONArray("events");
   assertEquals("raw-pack-submit",events.getJSONObject(0).getString("kind"));
@@ -106,5 +107,19 @@ public class SupportBundleTest {
   assertEquals("remote-transport",events.getJSONObject(1).getString("origin"));
   assertEquals(22,events.getJSONObject(1).getInt("reasonCode"));
   assertFalse(out.toString().contains("PRIVATE-"));
+ }
+ @Test public void v0417ZipPreservesOnlySafeNetherNetClosureEnums()throws Exception{
+  write("nodejs-project/private/diagnostics/connection.json",
+    "{\"schema\":1,\"phase\":\"pack-request\",\"transportKind\":\"nethernet\",\"rtcConnectionState\":\"connected\",\"rtcIceState\":\"failed\",\"rtcReliableState\":\"closed\",\"transportCloseLabel\":\"nethernet-disconnected\",\"iceCandidate\":\"PRIVATE-CANDIDATE\"}");
+  Map<String,String> out=export();
+  JSONObject c=new JSONObject(out.get("connection.json"));
+  assertEquals("nethernet",c.getString("transportKind"));
+  assertEquals("connected",c.getString("rtcConnectionState"));
+  assertEquals("failed",c.getString("rtcIceState"));
+  assertEquals("closed",c.getString("rtcReliableState"));
+  assertEquals("nethernet-disconnected",c.getString("transportCloseLabel"));
+  JSONObject packs=new JSONObject(out.get("pack-loading.json"));
+  assertEquals("nethernet",packs.getString("transportKind"));
+  assertFalse(out.toString().contains("PRIVATE-CANDIDATE"));
  }
 }
