@@ -21,6 +21,12 @@ export function selectJoinedRealm(realms,name='',owner=''){
   if(!Array.isArray(realms)||realms.length===0)throw new Error('No joined Realms returned by Minecraft; check saved Xbox session or invitation.')
   const wantedName=String(name||'').trim().toLowerCase()
   const wantedOwner=String(owner||'').trim().toLowerCase()
+  if(realms.length===1){
+    const only=realms[0]
+    const onlyOwner=String(only.owner||only.ownerName||only.ownerGamertag||'').trim().toLowerCase()
+    if(wantedOwner&&onlyOwner&&onlyOwner!==wantedOwner)throw new Error('Sole Realm belongs to an unexpected owner.')
+    return only
+  }
   const byOwner=wantedOwner?realms.filter(r=>String(r.owner||r.ownerName||r.ownerGamertag||'').trim().toLowerCase()===wantedOwner):[]
   // One owner match is conclusive for this single-owner bot even when a Realm was renamed.
   if(byOwner.length===1)return byOwner[0]
