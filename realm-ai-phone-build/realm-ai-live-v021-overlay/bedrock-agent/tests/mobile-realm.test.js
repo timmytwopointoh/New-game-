@@ -8,6 +8,6 @@ test('existing account can discover realm without invite code',()=>assert.equal(
 test('one joined realm is selected',()=>assert.equal(selectJoinedRealm([{id:101,name:'My Realm'}]).id,101))
 test('multiple joined realms require explicit selector',()=>assert.throws(()=>selectJoinedRealm([{name:'One'},{name:'Two'}]),/More than one/))
 test('exact name selects one realm',()=>assert.equal(selectJoinedRealm([{name:'One'},{name:'Two'}],'two').name,'Two'))
-test('unknown name fails without arbitrary selection',()=>assert.throws(()=>selectJoinedRealm([{name:'One'}],'Two'),/No joined Realm named/))
-test('no joined realm fails visibly',()=>assert.throws(()=>selectJoinedRealm([]),/does not have any/))
+test('unknown name fails without choosing unrelated Realms',()=>assert.throws(()=>selectJoinedRealm([{name:'One'},{name:'Three'}],'Two'),/No Realm matched/))
+test('no joined realm fails visibly',()=>assert.throws(()=>selectJoinedRealm([]),/No joined Realms/))
 test('realm options default to pickRealm callback',()=>{const o=buildClientOptions(m,'/tmp',()=>{}); assert.equal(typeof o.realms.pickRealm,'function'); assert.equal(o.raknetBackend,'jsp-raknet')})
