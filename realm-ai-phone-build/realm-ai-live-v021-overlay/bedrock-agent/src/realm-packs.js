@@ -134,7 +134,6 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     moddedRadiusGuard=function(name,packet,...args){
       if(name==='request_chunk_radius'&&!canRequestTerrain()){
         pendingRadius={method:originalQueue,packet,args};radiusDeferred++
-        emit('pack-radius-deferred','Waiting for pack stack before requesting world chunks',0,packs.size)
         return
       }
       return originalQueue.call(this,name,packet,...args)
