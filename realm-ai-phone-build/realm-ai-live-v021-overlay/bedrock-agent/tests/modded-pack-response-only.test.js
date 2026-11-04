@@ -47,9 +47,7 @@ function setup(){
 test('only modded Realm uses 1.26.60 Downloading selector 2; packet IDs and reliable send are intact',t=>{
  const h=setup();t.after(h.close)
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
- assert.equal(h.writes.length,1,'only cache-status should use native write in modded Realm')
- assert.equal(h.writes[0].name,'client_cache_status')
- assert.equal(h.writes[0].data.enabled,false)
+ assert.equal(h.writes.length,0,'modded download request must not start with chunk-cache status')
  assert.equal(h.sends.length,1)
  assert.equal(h.sends[0].immediate,true)
  const frame=h.sends[0].data
@@ -72,6 +70,7 @@ test('after modded pack is received and SHA verified, response selectors 3/4 fin
  inspect(h.sends[1].data,'DownloadingFinished',3)
  inspect(h.sends[2].data,'ResourcePackStackFinished',4)
  assert.equal(h.handler.snapshot().finished,true)
+ assert.deepEqual(h.writes.map(w=>w.name),['client_cache_status'],'cache status follows the complete pack stack')
 })
 test('no-pack Realm uses exact old v0.40.10 response and does not send rewritten modded buffers',t=>{
  const h=setup();t.after(h.close)
