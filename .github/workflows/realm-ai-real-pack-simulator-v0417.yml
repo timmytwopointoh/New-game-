@@ -1,0 +1,45 @@
+name: Realm AI 1.26.60 eight-pack transfer simulator
+on:
+  push:
+    branches: [fix/realm-ai-live-v0417-nethernet-close-evidence-20261104]
+    paths: ['.github/workflows/realm-ai-real-pack-simulator-v0417.yml']
+permissions:
+  contents: read
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore exact Android bundled Bedrock codec
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-all-errors \
+            https://github.com/timmytwopointoh/New-game-/releases/download/realm-ai-live-0395-pack-order-and-timing/Realm-AI-Live.apk \
+            -o /tmp/old-live.apk
+          echo 'e3e8b829e1b3c7113f9a8a23fa243a74c7c0dd3aba41a036af74d01bc9affebf  /tmp/old-live.apk' | sha256sum -c -
+          python3 - <<'PY'
+          import pathlib,zipfile,shutil
+          d=pathlib.Path('node_modules');d.mkdir(exist_ok=True)
+          p='assets/nodejs-project/node_modules/'
+          with zipfile.ZipFile('/tmp/old-live.apk') as z:
+            for x in z.infolist():
+              if x.filename.startswith(p) and not x.is_dir():
+                name=pathlib.PurePosixPath(x.filename[len(p):])
+                if name.is_absolute() or '..' in name.parts:raise RuntimeError('Unsafe path')
+                dest=d.joinpath(*name.parts)
+                dest.parent.mkdir(exist_ok=True,parents=True)
+                with z.open(x) as i,open(dest,'wb') as o:shutil.copyfileobj(i,o)
+          assert (d/'bedrock-protocol/src/transforms/serializer.js').exists()
+          PY
+      - name: Full eight-pack request/download/verify/finish test
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/realm-packs.js
+          node --test tests/eight-pack-complete-download-wire-v0417.test.js
+          node --test tests/modded-pack-response-only.test.js tests/slow-pack-wait-v0415.test.js
