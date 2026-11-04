@@ -19,6 +19,13 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-initiated companion maintains a live connection to an online game while the user plays"/>
         </service>
+        <!-- DUMP is a protected Android permission held by local ADB shell, not regular apps.
+             Provider also checks calling UID and only exposes sanitized diagnostic enums/counts. -->
+        <provider android:name="com.veilforge.realmagent.TestLabDiagnosticsProvider"
+            android:authorities="com.veilforge.realmagent.live.testlab"
+            android:exported="true"
+            android:readPermission="android.permission.DUMP"
+            android:grantUriPermissions="false"/>
         <receiver android:name="com.veilforge.realmagent.UpdateInstallerReceiver" android:exported="false"/>
     </application>
 </manifest>
