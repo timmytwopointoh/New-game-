@@ -23,7 +23,7 @@ test('duplicate Realm names prefer the confirmed owner rather than another owner
  const own={id:'wanted',name:'My Realm',owner:'ezilyincred',state:'OPEN'}
  const other={id:'other',name:'My Realm',owner:'someone-else',state:'OPEN'}
  assert.equal(selectJoinedRealm([other,own],'My Realm','ezilyincred'),own)
- assert.equal(buildClientOptions({mode:'realm',realmName:'My Realm',username:'bot'},'/tmp/bot',()=>{}).realms.pickRealm([other,own]),own)
+ assert.equal(buildClientOptions({mode:'realm',realmName:'My Realm',realmOwner:'ezilyincred',username:'bot'},'/tmp/bot',()=>{}).realms.pickRealm([other,own]),own)
 })
 test('duplicate Realm entries fail closed when owner cannot be distinguished',()=>{
  const a={id:'a',name:'My Realm',owner:'ezilyincred',state:'OPEN'}
@@ -35,6 +35,11 @@ test('single expected Realm owner remains selectable after renaming',()=>{
  assert.equal(selectJoinedRealm([owner,{id:'other',name:'My Realm',owner:'other'}],'My Realm','ezilyincred'),owner)
 })
 
-test('never select even a single Realm with confirmed wrong owner',()=>{
- assert.throws(()=>selectJoinedRealm([{id:'wrong',name:'My Realm',owner:'other'}],'My Realm','ezilyincred'),/unexpected owner/)
+test('unique named Realm is accepted even when API owner field is not a gamertag',()=>{
+ const only={id:'real-one',name:'My Realm',owner:'2533274900000000'}
+ assert.equal(selectJoinedRealm([only],'My Realm','ezilyincred'),only)
+})
+test('wrong owner cannot force selection of a differently named Realm among many',()=>{
+ const records=[{id:'a',name:'Other',owner:'some-xuid'},{id:'b',name:'Second',owner:'another-xuid'}]
+ assert.throws(()=>selectJoinedRealm(records,'My Realm','ezilyincred'),/No Realm matched/)
 })
