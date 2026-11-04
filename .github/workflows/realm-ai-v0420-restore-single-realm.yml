@@ -172,3 +172,5 @@ jobs:
 # Rebuild after real emulator evidence: 5 joined Realm entries, 2 exact-name matches; require owner-based disambiguation.
 
 # Rebuild with regression suite aligned to sole-Realm fallback and safe owner disambiguation.
+
+# Retry after restoring single-entry fallback (with owner guard) while keeping unique owner selection for five-entry list.
