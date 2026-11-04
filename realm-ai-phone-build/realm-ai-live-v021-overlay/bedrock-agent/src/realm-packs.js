@@ -8,7 +8,7 @@ import {downloadRealmCdn,checkCdnUrl} from './cdn-download.js'
 import {classifyPack,packDirectory,packFilePath,priorPackLocations,PACK_CATEGORIES} from './pack-storage.js'
 import {inspectPackResponseWire} from './pack-protocol-observer.js'
 import {markPackTransportRequest} from './transport-evidence.js'
-import {sendCurrentModdedPackResponse} from './modded-pack-response.js'
+import {encodeCurrentModdedPackResponse} from './modded-pack-response.js'
 import {installModdedNativeAckGuard} from './modded-native-ack-guard.js'
 
 const MAX_PACKS = 64
@@ -190,6 +190,14 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...(nativeAckGuard?.snapshot()||{}),...extra})
   }
 
+  // Modded-only candidate C: enqueue the verified 1.26.60 response through
+  // the native 20ms encrypted batch sender instead of sending immediately.
+  // Do not change packet fields, serializer, login or unmodded worlds.
+  const sendModdedResponseQueued=(packet)=>{
+    const {frame,observation}=encodeCurrentModdedPackResponse(client,packet)
+    client.sendBuffer(frame,false)
+    return observation
+  }
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
     // buffer critical handshake acknowledgements in the 20ms gameplay queue.
@@ -214,7 +222,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     }
     if(name==='send_packs')markPackTransportRequest(client)
     const observation=useCurrentModded?
-      sendCurrentModdedPackResponse(client,packet):
+      sendModdedResponseQueued(packet):
       inspectPackResponseWire(client,packet,{strategy:handshakeMode==='original-working'?'original-working':'modern'})
     if(!useCurrentModded)client.write('resource_pack_client_response',packet)
     packResponseCount++
