@@ -87,6 +87,10 @@ final class SupportBundle {
   pack.put("transportCloseKind",connection.optString("transportCloseKind","unknown"))
     .put("transportCloseOrigin",connection.optString("transportCloseOrigin","unknown"))
      .put("transportCloseLabel",connection.optString("transportCloseLabel","unobserved"))
+     .put("transportKind",connection.optString("transportKind","unknown"))
+     .put("rtcConnectionState",connection.optString("rtcConnectionState","unknown"))
+     .put("rtcIceState",connection.optString("rtcIceState","unknown"))
+     .put("rtcReliableState",connection.optString("rtcReliableState","unknown"))
      .put("packWireText",connection.optString("packWireText","unknown"))
     .put("packWireVersion",connection.optString("packWireVersion","unknown"));
   pack.put("packSelectionPolicy",connection.optString("packSelectionPolicy","unknown"));
