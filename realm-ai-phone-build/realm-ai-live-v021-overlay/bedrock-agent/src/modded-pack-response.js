@@ -59,5 +59,13 @@ export function sendCurrentModdedPackResponse(client,packet){
  // sendBuffer(..., true) retains the existing encryption, batching and
  // reliable transport; raw sendMCPE would bypass essential framing.
  client.sendBuffer(frame,true)
+ // Local submission evidence only: this does NOT prove the Realm received
+ // or acknowledged the request. Event carries counts, never private pack IDs.
+ client.emit?.('vf-pack-response-submit',{
+  status:TITLES[packet.response_status],
+  packCount:observation.packIdCount,
+  packetBytes:frame.length,
+  selector:observation.statusCode
+ })
  return observation
 }
