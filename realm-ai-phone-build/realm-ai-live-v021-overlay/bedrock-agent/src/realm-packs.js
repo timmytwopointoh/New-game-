@@ -407,7 +407,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // response; no other protocol fields or unmodded path change.
         // Candidate R: same native Downloading packet as P; send it BEFORE
         // the optional cache-status message, which the native library queues later.
-        response('send_packs',missing.map(p=>p.key))
+        // Candidate S: request just one advertised server pack with the
+        // verified outer selector 1 + string 'Downloading' and native writer.
+        // No other packet field or app/world/account behavior changes.
+        response('send_packs',missing.slice(0,1).map(p=>p.key))
         if(handshakeMode==='original-working'&&!cacheStatusIssued){
           client.write('client_cache_status',{enabled:false})
           cacheStatusIssued=true
