@@ -48,3 +48,16 @@ test('unmodded world retains byte-identical native queue behavior',t=>{
  assert.equal(s.events.filter(e=>e.kind==='queue').length,1)
  assert.equal(s.events.filter(e=>e.kind==='frame').length,0)
 })
+
+test('nine advertised packs are requested once, after cache status, without premature radius',t=>{
+ const s=setup();t.after(s.cleanup)
+ const packs=Array.from({length:9},(_,i)=>({uuid:'11111111-2222-3333-4444-'+String(i+1).padStart(12,'0'),version:'1.0.0',size:10}))
+ s.c.emit('resource_packs_info',{texture_packs:packs})
+ assert.deepEqual(s.events.map(e=>e.kind),['write','frame'])
+ assert.equal(s.events[1].frame[1],2)
+ assert.equal(s.h.snapshot().requested,9)
+ assert.equal(s.h.snapshot().wire.packIdCount,9)
+ s.c.queue('client_cache_status',{enabled:false})
+ s.c.queue('request_chunk_radius',{chunk_radius:12})
+ assert.equal(s.events.length,2,'no duplicate cache status or early chunk-radius request')
+})
