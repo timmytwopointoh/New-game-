@@ -207,12 +207,24 @@ export class Connection extends EventEmitter {
       // The transport can close silently without a Minecraft kick packet.
       // Capture its reason BEFORE bedrock-protocol calls close().
       const transport=client.connection
+      // NetherNet removes its RTC peer before the generic disconnect callback.
+      // Observe the last valid state at the peer's own close boundary, without
+      // blocking or changing the original close call.
+      const peer=transport?.nethernet?.connection
+      if(peer&&typeof peer.close==='function'&&!peer.__vfCloseStateObserved){
+        peer.__vfCloseStateObserved=true
+        const originalPeerClose=peer.close
+        peer.close=(...args)=>{
+          if(this.client===client&&!this.transportCloseSnapshot)this.transportCloseSnapshot=inspectTransportState(client)
+          return originalPeerClose.apply(peer,args)
+        }
+      }
       if(transport&&typeof transport.onCloseConnection==='function'&&!transport.__veilforgeCloseObserved){
         transport.__veilforgeCloseObserved=true
         const previous=transport.onCloseConnection
         transport.onCloseConnection=(reason)=>{
           markCloseOrigin('remote-transport')
-          this.transportCloseSnapshot=inspectTransportState(client)
+          this.transportCloseSnapshot ||= inspectTransportState(client)
           const classification=classifyTransportClose(reason,this.transportCloseSnapshot.transportKind)
           this.transportCloseCode=classification.code
           this.transportCloseLabel=classification.label
