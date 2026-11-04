@@ -16,6 +16,12 @@ export function sanitizeDiagnosticReport(input={}){
   if(!input||typeof input!=='object'||Array.isArray(input))input={}
   const report={schema:1,phase:phase(input.phase),authState:phase(input.authState),recordedAt:number(input.recordedAt),savedAuthentication:'kept'}
   for(const name of ['connected','joined','spawned','deviceCodePending','titleTokenRecoveryAttempted'])report[name]=input[name]===true
+  const realmStates=new Set(['not-reached','evaluating','selected','no-joined-realms','exact-name-not-found','exact-name-ambiguous','selection-error'])
+  report.realmSelectionState=realmStates.has(input.state)?input.state:'not-reached'
+  report.joinedRealmsCount=Math.min(100,number(input.joinedRealmsCount))
+  report.exactNameMatches=Math.min(100,number(input.exactNameMatches))
+  report.petalNameCandidates=Math.min(100,number(input.petalNameCandidates))
+  report.configuredNamePresent=input.configuredNamePresent===true
   report.packStage=phase(input.packStage)
   report.packReason=['none','storage-low','storage-unknown','pack-size-limit','cdn-access-denied','cdn-missing','cdn-unavailable','network-interrupted','pack-integrity','pack-transfer-failed','server-no-pack-data','server-pack-stalled'].includes(input.packReason)?input.packReason:'none'
   report.packFreeMB=number(input.packFreeMB);report.packNeededMB=number(input.packNeededMB);report.packRetryable=input.packRetryable===true
