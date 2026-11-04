@@ -23,6 +23,12 @@ final class ConnectionDiagnostics {
         try{
             result.put("schema",1);result.put("phase",phase(input.optString("phase","not-started")));result.put("authState",phase(input.optString("authState","not-started")));
             for(String field:new String[]{"connected","joined","spawned","deviceCodePending","titleTokenRecoveryAttempted"})result.put(field,Boolean.TRUE.equals(input.opt(field)));
+            String realmState=input.optString("realmSelectionState","not-reached");
+            result.put("realmSelectionState",Arrays.asList("not-reached","evaluating","selected","no-joined-realms","exact-name-not-found","exact-name-ambiguous","selection-error").contains(realmState)?realmState:"not-reached");
+            result.put("joinedRealmsCount",Math.min(100,nonnegative(input,"joinedRealmsCount")));
+            result.put("exactNameMatches",Math.min(100,nonnegative(input,"exactNameMatches")));
+            result.put("petalNameCandidates",Math.min(100,nonnegative(input,"petalNameCandidates")));
+            result.put("configuredNamePresent",Boolean.TRUE.equals(input.opt("configuredNamePresent")));
             result.put("packStage",phase(input.optString("packStage","not-reached")));
             String reason=input.optString("packReason","none");
             Set<String> reasons=new HashSet<>(Arrays.asList("none","storage-low","storage-unknown","pack-size-limit","cdn-access-denied","cdn-missing","cdn-unavailable","network-interrupted","pack-integrity","pack-transfer-failed","server-no-pack-data","server-pack-stalled"));
