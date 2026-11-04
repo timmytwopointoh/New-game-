@@ -18,3 +18,19 @@ test('multiple joined Realms still need a unique match',()=>{
  assert.equal(selectJoinedRealm([a,b],'My Realm'),a)
  assert.throws(()=>selectJoinedRealm([a,b],''),/More than one joined Realm/)
 })
+
+test('duplicate Realm names prefer the confirmed owner rather than another owner',()=>{
+ const own={id:'wanted',name:'My Realm',owner:'ezilyincred',state:'OPEN'}
+ const other={id:'other',name:'My Realm',owner:'someone-else',state:'OPEN'}
+ assert.equal(selectJoinedRealm([other,own],'My Realm','ezilyincred'),own)
+ assert.equal(buildClientOptions({mode:'realm',realmName:'My Realm',username:'bot'},'/tmp/bot',()=>{}).realms.pickRealm([other,own]),own)
+})
+test('duplicate Realm entries fail closed when owner cannot be distinguished',()=>{
+ const a={id:'a',name:'My Realm',owner:'ezilyincred',state:'OPEN'}
+ const b={id:'b',name:'My Realm',owner:'ezilyincred',state:'OPEN'}
+ assert.throws(()=>selectJoinedRealm([a,b],'My Realm','ezilyincred'),/Duplicate Realm names/)
+})
+test('single expected Realm owner remains selectable after renaming',()=>{
+ const owner={id:'a',name:'Changed display name',owner:'ezilyincred'}
+ assert.equal(selectJoinedRealm([owner,{id:'other',name:'My Realm',owner:'other'}],'My Realm','ezilyincred'),owner)
+})
