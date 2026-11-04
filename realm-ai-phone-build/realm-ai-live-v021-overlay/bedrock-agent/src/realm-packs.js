@@ -412,6 +412,17 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
           client.write('client_cache_status',{enabled:false})
           cacheStatusIssued=true
         }
+        // Candidate W: in bedrock-protocol 3.61.0 an encrypted packet's
+        // immediate flag is lost at onEncryptedPacket -> sendMCPE(packet).
+        // For the JavaScript RakNet backend, explicitly flush the queue once
+        // after both legitimate modded handshake packets were serialized.
+        // This is not used for unmodded worlds or any other packet stream.
+        setTimeout(()=>{
+          if(failed||finished||stackReceived||cancellation.signal.aborted)return
+          const transportQueue=client?.connection?.raknet?.connection
+          if(typeof transportQueue?.sendQueue!=='function')return
+          try{transportQueue.sendQueue()}catch(error){failure(error)}
+        },15).unref?.()
         emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
         if(missing.some(p=>!p.cdn)){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of missing)if(p.cdn)cdnQueue.push(p)
