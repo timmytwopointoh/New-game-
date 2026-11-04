@@ -62,7 +62,7 @@ test('modded world leaves cache queue native but holds premature terrain request
  assert.deepEqual(h.writes.map(x=>x.name),[],'no modded cache status before pack transfer')
  assert.equal(h.handler.snapshot().radiusDeferred,1)
  assert.equal(h.frames.length,1,'modded Downloading packet is still sent')
- assert.equal(h.frames[0].frame[1],2,'Bedrock 1.26.60 Downloading code stays 2')
+ assert.equal(h.frames[0].frame[1],1,'Bedrock 1.26.60 Downloading alternative tag is 1')
  download(h)
  assert.equal(h.handler.snapshot().finished,false)
  assert.equal(h.queues.some(x=>x.name==='request_chunk_radius'),false)
