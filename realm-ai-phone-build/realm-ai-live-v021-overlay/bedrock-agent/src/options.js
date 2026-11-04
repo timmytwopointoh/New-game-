@@ -29,3 +29,22 @@ export function selectJoinedRealm(realms,name=''){
   if(realms.length===1)return realms[0]
   throw new Error('More than one joined Realm is available: '+realms.map(r=>String(r.name||'(unnamed)')).slice(0,8).join(', ')+'. Set the exact Realm name or ID in the app.')
 }
+
+/**
+ * Privacy-safe Realm discovery evidence. Counts only; no Realm names, join IDs,
+ * account details or invites leave the Android application.
+ * "My World" may be a world name inside a differently named Realm.
+ */
+export function summarizeJoinedRealmMatches(realms, requestedName=''){
+ const list=Array.isArray(realms)?realms:[]
+ const name=String(requestedName||'').trim().toLocaleLowerCase('en-US')
+ const lower=r=>String(r?.name||'').trim().toLocaleLowerCase('en-US')
+ const exact=name?list.filter(r=>lower(r)===name).length:0
+ const petal=list.filter(r=>/petalwimds|petalwinds/.test(lower(r))).length
+ return {
+  joinedRealmsCount:Math.min(100,list.length),
+  exactNameMatches:Math.min(100,exact),
+  petalNameCandidates:Math.min(100,petal),
+  configuredNamePresent:name.length>0
+ }
+}
