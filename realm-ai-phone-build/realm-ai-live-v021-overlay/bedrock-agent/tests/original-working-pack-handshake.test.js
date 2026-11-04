@@ -70,7 +70,11 @@ test('modded Realm requests only server-advertised missing packs using original 
  assert.equal(reply.params.response_status,'send_packs')
  assert.deepEqual(reply.params.resourcepackids,['needed_1.0.0'])
  assert.equal(v.h.snapshot().handshakeMode,'original-working')
- assert.equal(v.c.queue,v.originalQueue)
+ assert.notEqual(v.c.queue,v.originalQueue,'modded Realm gates premature terrain traffic')
+ v.c.queue('client_cache_status',{enabled:false})
+ assert.equal(v.sent.at(-1).name,'client_cache_status','the original cache-status packet still reaches the native queue')
+ v.h.cleanup()
+ assert.equal(v.c.queue,v.originalQueue,'the original queue is restored on cleanup')
 })
 
 test('packless phase appears as packs-none rather than unknown',()=>{
