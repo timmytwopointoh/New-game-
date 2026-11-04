@@ -8,7 +8,7 @@ import {downloadRealmCdn,checkCdnUrl} from './cdn-download.js'
 import {classifyPack,packDirectory,packFilePath,priorPackLocations,PACK_CATEGORIES} from './pack-storage.js'
 import {inspectPackResponseWire} from './pack-protocol-observer.js'
 import {markPackTransportRequest} from './transport-evidence.js'
-import {sendCurrentModdedPackResponse} from './modded-pack-response.js'
+import {encodeCurrentModdedPackResponse} from './modded-pack-response.js'
 import {installModdedNativeAckGuard} from './modded-native-ack-guard.js'
 
 const MAX_PACKS = 64
@@ -190,6 +190,29 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...(nativeAckGuard?.snapshot()||{}),...extra})
   }
 
+  // Variant L: keep the modern 1.26.60 pack bytes, but submit this one
+  // response through bedrock-protocol's normal write/framing/encryption path.
+  // Do not modify the serializer globally or change unmodded packets.
+  function writeModdedResponseNatively(packet) {
+    const {frame,observation}=encodeCurrentModdedPackResponse(client,packet)
+    const serializer=client.serializer
+    const original=serializer.createPacketBuffer
+    let used=false
+    serializer.createPacketBuffer=function(payload,...args) {
+      if(payload?.name==='resource_pack_client_response' && payload?.params===packet) {
+        used=true
+        return frame
+      }
+      return original.call(this,payload,...args)
+    }
+    try {
+      client.write('resource_pack_client_response',packet)
+      if(!used)throw Error('Native modded resource pack writer did not use the expected payload')
+    } finally {
+      serializer.createPacketBuffer=original
+    }
+    return observation
+  }
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
     // buffer critical handshake acknowledgements in the 20ms gameplay queue.
@@ -214,7 +237,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     }
     if(name==='send_packs')markPackTransportRequest(client)
     const observation=useCurrentModded?
-      sendCurrentModdedPackResponse(client,packet):
+      writeModdedResponseNatively(packet):
       inspectPackResponseWire(client,packet,{strategy:handshakeMode==='original-working'?'original-working':'modern'})
     if(!useCurrentModded)client.write('resource_pack_client_response',packet)
     packResponseCount++
