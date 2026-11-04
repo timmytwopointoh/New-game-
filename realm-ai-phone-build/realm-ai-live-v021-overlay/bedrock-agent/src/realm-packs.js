@@ -393,7 +393,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // One atomic modded-only protocol probe: send cache policy BEFORE the
         // reliable Downloading response. The native library otherwise queues
         // its cache policy after this response, potentially too late.
-        response('send_packs',missing.map(p=>p.key))
+        // Candidate E: request ONE of the advertised missing packs in the first response.
+        // Once the server returns a header, add bounded sequential requests separately.
+        response('send_packs',missing.slice(0,1).map(p=>p.key))
         emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
         if(missing.some(p=>!p.cdn)){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of missing)if(p.cdn)cdnQueue.push(p)
