@@ -4,7 +4,7 @@ import {EventEmitter} from 'node:events'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import {classifyTransportClose,observeBedrockTransport,markPackTransportRequest,transportEvidenceSummary} from '../src/transport-evidence.js'
+import {classifyTransportClose,inspectTransportState,observeBedrockTransport,markPackTransportRequest,transportEvidenceSummary} from '../src/transport-evidence.js'
 import {createPackHandshakeForensics} from '../src/pack-handshake-forensics.js'
 import {sanitizeDiagnosticReport} from '../src/diagnostic-store.js'
 
@@ -66,4 +66,36 @@ test('exported connection summary preserves only allowlisted transport evidence'
  assert.equal(summary.transportPackReliableSubmissions,2)
  assert.equal(summary.transportAckObservable,false)
  assert.equal(JSON.stringify(summary).includes('do-not-export'),false)
+})
+
+test('NetherNet closes are textual, not numeric RakNet codes; never expose raw private errors',()=>{
+ assert.deepEqual(classifyTransportClose('disconnected','nethernet'),{code:0,label:'nethernet-disconnected'})
+ assert.deepEqual(classifyTransportClose('closed','nethernet'),{code:0,label:'nethernet-closed'})
+ assert.deepEqual(classifyTransportClose('connecterror:37','nethernet'),{code:37,label:'nethernet-connect-error'})
+ assert.deepEqual(classifyTransportClose('private-hostname secret-token','nethernet'),{code:0,label:'unknown-code'})
+ assert.deepEqual(classifyTransportClose('disconnected','raknet'),{code:0,label:'unknown-code'})
+})
+test('WebRTC reliable channel open is evidence of live transport even without RakNet connected flag',()=>{
+ const client={options:{transport:'nethernet'},connection:{nethernet:{connection:{
+  reliable:{readyState:'open'},rtcConnection:{connectionState:'connected',iceConnectionState:'completed'}
+ }}}}
+ const evidence=inspectTransportState(client)
+ assert.equal(evidence.transportKind,'nethernet')
+ assert.equal(evidence.transportReady,true)
+ assert.equal(evidence.rtcConnectionState,'connected')
+ assert.equal(evidence.rtcIceState,'completed')
+ assert.equal(evidence.rtcReliableState,'open')
+ client.connection.nethernet.connection.reliable.readyState='closed'
+ client.connection.nethernet.connection.rtcConnection.iceConnectionState='failed'
+ const end=inspectTransportState(client)
+ assert.equal(end.transportReady,false)
+ assert.equal(end.rtcIceState,'failed')
+ const safe=sanitizeDiagnosticReport({phase:'pack-request',transportKind:'nethernet',
+  rtcConnectionState:'connected',rtcIceState:'failed',rtcReliableState:'closed',
+  transportCloseLabel:'nethernet-disconnected',rawSdp:'private-address-secret'})
+ assert.equal(safe.transportKind,'nethernet')
+ assert.equal(safe.rtcIceState,'failed')
+ assert.equal(safe.rtcReliableState,'closed')
+ assert.equal(safe.transportCloseLabel,'nethernet-disconnected')
+ assert.equal(JSON.stringify(safe).includes('private-address-secret'),false)
 })
