@@ -1,0 +1,79 @@
+name: Publish Realm AI Live v0.40.16 signed APK as public GitHub Release
+on:
+  push:
+    branches: [fix/realm-ai-live-v0416-modpack-cache-after-20261104]
+    paths:
+      - '.github/workflows/realm-ai-v0416-publish-signed-public.yml'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-signed-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact verified unsigned v0.40.16 APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p unsigned
+          gh run download 41786846666 --repo "${{ github.repository }}" \
+            --name realm-ai-live-v0416-private-signing --dir unsigned
+          test -s unsigned/Realm-AI-Live-v0.40.16-ALIGNED-UNSIGNED.apk
+          echo '11e9cedda8bb6f8dccaa5067c838a812f05be49705a313d5dad8642441398405  unsigned/Realm-AI-Live-v0.40.16-ALIGNED-UNSIGNED.apk' | sha256sum -c -
+      - name: Reconstruct exact original-key signed APK from public byte patch
+        run: |
+          set -euo pipefail
+          base64 -d realm-ai-phone-build/v0416-public-patch/signed-v0416.patch.zst.b64 > signed-v0416.patch.zst
+          echo '37001641672519ca27c331bc82b8603d6ab0cae7f1d294feaa63460b09366a07  signed-v0416.patch.zst' | sha256sum -c -
+          zstd --patch-from=unsigned/Realm-AI-Live-v0.40.16-ALIGNED-UNSIGNED.apk \
+            -d signed-v0416.patch.zst -o Realm-AI-Live-v0.40.16.apk
+          echo '7722493a7c3d566d39c496b99366ef37a3ef51b45347c22d1d90b9ce12b2b6ff  Realm-AI-Live-v0.40.16.apk' | sha256sum -c -
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('Realm-AI-Live-v0.40.16.apk') as z:
+              assert z.testzip() is None
+              assert 'lib/arm64-v8a/libnode.so' in z.namelist()
+              assert 'assets/nodejs-project/src/connection.js' in z.namelist()
+              print('PASS full signed APK ZIP and native runtime', len(z.namelist()))
+          PY
+      - name: Verify original signing certificate and install-over package identity
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          if [ ! -x "$BT/apksigner" ]; then "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'; fi
+          "$BT/apksigner" verify --verbose --print-certs Realm-AI-Live-v0.40.16.apk | tee certificate-check.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: 77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' certificate-check.txt
+          "$BT/zipalign" -c -P 16 4 Realm-AI-Live-v0.40.16.apk
+          "$BT/aapt" dump badging Realm-AI-Live-v0.40.16.apk | tee package-check.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200045'" package-check.txt
+          sha256sum Realm-AI-Live-v0.40.16.apk > SHA256SUMS.txt
+      - name: Publish standard public APK download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<'TXT'
+          Realm AI Live v0.40.16 — modded-only deferred chunk-cache handshake experiment.
+          Original app ID com.veilforge.realmagent.live; versionCode 200045.
+          Original permanent signing certificate; installs over previously signed v0.40.14 without uninstalling.
+          Nintendo Switch profile, Microsoft login cache and unmodded Realm connection behavior are preserved.
+          Defers optional chunk cache status until modded pack handshake completes; unmodded worlds remain unchanged.
+          This is a diagnostic update, NOT yet a confirmed fix for modded Realm downloads.
+          The exact signed APK was reconstructed from a public byte patch and verified against
+          the original privately signed SHA-256. The signing key and password were never uploaded.
+          TXT
+          if gh release view realm-ai-live-v0416-cache-after-packs --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload realm-ai-live-v0416-cache-after-packs \
+              Realm-AI-Live-v0.40.16.apk SHA256SUMS.txt \
+              --clobber --repo "${{ github.repository }}"
+          else
+            gh release create realm-ai-live-v0416-cache-after-packs \
+              Realm-AI-Live-v0.40.16.apk SHA256SUMS.txt \
+              --repo "${{ github.repository }}" \
+              --target "$GITHUB_SHA" \
+              --title 'Realm AI Live v0.40.16 — Signed Android APK' \
+              --notes-file release-notes.txt
+          fi
