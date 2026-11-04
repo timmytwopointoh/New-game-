@@ -144,3 +144,5 @@ jobs:
 # Validates the direct no-pack stack fast path, the timed ACK fallback, and SHA-verified cache-only requests.
 
 # Final rebuild: preserve original lowercase pack-response names in the one-tap diagnostic export.
+
+# Final regression run includes revised historical test: only modded worlds wrap early radius, no-mod world queue stays byte-identical.
