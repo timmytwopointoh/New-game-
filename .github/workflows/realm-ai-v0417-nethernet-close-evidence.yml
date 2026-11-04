@@ -1,4 +1,4 @@
-name: Realm AI Live v0.40.17 NetherNet closure states and packet evidence; handshake unchanged
+name: Realm AI Live v0.40.17 NetherNet closure states and packet evidence; handshake unchanged (pre-close RTC snapshot)
 on:
   push:
     branches: [fix/realm-ai-live-v0417-nethernet-close-evidence-20261104]
