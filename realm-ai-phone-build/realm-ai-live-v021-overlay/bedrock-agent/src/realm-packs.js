@@ -9,6 +9,7 @@ import {classifyPack,packDirectory,packFilePath,priorPackLocations,PACK_CATEGORI
 import {inspectPackResponseWire} from './pack-protocol-observer.js'
 import {markPackTransportRequest} from './transport-evidence.js'
 import {sendCurrentModdedPackResponse} from './modded-pack-response.js'
+import {installModdedNativeAckGuard} from './modded-native-ack-guard.js'
 
 const MAX_PACKS = 64
 const MAX_PACK_BYTES = 512 * 1024 * 1024
@@ -111,6 +112,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // Original-working mode allows the bundled client to manage its own
   // cache-status and early terrain-radius packets as the proven v0.26 did.
   const originalQueue=client.queue,originalWrite=client.write
+  // Underlying Bedrock 3.61.0 sends premature legacy Completed replies on
+  // both pack events. Guard only modded stacks; unmodded native writes stay intact.
+  const nativeAckGuard=handshakeMode==='original-working'?installModdedNativeAckGuard(client):null
   let gameStarted=false,pendingRadius=null,radiusDeferred=0,cacheQueued=false
   let cacheStatusIssued=false,downloadRequestIssued=false,packResponseCount=0
   let packRequestWire={available:false,verified:false,packIdCount:0,statusCode:0,byteLength:0,version:'unknown',wireText:'unknown',transportConnected:false}
@@ -180,7 +184,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...(nativeAckGuard?.snapshot()||{}),...extra})
   }
 
   const response = (name,ids=[]) => {
@@ -471,11 +475,12 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);if(noPackAckTimer)clearTimeout(noPackAckTimer);cancellation.abort()})
-  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,...(nativeAckGuard?.snapshot()||{}),radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
     if(moddedRadiusGuard&&client.queue===moddedRadiusGuard)client.queue=originalQueue
+    nativeAckGuard?.cleanup()
     clearInterval(packWatchdog)
     if(noPackAckTimer)clearTimeout(noPackAckTimer)
     cancellation.abort()
