@@ -102,6 +102,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // Strictly bounded A/B protocol probes; never accept arbitrary packet behavior.
   if(!['original-working','native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
   const packs = new Map()
+  // v0.40.16 controlled modded-only handshake probe; no-mod path remains unchanged.
+  const deferModernCache=handshakeMode==='original-working'&&String(client?.options?.version)==='1.26.60'
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
   let verifiedCacheCount=0,missingPackCount=0,noPackAckTimer=null,noPackAckIssued=false,noPackDirectStack=false
@@ -253,6 +255,12 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     if([...packs.values()].some(p=>!p.ready))return
     finished=true
     response('completed')
+    // Chunk cache negotiation is not needed to receive the resource packs.
+    // Send it after the modded pack stack, not before Downloading.
+    if(deferModernCache&&packs.size>0&&!cacheStatusIssued){
+      originalQueue.call(client,'client_cache_status',{enabled:false})
+      cacheStatusIssued=true
+    }
     flushRadius()
     emit('packs-ready',`Realm pack handshake completed (${packs.size} packs)`,packs.size)
   }
@@ -335,12 +343,13 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       if(packs.size){
         installModdedRadiusGuard()
         if(handshakeMode==='original-working'){
-          // Bedrock sends its client cache capability once at login.
-          // Announce it before the modded Downloading response, not
-          // after in the library's 20ms queue. Keep the no-mod path as-is.
-          client.write('client_cache_status',{enabled:false})
-          cacheStatusIssued=true
+          // Suppress the library's queued cache status until after pack transfer.
+          // Keep the original behavior for other protocol versions and all no-mod worlds.
           moddedCacheStatusSent=true
+          if(!deferModernCache){
+            client.write('client_cache_status',{enabled:false})
+            cacheStatusIssued=true
+          }
         }
       }
       if(!packs.size){
