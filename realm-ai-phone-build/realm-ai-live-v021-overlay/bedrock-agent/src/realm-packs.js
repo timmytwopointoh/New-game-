@@ -220,7 +220,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     const packet={
       response_status:name,
       response_status_name:(useCurrentModded?
-        {refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}:
+        // Candidate I: legacy lower-case modded response label with immediate send.
+        {refused:'cancel',send_packs:'downloading',have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'}:
         handshakeMode==='original-working'?
         {refused:'cancel',send_packs:'downloading',have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'}:
         {refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
