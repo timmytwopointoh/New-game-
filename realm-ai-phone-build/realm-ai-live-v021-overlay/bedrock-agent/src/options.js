@@ -10,7 +10,7 @@ export function buildClientOptions(m,projectRoot,onMsaCode){
    // Realms lookup handles host/port and negotiated transport; never try direct IP here.
    if(m.realmId)options.realms={realmId:String(m.realmId)}
    else if(m.realmInvite && !String(m.realmInvite).startsWith('SET_'))options.realms={realmInvite:String(m.realmInvite)}
-   else options.realms={pickRealm:realms=>selectJoinedRealm(realms,m.realmName,m.realmOwner||'ezilyincred')}
+   else options.realms={pickRealm:realms=>selectJoinedRealm(realms,m.realmName,m.realmOwner||'')}
  }else{options.host=m.host;options.port=m.port}
  if(m.version)options.version=m.version
  return options
@@ -23,8 +23,6 @@ export function selectJoinedRealm(realms,name='',owner=''){
   const wantedOwner=String(owner||'').trim().toLowerCase()
   if(realms.length===1){
     const only=realms[0]
-    const onlyOwner=String(only.owner||only.ownerName||only.ownerGamertag||'').trim().toLowerCase()
-    if(wantedOwner&&onlyOwner&&onlyOwner!==wantedOwner)throw new Error('Sole Realm belongs to an unexpected owner.')
     return only
   }
   const byOwner=wantedOwner?realms.filter(r=>String(r.owner||r.ownerName||r.ownerGamertag||'').trim().toLowerCase()===wantedOwner):[]
@@ -32,15 +30,12 @@ export function selectJoinedRealm(realms,name='',owner=''){
   if(byOwner.length===1)return byOwner[0]
   const named=wantedName?realms.filter(r=>String(r.name||'').trim().toLowerCase()===wantedName):realms
   if(named.length===1){
-    // If owner metadata exists and disagrees, do not join somebody else's Realm.
-    const candidate=named[0]
-    const candidateOwner=String(candidate.owner||candidate.ownerName||candidate.ownerGamertag||'').trim().toLowerCase()
-    if(wantedOwner&&candidateOwner&&candidateOwner!==wantedOwner)throw new Error('Named Realm belongs to an unexpected owner.')
-    return candidate
+    // Realm.owner is API metadata, not guaranteed to equal the owner's Xbox gamertag.
+    return named[0]
   }
   const ownerNamed=byOwner.filter(r=>!wantedName||String(r.name||'').trim().toLowerCase()===wantedName)
   if(ownerNamed.length===1)return ownerNamed[0]
-  const eligible=(ownerNamed.length?ownerNamed:(!wantedOwner?named:[])).filter(r=>
+  const eligible=(ownerNamed.length?ownerNamed:named).filter(r=>
     String(r.state||'').toUpperCase()==='OPEN'&&r.expired!==true)
   if(eligible.length===1)return eligible[0]
   // Do not silently join an unrelated Realm: a bad selection might expose game activity.
