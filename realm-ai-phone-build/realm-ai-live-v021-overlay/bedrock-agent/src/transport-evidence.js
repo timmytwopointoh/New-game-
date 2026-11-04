@@ -10,8 +10,38 @@ const RAKNET_CODES=Object.freeze({
 })
 // The RakNet backend delivers numeric reason codes. Never expose raw reason
 // text or transport objects in exported diagnostics.
-export function classifyTransportClose(reason){
+const RTC_CONNECTION_STATES=new Set(['new','connecting','connected','disconnected','failed','closed'])
+const RTC_ICE_STATES=new Set(['new','checking','connected','completed','disconnected','failed','closed'])
+const DATA_CHANNEL_STATES=new Set(['connecting','open','closing','closed'])
+const checked=(value,allowed)=>allowed.has(value)?value:'unknown'
+
+// Read-only, fixed enum snapshots: never save SDP, ICE candidates, endpoints,
+// authentication tokens, real usernames, or WebRTC error objects.
+export function inspectTransportState(client){
+  const conn=client?.connection
+  const kind=client?.options?.transport==='nethernet'?'nethernet':
+    client?.options?.transport==='raknet'?'raknet':'unknown'
+  const peer=kind==='nethernet'?conn?.nethernet?.connection:null
+  const rtc=peer?.rtcConnection||conn?.nethernet?.rtcConnection
+  const rtcConnectionState=checked(rtc?.connectionState,RTC_CONNECTION_STATES)
+  const rtcIceState=checked(rtc?.iceConnectionState,RTC_ICE_STATES)
+  const rtcReliableState=checked(peer?.reliable?.readyState,DATA_CHANNEL_STATES)
+  const transportReady=conn?.connected===true||
+    (kind==='nethernet'&&rtcReliableState==='open')
+  return {transportKind:kind,rtcConnectionState,rtcIceState,rtcReliableState,transportReady}
+}
+export function classifyTransportClose(reason,transportKind='unknown'){
   const value=typeof reason==='number'?reason:reason&&typeof reason==='object'?reason.reason:null
+  const raw=typeof reason==='string'?reason:typeof value==='string'?value:''
+  const match=/^connecterror:([0-9]{1,3})$/.exec(raw)
+  if(transportKind==='nethernet'){
+    if(match){
+      const code=Number(match[1])
+      return {code:code<=255?code:0,label:'nethernet-connect-error'}
+    }
+    if(raw==='disconnected')return {code:0,label:'nethernet-disconnected'}
+    if(raw==='closed')return {code:0,label:'nethernet-closed'}
+  }
   const code=Number.isSafeInteger(value)&&value>=0&&value<=255?value:0
   return {code,label:RAKNET_CODES[code]||'unknown-code'}
 }
