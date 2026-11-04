@@ -194,31 +194,64 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // response through bedrock-protocol's normal write/framing/encryption path.
   // Do not modify the serializer globally or change unmodded packets.
   function writeModdedResponseNatively(packet) {
-    const {frame:encoded,observation}=encodeCurrentModdedPackResponse(client,packet)
-    // Candidate M: 1.26.60 selector 2 with lowercase wire label; no other bytes change.
-    const frame=Buffer.from(encoded)
-    const upper=Buffer.from('Downloading','utf8')
-    const offset=frame.indexOf(upper)
-    if(offset<0 || frame.indexOf(upper,offset+1)!==-1)
-      throw Error('Cannot locate exact one modern pack status label')
-    Buffer.from('downloading','utf8').copy(frame,offset)
+    // Candidate N: encode the modern 1.26.60 response independently, rather
+    // than modifying an outdated 1.26.51 packet returned by minecraft-data.
+    // Exactly one pack packet is changed; native framing and auth are unchanged.
+    const variants={
+      refused:[1,'cancel'],
+      send_packs:[2,'downloading'],
+      have_all_packs:[3,'downloadingfinished'],
+      completed:[4,'resourcepackstackfinished']
+    }
+    const status=variants[packet.response_status]
+    if(!status)throw Error('Unexpected modern pack response state')
+    function uint(value){
+      if(!Number.isSafeInteger(value)||value<0||value>0xffffffff)throw Error('Invalid pack varuint')
+      const out=[]
+      do{
+        let c=value%128
+        value=Math.floor(value/128)
+        if(value)c|=0x80
+        out.push(c)
+      }while(value)
+      return Buffer.from(out)
+    }
+    function word(value){
+      const b=Buffer.from(String(value),'utf8')
+      if(b.length>65535)throw Error('Pack string too long')
+      return Buffer.concat([uint(b.length),b])
+    }
+    const ids=packet.response_status==='send_packs'?packet.resourcepackids:[]
+    if(!Array.isArray(ids)||ids.length>64||packet.response_status==='send_packs'&&!ids.length)
+      throw Error('Invalid server-advertised pack ID count')
+    const parts=[uint(8),uint(status[0]),word(status[1])]
+    if(packet.response_status==='send_packs'){
+      parts.push(uint(ids.length))
+      for(const id of ids){
+        if(!/^[a-zA-Z0-9-]{1,80}_[0-9][0-9a-zA-Z_.-]{0,39}$/.test(id))
+          throw Error('Invalid server-advertised pack key')
+        parts.push(word(id))
+      }
+    }
+    const frame=Buffer.concat(parts)
     const serializer=client.serializer
     const original=serializer.createPacketBuffer
     let used=false
-    serializer.createPacketBuffer=function(payload,...args) {
-      if(payload?.name==='resource_pack_client_response' && payload?.params===packet) {
+    serializer.createPacketBuffer=function(payload,...args){
+      if(payload?.name==='resource_pack_client_response'&&payload?.params===packet){
         used=true
         return frame
       }
       return original.call(this,payload,...args)
     }
-    try {
+    try{
       client.write('resource_pack_client_response',packet)
-      if(!used)throw Error('Native modded resource pack writer did not use the expected payload')
-    } finally {
-      serializer.createPacketBuffer=original
-    }
-    return {...observation,wireText:'downloading'}
+      if(!used)throw Error('Native writer bypassed explicit modern pack buffer')
+    }finally{serializer.createPacketBuffer=original}
+    return {available:true,verified:true,status:packet.response_status,
+      packIdCount:ids.length,version:'1.26.60',statusCode:status[0],packetId:8,
+      byteLength:frame.length,wireText:status[1],
+      transportConnected:client?.connection?.connected===true}
   }
   const response = (name,ids=[]) => {
     // Pre-0.39.5 used an immediate write and did reach the world. Do not
