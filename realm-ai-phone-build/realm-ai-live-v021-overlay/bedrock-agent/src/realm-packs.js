@@ -8,6 +8,7 @@ import {downloadRealmCdn,checkCdnUrl} from './cdn-download.js'
 import {classifyPack,packDirectory,packFilePath,priorPackLocations,PACK_CATEGORIES} from './pack-storage.js'
 import {inspectPackResponseWire} from './pack-protocol-observer.js'
 import {markPackTransportRequest} from './transport-evidence.js'
+import {sendCurrentModdedPackResponse} from './modded-pack-response.js'
 
 const MAX_PACKS = 64
 const MAX_PACK_BYTES = 512 * 1024 * 1024
@@ -168,18 +169,27 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     // cache-first writes cache status here; native-queue lets the bundled
     // client enqueue it after the request, as in the earlier working build.
     // no-cache-status checks the protocol's optional-cache negotiation path.
+    // v0.40.10 restored the original serializer and can join unmodded
+    // Realms. Never alter that case. For a Realm advertising real packs,
+    // Bedrock 1.26.60 instead requires the NEW numeric selector (2 for
+    // Downloading, not legacy 1=Cancel). Build the same packet body with
+    // the old verified serializer, then correct only the response selector.
+    const useCurrentModded=handshakeMode==='original-working'&&packs.size>0&&
+      String(client?.options?.version)==='1.26.60'
     const packet={
       response_status:name,
-      // Mojang Bedrock 1.26.60 declares title-cased response text on the wire. For 1.26.60,
-      // the numeric Downloading value is 2. Verify both before sending.
-      response_status_name:(handshakeMode==='original-working'?
+      response_status_name:(useCurrentModded?
+        {refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}:
+        handshakeMode==='original-working'?
         {refused:'cancel',send_packs:'downloading',have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'}:
         {refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'})[name]||name,
       resourcepackids:ids
     }
-    const observation=inspectPackResponseWire(client,packet,{strategy:handshakeMode==='original-working'?'original-working':'modern'})
     if(name==='send_packs')markPackTransportRequest(client)
-    client.write('resource_pack_client_response',packet)
+    const observation=useCurrentModded?
+      sendCurrentModdedPackResponse(client,packet):
+      inspectPackResponseWire(client,packet,{strategy:handshakeMode==='original-working'?'original-working':'modern'})
+    if(!useCurrentModded)client.write('resource_pack_client_response',packet)
     packResponseCount++
     if(name==='send_packs'){downloadRequestIssued=true;packRequestWire=observation}
   }
