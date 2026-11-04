@@ -10,25 +10,34 @@ export function buildClientOptions(m,projectRoot,onMsaCode){
    // Realms lookup handles host/port and negotiated transport; never try direct IP here.
    if(m.realmId)options.realms={realmId:String(m.realmId)}
    else if(m.realmInvite && !String(m.realmInvite).startsWith('SET_'))options.realms={realmInvite:String(m.realmInvite)}
-   else options.realms={pickRealm:realms=>selectJoinedRealm(realms,m.realmName)}
+   else options.realms={pickRealm:realms=>selectJoinedRealm(realms,m.realmName,m.realmOwner||'ezilyincred')}
  }else{options.host=m.host;options.port=m.port}
  if(m.version)options.version=m.version
  return options
 }
 
-// Never silently select the first Realm when the same Xbox account belongs to many.
-export function selectJoinedRealm(realms,name=''){
-  if(!Array.isArray(realms)||realms.length===0)throw new Error('The bot account does not have any joined Realms. Sign in with the invited Xbox account.')
-  const requested=String(name||'').trim().toLowerCase()
-  // On the owner's single invited Realm, trust the one available Realm ID.
-  // Saved display names can be stale after world swaps or Realm renames.
-  if(realms.length===1)return realms[0]
-  if(requested){
-    const matches=realms.filter(r=>String(r.name||'').trim().toLowerCase()===requested)
-    if(matches.length===1)return matches[0]
-    if(matches.length>1)throw new Error('Multiple joined Realms share that name. Specify a Realm ID.')
-    throw new Error('No joined Realm named '+JSON.stringify(name)+'. Available: '+realms.map(r=>String(r.name||'(unnamed)')).slice(0,8).join(', '))
+// Never choose a Realm owned by another account when duplicate display names occur.
+export function selectJoinedRealm(realms,name='',owner=''){
+  if(!Array.isArray(realms)||realms.length===0)throw new Error('No joined Realms returned by Minecraft; check saved Xbox session or invitation.')
+  const wantedName=String(name||'').trim().toLowerCase()
+  const wantedOwner=String(owner||'').trim().toLowerCase()
+  const byOwner=wantedOwner?realms.filter(r=>String(r.owner||r.ownerName||r.ownerGamertag||'').trim().toLowerCase()===wantedOwner):[]
+  // One owner match is conclusive for this single-owner bot even when a Realm was renamed.
+  if(byOwner.length===1)return byOwner[0]
+  const named=wantedName?realms.filter(r=>String(r.name||'').trim().toLowerCase()===wantedName):realms
+  if(named.length===1){
+    // If owner metadata exists and disagrees, do not join somebody else's Realm.
+    const candidate=named[0]
+    const candidateOwner=String(candidate.owner||candidate.ownerName||candidate.ownerGamertag||'').trim().toLowerCase()
+    if(wantedOwner&&candidateOwner&&candidateOwner!==wantedOwner)throw new Error('Named Realm belongs to an unexpected owner.')
+    return candidate
   }
-  if(realms.length===1)return realms[0]
-  throw new Error('More than one joined Realm is available: '+realms.map(r=>String(r.name||'(unnamed)')).slice(0,8).join(', ')+'. Set the exact Realm name or ID in the app.')
+  const ownerNamed=byOwner.filter(r=>!wantedName||String(r.name||'').trim().toLowerCase()===wantedName)
+  if(ownerNamed.length===1)return ownerNamed[0]
+  const eligible=(ownerNamed.length?ownerNamed:(!wantedOwner?named:[])).filter(r=>
+    String(r.state||'').toUpperCase()==='OPEN'&&r.expired!==true)
+  if(eligible.length===1)return eligible[0]
+  // Do not silently join an unrelated Realm: a bad selection might expose game activity.
+  if(named.length>1)throw new Error('Duplicate Realm names; owner and open-state filters did not uniquely identify the requested Realm.')
+  throw new Error('No Realm matched the configured owner/name. Verify the invited bot account.')
 }
