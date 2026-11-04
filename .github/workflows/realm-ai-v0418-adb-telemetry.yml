@@ -1,8 +1,8 @@
 name: Realm AI Live v0.40.18 read-only local ADB diagnostics; original handshake preserved
 on:
   push:
-    branches: [fix/realm-ai-live-v0418-nethernet-close-evidence-20261104]
-    paths: ['.github/workflows/realm-ai-v0418-nethernet-close-evidence.yml']
+    branches: [fix/realm-ai-live-v0418-adb-telemetry-20261104]
+    paths: ['.github/workflows/realm-ai-v0418-adb-telemetry.yml']
 permissions:
   contents: read
 jobs:
