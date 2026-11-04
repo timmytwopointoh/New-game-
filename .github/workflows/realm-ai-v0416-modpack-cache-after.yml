@@ -1,4 +1,4 @@
-name: Realm AI Live v0.40.16 modded 1.26.60 cache deferred; no-mod unchanged
+name: Realm AI Live v0.40.16 modded 1.26.60 cache deferred; no-mod unchanged (verified test rerun)
 on:
   push:
     branches: [fix/realm-ai-live-v0416-modpack-cache-after-20261104]
