@@ -405,11 +405,13 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // Once the server returns a header, add bounded sequential requests separately.
         // Candidate K: restore optional cache policy BEFORE legacy Downloading
         // response; no other protocol fields or unmodded path change.
+        // Candidate R: same native Downloading packet as P; send it BEFORE
+        // the optional cache-status message, which the native library queues later.
+        response('send_packs',missing.map(p=>p.key))
         if(handshakeMode==='original-working'&&!cacheStatusIssued){
           client.write('client_cache_status',{enabled:false})
           cacheStatusIssued=true
         }
-        response('send_packs',missing.map(p=>p.key))
         emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
         if(missing.some(p=>!p.cdn)){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of missing)if(p.cdn)cdnQueue.push(p)
