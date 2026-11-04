@@ -128,10 +128,14 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // A modded Realm, however, must finish its mandatory pack exchange
   // before asking for terrain. Install this narrow queue guard ONLY
   // after a non-empty pack announcement (never for empty worlds).
-  let moddedRadiusGuard=null
+  let moddedRadiusGuard=null,moddedCacheStatusSent=false
   const installModdedRadiusGuard=()=>{
     if(handshakeMode!=='original-working'||!packs.size||moddedRadiusGuard||typeof originalQueue!=='function')return
     moddedRadiusGuard=function(name,packet,...args){
+      // The native client queues this after resource_packs_info. For modded
+      // worlds it was already sent synchronously before the pack request.
+      // Leave the unmodded native queue completely unchanged.
+      if(name==='client_cache_status'&&moddedCacheStatusSent)return
       if(name==='request_chunk_radius'&&!canRequestTerrain()){
         pendingRadius={method:originalQueue,packet,args};radiusDeferred++
         return
@@ -320,7 +324,17 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         if(byUuid.has(uuid))throw Error('Ambiguous Realm packs with duplicate IDs')
         byUuid.set(uuid,key)
       }
-      if(packs.size)installModdedRadiusGuard()
+      if(packs.size){
+        installModdedRadiusGuard()
+        if(handshakeMode==='original-working'){
+          // Bedrock sends its client cache capability once at login.
+          // Announce it before the modded Downloading response, not
+          // after in the library's 20ms queue. Keep the no-mod path as-is.
+          client.write('client_cache_status',{enabled:false})
+          cacheStatusIssued=true
+          moddedCacheStatusSent=true
+        }
+      }
       if(!packs.size){
         missingPackCount=0
         // Servers may send the empty pack stack directly without requiring
