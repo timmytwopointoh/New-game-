@@ -411,6 +411,15 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         // verified outer selector 1 + string 'Downloading' and native writer.
         // No other packet field or app/world/account behavior changes.
         response('send_packs',missing.slice(0,1).map(p=>p.key))
+        // Candidate T: one bounded repeat of the SAME authorized first pack ID
+        // if the server has not acknowledged it after 2 seconds. Do not change
+        // the packet format, pack IDs, cache ordering, auth or unmodded path.
+        const firstPack=missing[0]
+        setTimeout(()=>{
+          if(failed||finished||stackReceived||cancellation.signal.aborted||
+            firstPack.requested||firstPack.ready)return
+          try{response('send_packs',[firstPack.key])}catch(error){failure(error)}
+        },2000).unref?.()
         if(handshakeMode==='original-working'&&!cacheStatusIssued){
           client.write('client_cache_status',{enabled:false})
           cacheStatusIssued=true
