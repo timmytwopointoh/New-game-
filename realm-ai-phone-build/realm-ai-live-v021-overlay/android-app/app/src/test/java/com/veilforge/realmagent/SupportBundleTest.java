@@ -86,4 +86,25 @@ public class SupportBundleTest {
   assertEquals("offline",new JSONObject(files.get("live-snapshot.json")).getString("source"));
  }
 
+
+ @Test public void v0415ZipPreservesActualPackSubmitAndCloseOriginWithoutLeakingPrivateData()throws Exception{
+  write("nodejs-project/private/diagnostics/connection.json",
+    "{\"phase\":\"pack-request\",\"transportCloseCode\":22,\"transportCloseLabel\":\"raknet-connection-lost\",\"transportCloseOrigin\":\"remote-transport\",\"transportPackReliableSubmissions\":2,\"packWaitingForServer\":false,\"packServerWaitSeconds\":11,\"accessToken\":\"PRIVATE-SECRET\"}");
+  write("nodejs-project/private/diagnostics/pack-handshake.json",
+    "{\"schema\":1,\"sessions\":[{\"state\":\"closed\",\"events\":[{\"kind\":\"raw-pack-submit\",\"packet\":\"resource_pack_client_response\",\"status\":\"Downloading\",\"packCount\":8,\"packetBytes\":364,\"selector\":2,\"rawPackId\":\"PRIVATE-PACK\"},{\"kind\":\"close-origin\",\"origin\":\"remote-transport\",\"reasonCode\":22,\"token\":\"PRIVATE-TOKEN\"}]}]}");
+  Map<String,String> out=export();
+  JSONObject c=new JSONObject(out.get("connection.json"));
+  assertEquals(22,c.getInt("transportCloseCode"));
+  assertEquals("raknet-connection-lost",c.getString("transportCloseLabel"));
+  assertEquals("remote-transport",c.getString("transportCloseOrigin"));
+  assertEquals(2,c.getInt("transportPackReliableSubmissions"));
+  JSONArray events=new JSONObject(out.get("pack-handshake.json")).getJSONArray("sessions").getJSONObject(0).getJSONArray("events");
+  assertEquals("raw-pack-submit",events.getJSONObject(0).getString("kind"));
+  assertEquals(364,events.getJSONObject(0).getInt("packetBytes"));
+  assertEquals(2,events.getJSONObject(0).getInt("selector"));
+  assertEquals("close-origin",events.getJSONObject(1).getString("kind"));
+  assertEquals("remote-transport",events.getJSONObject(1).getString("origin"));
+  assertEquals(22,events.getJSONObject(1).getInt("reasonCode"));
+  assertFalse(out.toString().contains("PRIVATE-"));
+ }
 }
