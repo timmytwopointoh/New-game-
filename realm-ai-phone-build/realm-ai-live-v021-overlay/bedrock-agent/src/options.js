@@ -20,6 +20,9 @@ export function buildClientOptions(m,projectRoot,onMsaCode){
 export function selectJoinedRealm(realms,name=''){
   if(!Array.isArray(realms)||realms.length===0)throw new Error('The bot account does not have any joined Realms. Sign in with the invited Xbox account.')
   const requested=String(name||'').trim().toLowerCase()
+  // On the owner's single invited Realm, trust the one available Realm ID.
+  // Saved display names can be stale after world swaps or Realm renames.
+  if(realms.length===1)return realms[0]
   if(requested){
     const matches=realms.filter(r=>String(r.name||'').trim().toLowerCase()===requested)
     if(matches.length===1)return matches[0]
