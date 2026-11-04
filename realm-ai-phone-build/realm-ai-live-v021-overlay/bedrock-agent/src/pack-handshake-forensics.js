@@ -5,7 +5,7 @@ import {readPrivateJson,writePrivateJson} from './survival/private-json.js'
 
 const INPUT_NAMES=new Set(['network_settings','server_to_client_handshake','play_status','resource_packs_info','resource_pack_data_info','resource_pack_chunk_data','resource_pack_stack','start_game','disconnect'])
 const OUTPUT_NAMES=new Set(['client_to_server_handshake','client_cache_status','resource_pack_client_response','request_chunk_radius','resource_pack_chunk_request'])
-const KINDS=new Set(['session-start','joined','client-session','received','write-attempt','queue-attempt','send-mcpe','raw-pack-submit','client-closed','server-disconnect','client-error','transport-closed','world-spawned'])
+const KINDS=new Set(['session-start','joined','client-session','received','write-attempt','queue-attempt','send-mcpe','raw-pack-submit','close-origin','client-closed','server-disconnect','client-error','transport-closed','world-spawned'])
 const SHORT_MAX=9007199254740991
 const finite=n=>Number.isSafeInteger(n)&&n>=0?Math.min(n,SHORT_MAX):0
 const elapsed=(now,start)=>finite(now>=start?now-start:0)
@@ -16,8 +16,9 @@ function safeEntry(data){
  const packet=INPUT_NAMES.has(data.packet)||OUTPUT_NAMES.has(data.packet)?data.packet:'unknown'
  const transport=data.transport==='open'||data.transport==='closed'?data.transport:'unknown'
  const status=['none','Cancel','Downloading','DownloadingFinished','ResourcePackStackFinished'].includes(data.status)?data.status:'none'
+ const origin=['unknown','remote-transport','server-kick','client-disconnect','local-client-close','network-error','app-stop'].includes(data.origin)?data.origin:'unknown'
  return {ms:finite(data.ms),kind,packet,transport,status,packCount:finite(data.packCount),
-  packetBytes:finite(data.packetBytes),selector:finite(data.selector),reasonCode:finite(data.reasonCode)}
+  packetBytes:finite(data.packetBytes),selector:finite(data.selector),reasonCode:finite(data.reasonCode),origin}
 }
 export function createPackHandshakeForensics(client,file,{clock=()=>Date.now()}={}){
  const started=clock()
@@ -38,7 +39,7 @@ export function createPackHandshakeForensics(client,file,{clock=()=>Date.now()}=
     conn?.connected===true?'open':'unknown'
   const item=safeEntry({ms:elapsed(when,started),kind,packet,transport,
    status:extra.status||'none',packCount:finite(extra.packCount),
-   packetBytes:extra.packetBytes,selector:extra.selector,reasonCode:extra.reasonCode})
+   packetBytes:extra.packetBytes,selector:extra.selector,reasonCode:extra.reasonCode,origin:extra.origin})
   session.events.push(item)
   if(session.events.length>64)session.events.shift()
   if(kind==='client-closed'||kind==='server-disconnect'||kind==='transport-closed')session.state='closed'
