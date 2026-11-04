@@ -80,7 +80,7 @@ jobs:
           "$BT/zipalign" -P 16 -f 4 "$SRC" "$RUNNER_TEMP/realm-v0413/Realm-AI-Live-v0.40.13-ALIGNED-UNSIGNED.apk"
           "$BT/zipalign" -c -P 16 4 "$RUNNER_TEMP/realm-v0413/Realm-AI-Live-v0.40.13-ALIGNED-UNSIGNED.apk"
           "$BT/aapt" dump badging "$RUNNER_TEMP/realm-v0413/Realm-AI-Live-v0.40.13-ALIGNED-UNSIGNED.apk" | tee "$RUNNER_TEMP/realm-v0413/package-report.txt"
-          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200041'" "$RUNNER_TEMP/realm-v0413/package-report.txt"
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200042'" "$RUNNER_TEMP/realm-v0413/package-report.txt"
           python3 - <<'PY'
           import zipfile
           path=__import__('os').environ['RUNNER_TEMP']+'/realm-v0413/Realm-AI-Live-v0.40.13-ALIGNED-UNSIGNED.apk'
@@ -100,7 +100,7 @@ jobs:
               assert b"handshakeMode='original-working'" in conn
               assert b"useCurrentModded=handshakeMode==='original-working'" in packs
               assert b"sendCurrentModdedPackResponse(client,packet)" in packs
-              assert b"if(packs.size)installModdedRadiusGuard()" in packs
+              assert b"if(packs.size){" in packs and b"installModdedRadiusGuard()" in packs
               assert b"client.write('client_cache_status',{enabled:false})" in packs
               assert b"moddedCacheStatusSent=true" in packs
               assert b"if(name==='client_cache_status'&&moddedCacheStatusSent)return" in packs
