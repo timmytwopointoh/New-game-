@@ -124,10 +124,31 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     return method.call(this,name,packet,...args)
   }}
   const gatedWrite=gate(originalWrite),gatedQueue=originalQueue?gate(originalQueue,true):null
+  // The known-good no-mod Realm retains the EXACT original client queue.
+  // A modded Realm, however, must finish its mandatory pack exchange
+  // before asking for terrain. Install this narrow queue guard ONLY
+  // after a non-empty pack announcement (never for empty worlds).
+  let moddedRadiusGuard=null
+  const installModdedRadiusGuard=()=>{
+    if(handshakeMode!=='original-working'||!packs.size||moddedRadiusGuard||typeof originalQueue!=='function')return
+    moddedRadiusGuard=function(name,packet,...args){
+      if(name==='request_chunk_radius'&&!canRequestTerrain()){
+        pendingRadius={method:originalQueue,packet,args};radiusDeferred++
+        emit('pack-radius-deferred','Waiting for pack stack before requesting world chunks',0,packs.size)
+        return
+      }
+      return originalQueue.call(this,name,packet,...args)
+    }
+    client.queue=moddedRadiusGuard
+  }
   if(handshakeMode!=='original-working'){
     client.write=gatedWrite;if(gatedQueue)client.queue=gatedQueue
   }
-  function flushRadius(){if(handshakeMode==='original-working')return;if(pendingRadius&&canRequestTerrain()){const request=pendingRadius;pendingRadius=null;(originalQueue||originalWrite).call(client,'request_chunk_radius',request.packet,...request.args)}}
+  function flushRadius(){
+    if(!pendingRadius||!canRequestTerrain())return
+    const request=pendingRadius;pendingRadius=null
+    request.method.call(client,'request_chunk_radius',request.packet,...request.args)
+  }
   const onStartGame=()=>{gameStarted=true;flushRadius()}
   client.on('start_game',onStartGame)
   // createClient installs its own info listener asynchronously after this one.
@@ -300,6 +321,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         if(byUuid.has(uuid))throw Error('Ambiguous Realm packs with duplicate IDs')
         byUuid.set(uuid,key)
       }
+      if(packs.size)installModdedRadiusGuard()
       if(!packs.size){
         missingPackCount=0
         // Servers may send the empty pack stack directly without requiring
@@ -454,6 +476,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
+    if(moddedRadiusGuard&&client.queue===moddedRadiusGuard)client.queue=originalQueue
     clearInterval(packWatchdog)
     if(noPackAckTimer)clearTimeout(noPackAckTimer)
     cancellation.abort()
