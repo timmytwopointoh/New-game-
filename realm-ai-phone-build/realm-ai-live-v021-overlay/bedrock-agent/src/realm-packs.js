@@ -409,7 +409,14 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
           client.write('client_cache_status',{enabled:false})
           cacheStatusIssued=true
         }
-        response('send_packs',missing.map(p=>p.key))
+        // Candidate Q: delay ONLY the modded initial Downloading response by 750ms
+        // after resource_packs_info so the Realm can finish announcing its packs.
+        // Packet contents, cache policy, native writer and auth remain identical to P.
+        const pendingPackKeys=missing.map(p=>p.key)
+        setTimeout(()=>{
+          if(failed||finished||stackReceived||cancellation.signal.aborted)return
+          try{response('send_packs',pendingPackKeys)}catch(error){failure(error)}
+        },750).unref?.()
         emit('pack-request','Requesting '+missing.length+' missing Realm packs; '+verifiedCacheCount+' verified in cache',verifiedCacheCount,packs.size)
         if(missing.some(p=>!p.cdn)){serverWaitSince=now();lastServerPacketAt=serverWaitSince}
         for(const p of missing)if(p.cdn)cdnQueue.push(p)
