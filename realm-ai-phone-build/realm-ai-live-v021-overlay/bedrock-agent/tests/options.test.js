@@ -34,3 +34,7 @@ test('single expected Realm owner remains selectable after renaming',()=>{
  const owner={id:'a',name:'Changed display name',owner:'ezilyincred'}
  assert.equal(selectJoinedRealm([owner,{id:'other',name:'My Realm',owner:'other'}],'My Realm','ezilyincred'),owner)
 })
+
+test('never select even a single Realm with confirmed wrong owner',()=>{
+ assert.throws(()=>selectJoinedRealm([{id:'wrong',name:'My Realm',owner:'other'}],'My Realm','ezilyincred'),/unexpected owner/)
+})
