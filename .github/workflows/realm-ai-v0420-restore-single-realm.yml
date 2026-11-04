@@ -170,3 +170,5 @@ jobs:
 # Final regression run includes revised historical test: only modded worlds wrap early radius, no-mod world queue stays byte-identical.
 
 # Rebuild after real emulator evidence: 5 joined Realm entries, 2 exact-name matches; require owner-based disambiguation.
+
+# Rebuild with regression suite aligned to sole-Realm fallback and safe owner disambiguation.
