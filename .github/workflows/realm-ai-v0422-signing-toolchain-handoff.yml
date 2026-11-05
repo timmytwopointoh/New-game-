@@ -1,0 +1,36 @@
+name: Realm AI v0422 — export official Android signer tools for offline local verification
+on:
+  push:
+    branches: [fix/realm-ai-v0422-phone-pack-test-20261104]
+    paths: ['.github/workflows/realm-ai-v0422-signing-toolchain-handoff.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  toolchain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - name: Stage official Android build-tools 35 signer and alignment checker
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          if [ ! -f "$BT/lib/apksigner.jar" ] || [ ! -x "$BT/zipalign" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" || true
+          fi
+          test -f "$BT/lib/apksigner.jar"
+          test -x "$BT/zipalign"
+          mkdir -p tools
+          cp "$BT/lib/apksigner.jar" tools/apksigner.jar
+          cp "$BT/zipalign" tools/zipalign
+          cp "$BT/aapt" tools/aapt
+          java -jar tools/apksigner.jar --version
+          file tools/zipalign
+          ldd tools/zipalign || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: realm-v0422-android-signing-tools-internal
+          path: tools/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
