@@ -21,10 +21,10 @@ function varuint(value){
 const str=s=>Buffer.concat([varuint(Buffer.byteLength(s)),Buffer.from(s,'utf8')])
 const packId=i=>'11111111-2222-3333-4444-'+String(i+1).padStart(12,'0')
 function officialDownloadingFrame(ids){
- // Stable wire contract: variant index, lowercase alternative string and list.
+ // Stable wire contract: variant index, official-cased response string and list.
  // Gophertunnel 0e179fc4 (protocol 2225); see stable-pack-2225-vectors.test.js.
  // packet ID varuint (8), response enum 2, enum name and requested ID array.
- return Buffer.concat([varuint(8),varuint(1),str('downloading'),
+ return Buffer.concat([varuint(8),varuint(1),str('Downloading'),
    varuint(ids.length),...ids.map(str)])
 }
 test('all eight Realm packs use byte-exact Mojang 2225 Downloading request and complete verified transfer',t=>{
