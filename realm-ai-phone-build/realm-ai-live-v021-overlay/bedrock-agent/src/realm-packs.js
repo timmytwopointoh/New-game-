@@ -206,8 +206,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // contradicts our Downloading response and can start an unready world.
   // Suppress ONLY that legacy shortcut for 1.26.60 WITH required packs.
   // The verified original no-pack path and all other packets stay unchanged.
-  const suppressPrematureNativeCompletion=()=>{
-    if(handshakeMode!=='original-working'||!packs.size||
+  const suppressPrematureNativeCompletion=(advertisedBeforeParse=false)=>{
+    if(handshakeMode!=='original-working'||!(packs.size||advertisedBeforeParse)||
        String(client?.options?.version)!=='1.26.60'||
        moddedPrematureCompletionGuard||typeof originalWrite!=='function')return
     moddedPrematureCompletionGuard=function(name,packet,...args){
@@ -441,6 +441,23 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       failure(lastError)
     }catch(e){failure(e)}
   }
+  // bedrock-protocol 3.61.0 registers its own resource_packs_info listener
+  // inside createClient, BEFORE the caller can attach Realm pack handling.
+  // That listener immediately writes 'completed' (ResourcePackStackFinished)
+  // even when the server advertised packs that have not yet downloaded.
+  // An ordinary .on listener and its write guard are too late; the bad
+  // completion frame is already transmitted. prependListener always runs
+  // first, regardless of native listener registration order.
+  // Scope to the exact approved modded 1.26.60 path; vanilla zero-pack worlds
+  // must retain every byte and callback order from the proven original APK.
+  const preemptPrematureNativeCompletion=packet=>{
+    if(handshakeMode!=='original-working'||
+       String(client?.options?.version)!=='1.26.60'||finished||failed)return
+    const hasAdvertisedPacks=['resource_packs','texture_packs','behavior_packs']
+      .some(field=>Array.isArray(packet?.[field])&&packet[field].length>0)
+    if(hasAdvertisedPacks)suppressPrematureNativeCompletion(true)
+  }
+  client.prependListener('resource_packs_info',preemptPrematureNativeCompletion)
   client.on('resource_packs_info',packet=>{
     try{
       if(infoReceived||finished||failed)return
@@ -694,7 +711,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   })
   client.once('close',()=>{clearInterval(packWatchdog);if(noPackAckTimer)clearTimeout(noPackAckTimer);cancellation.abort()})
   return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,sourceCounts:{resource:resourceInfoCount,texture:textureInfoCount,behavior:behaviorInfoCount,duplicates:duplicateListEntries},radiusDeferred,gameStarted,skippedOptional,requested:packs.size,suppressedNativePackCompletions,headlessPackProbe:headlessPackProbe===true,headlessProbeSent,headlessProbeAccepted,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
-    pendingRadius=null;client.off('start_game',onStartGame);client.off('play_status',onLoginSuccess);client.off('resource_packs_info',cacheFirst)
+    pendingRadius=null;client.off('start_game',onStartGame);client.off('play_status',onLoginSuccess);client.off('resource_packs_info',cacheFirst);client.off('resource_packs_info',preemptPrematureNativeCompletion)
     if(loginCacheQueueGuard&&client.queue===loginCacheQueueGuard)client.queue=originalQueue
     if(moddedPrematureCompletionGuard&&client.write===moddedPrematureCompletionGuard)client.write=originalWrite
     if(client.write===gatedWrite)client.write=originalWrite
