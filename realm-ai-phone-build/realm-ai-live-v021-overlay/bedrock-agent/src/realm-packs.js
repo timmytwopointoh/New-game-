@@ -103,7 +103,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   if(!['original-working','native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
   const packs = new Map()
   // v0.40.16 controlled modded-only handshake probe; no-mod path remains unchanged.
-  const deferModernCache=handshakeMode==='original-working'&&String(client?.options?.version)==='1.26.60'
+  // Protocol 2225 combination test: announce no chunk cache BEFORE the corrected
+  // Downloading(2) request, never afterwards. The native duplicate is intercepted
+  // for modded packs; no-pack worlds retain the prior untouched flow.
+  const deferModernCache=false
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
   let verifiedCacheCount=0,missingPackCount=0,noPackAckTimer=null,noPackAckIssued=false,noPackDirectStack=false
