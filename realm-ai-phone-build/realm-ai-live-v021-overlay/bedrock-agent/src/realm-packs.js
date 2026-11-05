@@ -64,20 +64,62 @@ export function explainPackFailure(error){
  * per-chunk hashes and private storage rules. No add-on scripts are run.
  */
 export function selectRequiredRealmPacks(packet) {
-  const texture=packet?.texture_packs??packet?.resource_packs??[], behavior=packet?.behavior_packs??[]
-  if(!Array.isArray(texture)||!Array.isArray(behavior))throw Error('Invalid Realm pack list')
-  const advertised=[
-    ...texture.map(meta=>({meta,origin:'resource'})),
-    ...behavior.map(meta=>({meta,origin:'behavior'}))
+  // Bedrock 1.26.x can expose resource_packs, texture_packs, behavior_packs
+  // or a combination of the old and modern lists. An empty texture_packs
+  // array must NOT hide a populated resource_packs array.
+  const fields=[
+    ['resource_packs','resource'],
+    ['texture_packs','resource'],
+    ['behavior_packs','behavior']
   ]
-  if(advertised.length>MAX_PACKS)throw Error('Too many Realm packs requested')
+  const counts={resource_packs:0,texture_packs:0,behavior_packs:0}
+  const unique=new Map()
+  let duplicateListEntries=0
+  for(const [field,origin] of fields){
+    const entries=packet?.[field]??[]
+    if(!Array.isArray(entries))throw Error('Invalid Realm '+field+' list')
+    counts[field]=entries.length
+    if(entries.length>MAX_PACKS)throw Error('Too many Realm packs advertised')
+    for(const meta of entries){
+      if(!meta||typeof meta!=='object'||Array.isArray(meta))throw Error('Invalid Realm pack metadata')
+      const key=packKey(meta)
+      const previous=unique.get(key)
+      if(!previous){
+        if(unique.size>=MAX_PACKS)throw Error('Too many Realm packs requested')
+        unique.set(key,{meta:{...meta},origin})
+        continue
+      }
+      duplicateListEntries++
+      const firstSize=previous.meta.size,otherSize=meta.size
+      if(firstSize!=null&&otherSize!=null&&Number(firstSize)!==Number(otherSize))
+        throw Error('Conflicting Realm pack size across lists')
+      const firstCdn=String(previous.meta.cdn_url||'').trim()
+      const otherCdn=String(meta.cdn_url||'').trim()
+      if(firstCdn&&otherCdn&&firstCdn!==otherCdn)
+        throw Error('Conflicting Realm pack URL across lists')
+      // Keep the first (modern) list's order and metadata while filling in
+      // missing fields from legacy lists. Preserve behavior/add-on hints.
+      for(const [name,value] of Object.entries(meta)){
+        if((previous.meta[name]==null||previous.meta[name]==='')&&value!=null&&value!=='')
+          previous.meta[name]=value
+      }
+      previous.meta.addon_pack=previous.meta.addon_pack===true||meta.addon_pack===true
+      previous.meta.has_scripts=previous.meta.has_scripts===true||meta.has_scripts===true
+      if(origin==='behavior')previous.origin='behavior'
+    }
+  }
+  const required=[...unique.values()]
   return {
-    required:advertised,
-    advertised:advertised.length,
+    required,
+    advertised:required.length,
     skippedOptional:0,
     policy:'all-advertised',
     selectionKnown:true,
-    legacyBehaviorCount:behavior.length
+    legacyBehaviorCount:counts.behavior_packs,
+    resourceInfoCount:counts.resource_packs,
+    textureInfoCount:counts.texture_packs,
+    behaviorInfoCount:counts.behavior_packs,
+    duplicateListEntries
   }
 }
 
