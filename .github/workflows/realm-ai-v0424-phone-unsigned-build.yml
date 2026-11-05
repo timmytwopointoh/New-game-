@@ -1,0 +1,100 @@
+name: Realm AI v0.42.4 — GitHub hosted phone APK build (unsigned staging)
+on:
+  push:
+    branches: [fix/realm-ai-v0424-visible-build-20261105]
+    paths:
+      - '.github/workflows/realm-ai-v0424-phone-unsigned-build.yml'
+      - 'realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/**'
+      - 'realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/**'
+      - 'realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build.gradle'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Prepare Android platform and build tools
+        run: |
+          set -euo pipefail
+          if [ ! -f "$ANDROID_HOME/platforms/android-35/android.jar" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" || true
+          fi
+          if [ ! -x "$ANDROID_HOME/build-tools/35.0.0/aapt" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" || true
+          fi
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
+      - name: Restore pinned native runtime from verified original-key public APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .native-base
+          gh release download realm-ai-live-v0419-realm-selector-diagnostics \
+            --repo "${{ github.repository }}" --pattern 'Realm-AI-Live-v0.40.19.apk' --dir .native-base
+          echo 'e96e75deed3e39e2c978ad4390b4757e70173fd92a930aafd945ad5bce1d506e  .native-base/Realm-AI-Live-v0.40.19.apk' | sha256sum -c -
+          python3 - <<'PY'
+          import pathlib,zipfile
+          apk=pathlib.Path('.native-base/Realm-AI-Live-v0.40.19.apk')
+          out=pathlib.Path('realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/src/main/jniLibs/arm64-v8a')
+          out.mkdir(parents=True,exist_ok=True)
+          with zipfile.ZipFile(apk) as z:
+            for name in ('libnode.so','libveilforge_bridge.so','libc++_shared.so'):
+              b=z.read('lib/arm64-v8a/'+name)
+              assert len(b)>1000
+              (out/name).write_bytes(b)
+          print('Pinned ARM64 native libraries restored')
+          PY
+      - name: Install production dependencies and validate modded pack protocol
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test tests/stable-pack-2225-vectors.test.js tests/modded-pack-response-only.test.js tests/eight-pack-complete-download-wire-v0417.test.js tests/original-working-pack-handshake.test.js tests/modded-pack-no-premature-complete-v0423.test.js tests/unknown-terrain-keepalive-v0423.test.js tests/headless-pack-ack-v0424.test.js
+      - name: Compile full release APK
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/android-app
+        run: |
+          set -euo pipefail
+          gradle :app:assembleRelease --no-daemon --console=plain
+      - name: Check Android package, ARM64 engine, and diagnostic source
+        run: |
+          set -euo pipefail
+          APK=realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > /tmp/vf-package.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200057'" /tmp/vf-package.txt
+          grep -q "launchable-activity: name='com.veilforge.realmagent.MainActivity'" /tmp/vf-package.txt
+          python3 - <<'PY'
+          import zipfile
+          p='realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk'
+          with zipfile.ZipFile(p) as z:
+            assert z.testzip() is None
+            for k in ('lib/arm64-v8a/libnode.so','lib/arm64-v8a/libveilforge_bridge.so','assets/nodejs-project/src/connection.js','assets/nodejs-project/src/modded-pack-response.js'):
+              assert k in z.namelist(),k
+          print('Full agent and launcher verified')
+          PY
+          cp "$APK" Realm-AI-Live-v0424-UNSIGNED-NOT-INSTALLABLE.apk
+          sha256sum Realm-AI-Live-v0424-UNSIGNED-NOT-INSTALLABLE.apk > UNSIGNED-SHA256.txt
+      - name: Save private unsigned build artifact for secure signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: realm-ai-live-v0424-unsigned-200057
+          path: Realm-AI-Live-v0424-UNSIGNED-NOT-INSTALLABLE.apk
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
