@@ -9,7 +9,7 @@ import {createRequire} from 'node:module'
 import {attachRealmPacks} from '../src/realm-packs.js'
 
 const require=createRequire(import.meta.url)
-const {createSerializer}=require('bedrock-protocol/src/transforms/serializer.js')
+const {createSerializer,createDeserializer}=require('bedrock-protocol/src/transforms/serializer.js')
 
 function harness(){
  const c=new EventEmitter(),writes=[],sends=[]
@@ -18,6 +18,7 @@ function harness(){
  c.write=originalWrite;c.queue=originalQueue
  c.options={version:'1.26.60'}
  c.serializer=createSerializer('1.26.60')
+ c.deserializer=createDeserializer('1.26.60')
  c.connection={connected:true}
  c.sendBuffer=(bytes,flush)=>sends.push({bytes,flush})
  const dir=mkdtempSync(path.join(os.tmpdir(),'vf-v0423-packs-'))
