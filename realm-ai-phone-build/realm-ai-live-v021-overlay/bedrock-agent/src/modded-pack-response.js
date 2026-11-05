@@ -11,10 +11,13 @@
 // The official docs display capitalized strings; this is a targeted wire A/B
 // experiment, not a proven server expectation. Unmodded worlds are unchanged.
 import {inspectTransportState} from './transport-evidence.js'
+import {assertOfficialPackResponse2225} from './official-pack-request-2225.js'
 const LEGACY={refused:0,send_packs:1,have_all_packs:2,completed:3}
 const CURRENT={refused:0,send_packs:1,have_all_packs:2,completed:3}
 const TITLES={refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}
-const WIRE_TITLES={refused:'cancel',send_packs:'downloading',have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'}
+// Probe Mojang's documented canonical string casing for a modded world only.
+// Do not change the proven vanilla / zero-pack response path.
+const WIRE_TITLES=TITLES
 
 function varuint(bytes,offset){
  let n=0,multiplier=1
@@ -47,6 +50,9 @@ export function encodeCurrentModdedPackResponse(client,packet){
  const stringHeader=varuint(encoded,selector.next)
  const actual=encoded.subarray(stringHeader.next,stringHeader.next+stringHeader.value).toString('utf8')
  if(actual!==title)throw Error('Incorrect serialized pack response name')
+ // Independent check against protocol 2225's complete packet 8 wire layout,
+ // including UUID_version count and the canonical Downloading string.
+ const independent=assertOfficialPackResponse2225(encoded,status,clean.resourcepackids)
  // The serializer already emits the correct 0..3 oneOf variant tag.
  // Never rewrite it to the 1..4 ResourcePackResponse metadata enum.
  const frame=Buffer.from(encoded)
@@ -56,7 +62,7 @@ export function encodeCurrentModdedPackResponse(client,packet){
  return {frame,observation:{
   available:true,verified:true,status,packIdCount:clean.resourcepackids.length,
   version:'1.26.60',statusCode:CURRENT[status],packetId:8,
-  byteLength:frame.length,wireText:title,
+  byteLength:frame.length,wireText:independent.wireText,
   transportConnected:inspectTransportState(client).transportReady
  }}
 }
