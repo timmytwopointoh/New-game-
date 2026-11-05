@@ -200,7 +200,7 @@ export class Connection extends EventEmitter {
         if(!spawnedBeforeUpdate)this.authState=state.stage
         this.log('Realm pack stage: '+state.message)
       }
-    },{handshakeMode,noPackGraceMs:0,headlessPackProbe:true})
+    },{handshakeMode,noPackGraceMs:0,headlessPackProbe:false})
     // The library reports authentication/transport separately from the game join.
     // Do not log tokens, automatically retry or infer that the game has spawned.
     client.on('resource_packs_info',p=>this.loadingLiveness.note('resource_packs_info',String(p?.texture_packs?.length??0)+':'+String(p?.behavior_packs?.length??0)))
