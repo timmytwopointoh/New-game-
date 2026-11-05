@@ -24,7 +24,7 @@ function officialDownloadingFrame(ids){
  // Stable wire contract: variant index, official-cased response string and list.
  // Gophertunnel 0e179fc4 (protocol 2225); see stable-pack-2225-vectors.test.js.
  // packet ID varuint (8), response enum 2, enum name and requested ID array.
- return Buffer.concat([varuint(8),varuint(1),str('Downloading'),
+ return Buffer.concat([varuint(8),varuint(2),str('Downloading'),
    varuint(ids.length),...ids.map(str)])
 }
 test('all eight Realm packs use byte-exact Mojang 2225 Downloading request and complete verified transfer',t=>{
@@ -68,10 +68,10 @@ test('all eight Realm packs use byte-exact Mojang 2225 Downloading request and c
    c.emit('resource_pack_chunk_data',{pack_id:id,chunk_index:1,progress:half,payload:data.subarray(half)})
  }
  assert.equal(h.snapshot().finished,false,'server stack must still arrive')
- assert.deepEqual(frames.map(f=>f.data[1]),[1,2])
+ assert.deepEqual(frames.map(f=>f.data[1]),[2,3])
  c.emit('resource_pack_stack',{resource_packs:announced})
  assert.equal(h.snapshot().finished,true)
- assert.deepEqual(frames.map(f=>f.data[1]),[1,2,3])
+ assert.deepEqual(frames.map(f=>f.data[1]),[2,3,4])
  assert.equal(queue.filter(e=>e.name==='client_cache_status').length,1)
  assert.equal(writes.filter(e=>e.name==='resource_pack_chunk_request').length,16)
  assert.equal(events.at(-1).stage,'packs-ready')
