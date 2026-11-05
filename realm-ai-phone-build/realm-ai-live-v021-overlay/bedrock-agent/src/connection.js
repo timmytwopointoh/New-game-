@@ -7,6 +7,7 @@ import {buildClientOptions,summarizeJoinedRealmMatches} from './options.js'
 import {root} from '../tools/config.js'
 import {attachRealmPacks} from './realm-packs.js'
 import {preparePackResponseWire} from './bedrock-pack-wire-compat.js'
+import {installRealmJoinRetryCompat} from './realm-join-availability-compat.js'
 import {JoinLoadingLiveness,recoveryDecision} from './join-loading-liveness.js'
 import {observeBedrockTransport,transportEvidenceSummary,classifyTransportClose,inspectTransportState} from './transport-evidence.js'
 import {createPackHandshakeForensics} from './pack-handshake-forensics.js'
@@ -114,6 +115,9 @@ export class Connection extends EventEmitter {
           this.survival.commandVocabulary.setScope(String(selected.id))
           this.survival.landmarks.setScope(String(selected.id))
           this.survival.workshop.setScope(String(selected.id))
+          const safeRealmState=String(selected?.state||'').trim().toUpperCase()
+          this.realmDiscovery.selectedRealmState=safeRealmState==='OPEN'?'OPEN':safeRealmState==='CLOSED'?'CLOSED':'UNKNOWN'
+          this.realmDiscovery.selectedRealmExpired=selected?.expired===true
           this.realmDiscovery.state='selected';this.authChallenge=null;this.lastPhase='realm-selected';this.authState='realm-selected'
           this.log('Realm selected; attempting game connection.')
           return selected
@@ -128,10 +132,12 @@ export class Connection extends EventEmitter {
         }
       }
     }
-    // Only a transient 503 on /worlds/{realmId}/join is retried. We never restart Xbox login.
+    // prismarine-realms already makes its own four 5xx retries. Our shim
+    // adds one bounded outer attempt only if those HTTP503 retries all fail.
+    // It never retries Xbox login or any resource-pack traffic.
     options.onRealmJoinRetry=({attempt,totalAttempts,delayMs})=>{
       this.lastPhase='realm-join-retry';this.authState='realm-join-retry';this.lastError=''
-      this.log('Minecraft Realm join request returned HTTP 503; retry '+(attempt+1)+'/'+totalAttempts+' in '+Math.ceil(delayMs/1000)+'s')
+      this.log('Minecraft Realm join request still returned HTTP 503 after library retries; outer retry '+attempt+'/'+(totalAttempts-1)+' in '+Math.ceil(delayMs/1000)+'s')
     }
     this.lastPhase=m.mode==='realm'?'realm-discovery':'minecraft-authentication';this.authState=this.lastPhase
     this.clientIdentity={platform:options.deviceType,deviceOS:options.deviceOS,flow:options.flow,accessTokenExpiryUnits:'seconds'}
@@ -143,6 +149,11 @@ export class Connection extends EventEmitter {
     // Fix 1.26.60's stale third-party pack response enum before serializer compilation.
     // This changes only the pack handshake's status code, not authentication.
     this.packWire=preparePackResponseWire(options,undefined,{strategy:'original-working'})
+    if(m.mode==='realm')installRealmJoinRetryCompat(options.authflow,{
+      onRetry:options.onRealmJoinRetry,
+      isActive:()=>!this.manualRecoveryStop&&this.client?._closed!==true,
+      delayMs:15000
+    })
     const client=bedrock.createClient(options)
     this.client=client
     this.trace?.attachClient(client)
