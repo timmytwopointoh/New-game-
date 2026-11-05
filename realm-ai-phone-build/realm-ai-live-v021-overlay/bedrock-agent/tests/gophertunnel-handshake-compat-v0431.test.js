@@ -56,7 +56,7 @@ test('Gophertunnel timing: cache status on login success before the first pack-i
  assert.equal(payload.length,25)
  const completeId=id+'_'+version
  h.c.emit('resource_pack_data_info',{
-  pack_id:completeId,max_chunk_size:9,chunk_count:3,size:25,
+  pack_id:completeId,max_chunk_size:9,chunk_count:0,size:25,
   hash:crypto.createHash('sha256').update(payload).digest(),pack_type:6
  })
  const requests=h.writes.filter(x=>x.name==='resource_pack_chunk_request')
