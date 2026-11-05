@@ -131,6 +131,28 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // before asking for terrain. Install this narrow queue guard ONLY
   // after a non-empty pack announcement (never for empty worlds).
   let moddedRadiusGuard=null,moddedCacheStatusSent=false
+  let moddedPrematureCompletionGuard=null,suppressedNativePackCompletions=0
+  // The bundled bedrock-protocol createClient registers a one-shot listener
+  // that writes ResourcePackStackFinished IMMEDIATELY on resource_packs_info,
+  // before it has received or downloaded a pack. On a modded Realm, that
+  // contradicts our Downloading response and can start an unready world.
+  // Suppress ONLY that legacy shortcut for 1.26.60 WITH required packs.
+  // The verified original no-pack path and all other packets stay unchanged.
+  const suppressPrematureNativeCompletion=()=>{
+    if(handshakeMode!=='original-working'||!packs.size||
+       String(client?.options?.version)!=='1.26.60'||
+       moddedPrematureCompletionGuard||typeof originalWrite!=='function')return
+    moddedPrematureCompletionGuard=function(name,packet,...args){
+      if(name==='resource_pack_client_response'&&
+         packet?.response_status==='completed'&&
+         String(packet?.response_status_name||'').toLowerCase()==='resourcepackstackfinished'){
+        suppressedNativePackCompletions++
+        return
+      }
+      return originalWrite.call(this,name,packet,...args)
+    }
+    client.write=moddedPrematureCompletionGuard
+  }
   const installModdedRadiusGuard=()=>{
     if(handshakeMode!=='original-working'||!packs.size||moddedRadiusGuard||typeof originalQueue!=='function')return
     moddedRadiusGuard=function(name,packet,...args){
@@ -194,7 +216,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,suppressedNativePackCompletions,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
   }
 
   const response = (name,ids=[]) => {
@@ -341,6 +363,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         byUuid.set(uuid,key)
       }
       if(packs.size){
+        // Install before the library's own later listener on this same
+        // resource_packs_info event sends its premature Completed frame.
+        suppressPrematureNativeCompletion()
         installModdedRadiusGuard()
         if(handshakeMode==='original-working'){
           // Suppress the library's queued cache status until after pack transfer.
@@ -502,8 +527,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);if(noPackAckTimer)clearTimeout(noPackAckTimer);cancellation.abort()})
-  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,suppressedNativePackCompletions,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
+    if(moddedPrematureCompletionGuard&&client.write===moddedPrematureCompletionGuard)client.write=originalWrite
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
     if(moddedRadiusGuard&&client.queue===moddedRadiusGuard)client.queue=originalQueue
