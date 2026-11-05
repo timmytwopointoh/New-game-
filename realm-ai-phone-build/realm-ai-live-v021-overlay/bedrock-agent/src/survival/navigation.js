@@ -413,9 +413,30 @@ export class Navigation{
   }
   if(!this.world.terrainKnown(this.world.position)){
    this.unknownSince??=now
-   try{this.world.requestNearby(this.client)}catch{}
-   if(now-this.unknownSince>=5000){this.stop('Terrain/clearance could not be verified after five seconds; disconnecting with saved login preserved.');this.report(this.reason);this.client.disconnect?.(this.reason);this.client.close?.();this.detach();return}
-  }else this.unknownSince=null
+   // Missing terrain is normal while a required resource-pack stack and world
+   // chunks are loading. Stop actions, NEVER disconnect the Bedrock session.
+   // Let the pack watchdog and the server control connection lifecycle.
+   if(now-this.unknownSince>=5000){
+    const reason='Waiting for server terrain; movement paused, Realm connection kept open.'
+    if(this.job||this.route||this.flight||this.mining.job||this.building.job){
+     this.stop(reason)
+    }else if(!this.unknownTerrainNoticeAt){
+     this.unknownTerrainNoticeAt=now
+     this.report(reason)
+    }
+   }
+   if(now-(this.lastUnknownTerrainRequestAt||0)>=1000){
+    this.lastUnknownTerrainRequestAt=now
+    try{this.world.requestNearby(this.client)}catch(e){this.reportRuntimeError?.(e)}
+   }
+   // No speculative gravity, walking, collision or mining while chunks are
+   // absent. We can become active again when authoritative terrain arrives.
+   this.vy=0
+   return
+  }else{
+   this.unknownSince=null
+   this.unknownTerrainNoticeAt=null
+  }
   const portal=this.portalControl?.(now)
   const hazard=this.job?.waterRouting&&this.shallowWading()?null:this.hazards.control(now)
   this.updateFollow(now)
