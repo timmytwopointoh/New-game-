@@ -24,6 +24,9 @@ jobs:
           cp "$BT/lib/apksigner.jar" tools/apksigner.jar
           cp "$BT/zipalign" tools/zipalign
           cp "$BT/aapt" tools/aapt
+          echo 'Finding Android build-tools Linux C++ runtime dependency'
+          LIBCXX=$(find "$BT" "$ANDROID_HOME/ndk" -name 'libc++.so' -type f 2>/dev/null | head -1 || true)
+          if [ -n "$LIBCXX" ]; then cp "$LIBCXX" tools/libc++.so; else echo 'Android C++ runtime not found in SDK'; fi
           java -jar tools/apksigner.jar --version
           file tools/zipalign
           ldd tools/zipalign || true
