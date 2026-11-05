@@ -44,7 +44,7 @@ function setup(){
  return {...mock,handler,report,close(){handler.cleanup();rmSync(dir,{recursive:true,force:true})}}
 }
 
-test('only modded Realm uses 1.26.60 official-cased Downloading selector 2; packet IDs and reliable send are intact',t=>{
+test('only modded Realm uses 1.26.60 official-cased Downloading oneOf variant 1; packet IDs and reliable send are intact',t=>{
  const h=setup();t.after(h.close)
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
  assert.equal(h.writes.length,1,'modern modded Realm must announce disabled chunk cache before Downloading')
@@ -53,24 +53,23 @@ test('only modded Realm uses 1.26.60 official-cased Downloading selector 2; pack
  assert.equal(h.sends.length,1)
  assert.equal(h.sends[0].immediate,true)
  const frame=h.sends[0].data
- inspect(frame,'Downloading',2)
- const decodeLegacy=Buffer.from(frame);decodeLegacy[1]=1
- assert.deepEqual(h.c.deserializer.parsePacketBuffer(decodeLegacy).data.params.resourcepackids,['abc_1.0.0'])
- assert.equal(h.report.at(-1).packWireCode,2)
+ inspect(frame,'Downloading',1)
+ assert.deepEqual(h.c.deserializer.parsePacketBuffer(frame).data.params.resourcepackids,['abc_1.0.0'])
+ assert.equal(h.report.at(-1).packWireCode,1)
  assert.equal(h.report.at(-1).packWireText,'Downloading')
  assert.equal(h.report.at(-1).packWireIds,1)
  assert.equal(h.report.at(-1).packWireVerified,true)
 })
-test('after modded pack is received and SHA verified, response selectors 3/4 finish the stack',t=>{
+test('after modded pack is received and SHA verified, response oneOf variants 2/3 finish the stack',t=>{
  const h=setup();t.after(h.close)
  const data=Buffer.from('foobar'),hash=crypto.createHash('sha256').update(data).digest()
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
  h.c.emit('resource_pack_data_info',{pack_id:'abc',max_chunk_size:6,chunk_count:1,size:6,hash})
  h.c.emit('resource_pack_chunk_data',{pack_id:'abc',chunk_index:0,progress:0,payload:data})
  h.c.emit('resource_pack_stack',{resource_packs:[]})
- assert.deepEqual(h.sends.map(v=>v.data[1]),[2,3,4])
- inspect(h.sends[1].data,'DownloadingFinished',3)
- inspect(h.sends[2].data,'ResourcePackStackFinished',4)
+ assert.deepEqual(h.sends.map(v=>v.data[1]),[1,2,3])
+ inspect(h.sends[1].data,'DownloadingFinished',2)
+ inspect(h.sends[2].data,'ResourcePackStackFinished',3)
  assert.equal(h.handler.snapshot().finished,true)
  assert.deepEqual(h.writes.map(w=>w.name),['client_cache_status','resource_pack_chunk_request'],'cache status precedes Downloading; chunk requests follow server header')
 })
