@@ -27,7 +27,7 @@ function officialDownloadingFrame(ids){
  return Buffer.concat([varuint(8),varuint(1),str('downloading'),
    varuint(ids.length),...ids.map(str)])
 }
-test('all eight Realm packs use byte-exact Mojang 2225 Downloading request and complete verified transfer',t=>{
+test('all eight Realm packs use bounded parallel chunk requests and complete SHA256 verified transfer',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vf-eight-pack-transfer-'))
  const c=new EventEmitter(),writes=[],queue=[],frames=[],events=[]
  c.options={version:'1.26.60',transport:'nethernet'}
@@ -61,19 +61,31 @@ test('all eight Realm packs use byte-exact Mojang 2225 Downloading request and c
    const half=Math.ceil(data.length/2)
    c.emit('resource_pack_data_info',{pack_id:id,max_chunk_size:half,chunk_count:2,size:data.length,
      hash,pack_type:i===0?6:1,is_premium:false})
-   assert.equal(writes.at(-1).name,'resource_pack_chunk_request')
-   assert.equal(writes.at(-1).data.chunk_index,0)
+   const requests=queue.filter(e=>e.name==='resource_pack_chunk_request'&&e.data.pack_id===id)
+   assert.deepEqual(requests.map(e=>e.data.chunk_index),[0,1],
+     'both chunks must be requested immediately after first pack header')
+   // Reverse completion order, as real NetherNet/pack servers may respond.
+   c.emit('resource_pack_chunk_data',{pack_id:id,chunk_index:1,progress:half,payload:data.subarray(half)})
    c.emit('resource_pack_chunk_data',{pack_id:id,chunk_index:0,progress:0,payload:data.subarray(0,half)})
-   assert.equal(writes.at(-1).data.chunk_index,1)
    c.emit('resource_pack_chunk_data',{pack_id:id,chunk_index:1,progress:half,payload:data.subarray(half)})
  }
  assert.equal(h.snapshot().finished,false,'server stack must still arrive')
+ await new Promise((resolve,reject)=>{
+   const deadline=Date.now()+4000
+   const poll=()=>{
+     if(h.snapshot().verified===8)return resolve()
+     if(Date.now()>deadline)return reject(Error('Full-file SHA-256 verification did not complete'))
+     setTimeout(poll,20)
+   };poll()
+ })
  assert.deepEqual(frames.map(f=>f.data[1]),[1,2])
  c.emit('resource_pack_stack',{resource_packs:announced})
  assert.equal(h.snapshot().finished,true)
  assert.deepEqual(frames.map(f=>f.data[1]),[1,2,3])
  assert.equal(queue.filter(e=>e.name==='client_cache_status').length,1,'announce disabled blob cache once after pack completion')
- assert.equal(writes.filter(e=>e.name==='resource_pack_chunk_request').length,16)
+ assert.equal(queue.filter(e=>e.name==='resource_pack_chunk_request').length,16)
+ assert.equal(writes.length,0,'pack requests use the normal Bedrock batched transport')
+ assert.equal(events.filter(e=>e.stage==='pack-error').length,0)
  assert.equal(events.at(-1).stage,'packs-ready')
  assert.equal(events.at(-1).total,8)
  assert.equal(events.filter(e=>e.stage==='pack-error').length,0)
