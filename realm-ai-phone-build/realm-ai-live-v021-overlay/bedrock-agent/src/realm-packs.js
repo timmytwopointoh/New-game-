@@ -114,10 +114,12 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   if(!['original-working','native-queue','no-cache-status','cache-first'].includes(handshakeMode))throw Error('Unknown safe pack handshake mode')
   const packs = new Map()
   // v0.40.16 controlled modded-only handshake probe; no-mod path remains unchanged.
-  // Protocol 2225 combination test: announce no chunk cache BEFORE the corrected
-  // Downloading(2) request, never afterwards. The native duplicate is intercepted
-  // for modded packs; no-pack worlds retain the prior untouched flow.
-  const deferModernCache=false
+  // v0.42.9 isolated ordering probe: leave the optional blob-cache status out
+  // of modded-pack negotiation until the server has provided a pack stack.
+  // The v0.42.8 client announced cache status immediately before Downloading;
+  // no pack headers arrived. Retain correct oneOf selector 1, lowercase wire
+  // response and all pack IDs. Unmodded worlds keep the original client path.
+  const deferModernCache=true
   const byUuid = new Map()
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
   let verifiedCacheCount=0,missingPackCount=0,noPackAckTimer=null,noPackAckIssued=false,noPackDirectStack=false
@@ -300,8 +302,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     if([...packs.values()].some(p=>!p.ready))return
     finished=true
     response('completed')
-    // In legacy defer mode cache status follows the pack stack; the current
-    // v0.42.8 candidate continues to send it before the modded request.
+    // Report optional blob-cache status only after pack transfer has completed;
+    // avoid interfering with the modded server's initial Downloading exchange.
     if(deferModernCache&&packs.size>0&&!cacheStatusIssued){
       originalQueue.call(client,'client_cache_status',{enabled:false})
       cacheStatusIssued=true
@@ -391,8 +393,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         suppressPrematureNativeCompletion()
         installModdedRadiusGuard()
         if(handshakeMode==='original-working'){
-          // Suppress the library's queued duplicate cache-status announcement.
-          // Keep the original behavior for other protocol versions and all no-mod worlds.
+          // Suppress the library's native cache announcement until the modded
+          // server finishes transfer; preserve native no-pack world ordering.
           moddedCacheStatusSent=true
           if(!deferModernCache){
             client.write('client_cache_status',{enabled:false})
