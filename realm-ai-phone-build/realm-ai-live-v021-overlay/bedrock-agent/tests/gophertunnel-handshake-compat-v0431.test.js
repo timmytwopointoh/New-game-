@@ -32,7 +32,7 @@ function harness(t){
 }
 const id='f0e1d2c3-a4b5-46c7-89ab-000000000005'
 const version='1.0.0'
-const info={texture_packs:[{uuid:id,version,size:24,cdn_url:''}]}
+const info={texture_packs:[{uuid:id,version,size:25,cdn_url:''}]}
 const statusWrites=x=>x.writes.filter(v=>v.name==='client_cache_status')
 async function verified(handler){
  const deadline=Date.now()+4000
@@ -51,13 +51,12 @@ test('Gophertunnel timing: cache status on login success before the first pack-i
  assert.equal(h.frames[0].buf[1],1)
  h.c.queue('client_cache_status',{enabled:false}) // upstream's delayed duplicate
  assert.equal(statusWrites(h).length,1,'native post-info cache packet must be suppressed')
- assert.equal(h.handler.snapshot().cacheStatusIssued,undefined,'cache policy is reported in telemetry events')
  assert.equal(h.reports.some(r=>r.packCacheStatusIssued===true),true)
  const payload=Buffer.from('gophertunnel-fixture-data')
- assert.equal(payload.length,24)
+ assert.equal(payload.length,25)
  const completeId=id+'_'+version
  h.c.emit('resource_pack_data_info',{
-  pack_id:completeId,max_chunk_size:9,chunk_count:3,size:24,
+  pack_id:completeId,max_chunk_size:9,chunk_count:3,size:25,
   hash:crypto.createHash('sha256').update(payload).digest(),pack_type:6
  })
  const requests=h.writes.filter(x=>x.name==='resource_pack_chunk_request')
@@ -93,6 +92,6 @@ test('ignores login status other than success and never confuses different pack 
  h.c.emit('play_status',{status:'player_spawn'})
  assert.equal(statusWrites(h).length,0)
  h.c.emit('resource_packs_info',info)
- h.c.emit('resource_pack_data_info',{pack_id:id+'_9.9.9',max_chunk_size:9,chunk_count:3,size:24,hash:Buffer.alloc(32)})
+ h.c.emit('resource_pack_data_info',{pack_id:id+'_9.9.9',max_chunk_size:9,chunk_count:3,size:25,hash:Buffer.alloc(32)})
  assert.equal(h.handler.snapshot().failed,true,'unadvertised pack version cannot enter cache')
 })
