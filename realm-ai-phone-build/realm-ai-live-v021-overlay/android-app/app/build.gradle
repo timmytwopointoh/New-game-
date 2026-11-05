@@ -6,8 +6,8 @@ android {
         applicationId 'com.veilforge.realmagent.live'
         minSdk 28
         targetSdk 35
-        versionCode 200065
-        versionName '0.43.2-realm-join-availability'
+        versionCode 200068
+        versionName '0.43.5-official-pack-request'
         ndk { abiFilters 'arm64-v8a' }
     }
     sourceSets.main.assets.srcDir "$buildDir/generated/node-assets"
