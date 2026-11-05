@@ -122,6 +122,13 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // response and all pack IDs. Unmodded worlds keep the original client path.
   const deferModernCache=true
   const byUuid = new Map()
+  // The server sends PackDataInfo and chunk packet IDs in either bare UUID
+  // or UUID_version form. Reuse only identifiers advertised by this Realm.
+  const advertisedPackFromWireId=wireId=>{
+    const id=String(wireId??'').trim()
+    const key=byUuid.get(id)||(packs.has(id)?id:null)
+    return key?packs.get(key):null
+  }
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
   let verifiedCacheCount=0,missingPackCount=0,noPackAckTimer=null,noPackAckIssued=false,noPackDirectStack=false
   let headlessProbeSent=false,headlessProbeAccepted=false,headlessProbeSince=0
@@ -149,6 +156,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   // before asking for terrain. Install this narrow queue guard ONLY
   // after a non-empty pack announcement (never for empty worlds).
   let moddedRadiusGuard=null,moddedCacheStatusSent=false
+  let loginCacheQueueGuard=null
   let moddedPrematureCompletionGuard=null,suppressedNativePackCompletions=0
   // The bundled bedrock-protocol createClient registers a one-shot listener
   // that writes ResourcePackStackFinished IMMEDIATELY on resource_packs_info,
@@ -209,6 +217,33 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     }catch(error){cacheQueued=false;throw error}
   }
   if(handshakeMode==='cache-first')client.prependListener('resource_packs_info',cacheFirst)
+  // Gophertunnel's client declares blob-cache support synchronously on
+  // PlayStatusLoginSuccess, BEFORE the ResourcePacksInfo packet. The bundled
+  // Bedrock library queues the same announcement only after packs info,
+  // which is too late for strict servers. Do this once for protocol 2225.
+  // Suppress only the library's later duplicate; no-pack response handling,
+  // saved identity and the Xbox/NetherNet login remain unchanged.
+  const onLoginSuccess=packet=>{
+    if(handshakeMode!=='original-working'||String(client?.options?.version)!=='1.26.60'||
+       packet?.status!=='login_success'||cacheStatusIssued)return
+    try{
+      client.write('client_cache_status',{enabled:false})
+      cacheStatusIssued=true
+      if(typeof originalQueue==='function'){
+        loginCacheQueueGuard=function(name,data,...args){
+          if(name==='client_cache_status'){
+            // On no-pack worlds restore the original queue immediately.
+            // Modded worlds replace this with the radius/duplicate guard.
+            if(!packs.size&&client.queue===loginCacheQueueGuard)client.queue=originalQueue
+            return
+          }
+          return originalQueue.call(this,name,data,...args)
+        }
+        client.queue=loginCacheQueueGuard
+      }
+    }catch(error){failure(error)}
+  }
+  client.on('play_status',onLoginSuccess)
   const cancellation = new AbortController()
   // CDN downloads have their own idle timeout; only watch missing server chunk data.
   const pendingServerPacks=()=>[...packs.values()].some(p=>!p.cdn&&!p.ready)
@@ -493,14 +528,16 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   client.on('resource_pack_data_info',packet=>{
     if(failed)return
     try{
-      const key=byUuid.get(String(packet.pack_id))
-      const p=key?packs.get(key):null
+      const p=advertisedPackFromWireId(packet.pack_id)
       if(!p)throw Error('Received an unexpected Realm pack')
       // CDN owns readiness, cache and temporary files for this pack.
       // Server chunk metadata must never advance or cancel that transfer.
       if(p.cdn)return
       serverPackHeaders++;lastServerPacketAt=now()
       if(p.requested||p.ready)throw Error('Duplicate pack data header')
+      // Match the exact version-qualified ID provided by the server when
+      // sending chunk requests, as Gophertunnel does.
+      p.transferId=String(packet.pack_id)
       p.chunkSize=safeNumber(packet.max_chunk_size,MAX_CHUNK_BYTES)
       p.count=safeNumber(packet.chunk_count,65536)
       p.expected=safeNumber(packet.size,MAX_PACK_BYTES)
@@ -531,7 +568,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         chunkSize:p.chunkSize,chunkCount:p.count,size:p.expected,
         request:index=>{
           const send=typeof client.queue==='function'?client.queue:client.write
-          send.call(client,'resource_pack_chunk_request',{pack_id:p.uuid,chunk_index:index})
+          send.call(client,'resource_pack_chunk_request',{pack_id:p.transferId,chunk_index:index})
         },
         write:(data,offset)=>{
           const count=fs.writeSync(p.fd,data,0,data.length,offset)
@@ -546,7 +583,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   client.on('resource_pack_chunk_data',packet=>{
     if(failed)return
     try{
-      const key=byUuid.get(String(packet.pack_id));const p=key?packs.get(key):null
+      const p=advertisedPackFromWireId(packet.pack_id)
       if(!p||!p.requested||!p.window)throw Error('Unexpected pack data chunk')
       // A late duplicate is not a failed transfer. Keep the authoritative
       // requested index/offset and size checks even after verification.
@@ -606,7 +643,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   })
   client.once('close',()=>{clearInterval(packWatchdog);if(noPackAckTimer)clearTimeout(noPackAckTimer);cancellation.abort()})
   return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,suppressedNativePackCompletions,headlessPackProbe:headlessPackProbe===true,headlessProbeSent,headlessProbeAccepted,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
-    pendingRadius=null;client.off('start_game',onStartGame);client.off('resource_packs_info',cacheFirst)
+    pendingRadius=null;client.off('start_game',onStartGame);client.off('play_status',onLoginSuccess);client.off('resource_packs_info',cacheFirst)
+    if(loginCacheQueueGuard&&client.queue===loginCacheQueueGuard)client.queue=originalQueue
     if(moddedPrematureCompletionGuard&&client.write===moddedPrematureCompletionGuard)client.write=originalWrite
     if(client.write===gatedWrite)client.write=originalWrite
     if(gatedQueue&&client.queue===gatedQueue)client.queue=originalQueue
