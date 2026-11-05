@@ -42,7 +42,7 @@ function harness(){
 function packInfo(){
  return {texture_packs:[{uuid:'realmPack',version:'1.0.0',size:6,cdn_url:''}]}
 }
-test('native immediate Completed is blocked on modded Realm while its eight-pack downloader remains active',t=>{
+test('native immediate Completed is blocked on modded Realm while its eight-pack downloader remains active',async t=>{
  const h=harness();t.after(()=>h.cleanup())
  h.c.emit('resource_packs_info',packInfo())
  assert.equal(h.sends.length,1,'only Downloading is sent at initial pack announcement')
@@ -60,6 +60,12 @@ test('native immediate Completed is blocked on modded Realm while its eight-pack
   hash:crypto.createHash('sha256').update(bytes).digest()
  })
  h.c.emit('resource_pack_chunk_data',{pack_id:'realmPack',chunk_index:0,progress:0,payload:bytes})
+ await new Promise((resolve,reject)=>{
+  const deadline=Date.now()+4000
+  const poll=()=>h.handler.snapshot().finished?resolve():
+   Date.now()>deadline?reject(Error('Pack hash verification incomplete')):setTimeout(poll,15)
+  poll()
+ })
  assert.equal(h.handler.snapshot().finished,true)
  assert.equal(h.sends.length,3,'Downloading, DownloadingFinished, ResourcePackStackFinished')
  assert.deepEqual(h.sends.map(x=>x.bytes[1]),[1,2,3])
