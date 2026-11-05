@@ -30,8 +30,19 @@ function safeNumber(v, max) {
   return n
 }
 function packHash(v) {
-  const b = Buffer.isBuffer(v) ? v : ArrayBuffer.isView(v) ? Buffer.from(v.buffer,v.byteOffset,v.byteLength) : Array.isArray(v) ? Buffer.from(v) : null
-  if (!b || b.length!==32) throw Error('Pack hash missing or unsupported; refusing unverified content')
+  // Bedrock's PackDataInfo Hash is encoded as a string on protocol 2225.
+  // Allow only a full SHA-256 digest as 32 raw bytes, 64 hex digits or
+  // canonical base64 (44 chars with one '='). Never bypass hash verification.
+  let b=Buffer.isBuffer(v)?v:ArrayBuffer.isView(v)?Buffer.from(v.buffer,v.byteOffset,v.byteLength):Array.isArray(v)?Buffer.from(v):null
+  if(typeof v==='string'){
+    const hash=v.trim()
+    if(/^[a-fA-F0-9]{64}$/.test(hash))b=Buffer.from(hash,'hex')
+    else if(/^[A-Za-z0-9+/]{43}=$/.test(hash)){
+      const decoded=Buffer.from(hash,'base64')
+      if(decoded.length===32&&decoded.toString('base64')===hash)b=decoded
+    }
+  }
+  if(!b || b.length!==32) throw Error('Pack hash missing or unsupported; refusing unverified content')
   return b.toString('hex')
 }
 export function explainPackFailure(error){
@@ -239,9 +250,9 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     // no-cache-status checks the protocol's optional-cache negotiation path.
     // v0.40.10 restored the original serializer and can join unmodded
     // Realms. Never alter that case. For a Realm advertising real packs,
-    // Bedrock 1.26.60 instead requires the NEW numeric selector (2 for
-    // Downloading, not legacy 1=Cancel). Build the same packet body with
-    // the old verified serializer, then correct only the response selector.
+    // Bedrock protocol 2225 retains outer variant index 1 for Downloading.
+    // The pack-only response encoder tests Gophertunnel's lowercase wire
+    // spelling while keeping pack IDs, variant shape and framing unchanged.
     const useCurrentModded=handshakeMode==='original-working'&&packs.size>0&&
       String(client?.options?.version)==='1.26.60'
     const packet={
@@ -289,8 +300,8 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     if([...packs.values()].some(p=>!p.ready))return
     finished=true
     response('completed')
-    // Chunk cache negotiation is not needed to receive the resource packs.
-    // Send it after the modded pack stack, not before Downloading.
+    // In legacy defer mode cache status follows the pack stack; the current
+    // v0.42.8 candidate continues to send it before the modded request.
     if(deferModernCache&&packs.size>0&&!cacheStatusIssued){
       originalQueue.call(client,'client_cache_status',{enabled:false})
       cacheStatusIssued=true
@@ -380,7 +391,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
         suppressPrematureNativeCompletion()
         installModdedRadiusGuard()
         if(handshakeMode==='original-working'){
-          // Suppress the library's queued cache status until after pack transfer.
+          // Suppress the library's queued duplicate cache-status announcement.
           // Keep the original behavior for other protocol versions and all no-mod worlds.
           moddedCacheStatusSent=true
           if(!deferModernCache){
