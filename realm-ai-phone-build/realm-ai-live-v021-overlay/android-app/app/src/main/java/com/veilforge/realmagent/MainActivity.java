@@ -35,6 +35,19 @@ public class MainActivity extends Activity {
     GradientDrawable shape(int color){GradientDrawable r=new GradientDrawable();r.setColor(color);r.setCornerRadius(d(14));return r;}
     GradientDrawable circle(int color){GradientDrawable r=new GradientDrawable();r.setColor(color);r.setShape(GradientDrawable.OVAL);return r;}
     TextView txt(String value,int size,int color){TextView v=new TextView(this);v.setText(value);v.setTextColor(color);v.setTextSize(size);return v;}
+    /** Uses Android's installed APK metadata, not a manually edited build label. */
+    String installedBuildLabel(){
+        try {
+            android.content.pm.PackageInfo info=getPackageManager().getPackageInfo(getPackageName(),0);
+            String full=info.versionName==null?"unknown":info.versionName;
+            String shortVersion=full.split("-",2)[0];
+            if(shortVersion.isEmpty())shortVersion=full;
+            return "v"+shortVersion+"\nBuild "+info.getLongVersionCode();
+        } catch (Exception e) {
+            return "Build unavailable";
+        }
+    }
+
     LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
     LinearLayout.LayoutParams space(int pixels){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=d(pixels);return p;}
     EditText edit(String hint){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);e.setHintTextColor(MUTED);e.setTextColor(WHITE);e.setTextSize(15);e.setPadding(d(12),d(12),d(12),d(12));e.setBackground(shape(PANEL));return e;}
@@ -49,7 +62,15 @@ public class MainActivity extends Activity {
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header,space(1));
         powerButton=button("●",this::toggleBotService);powerButton.setPadding(0,0,0,0);header.addView(powerButton,new LinearLayout.LayoutParams(d(42),d(42)));renderPowerButton();
         Button updates=button("Updates",()->AppUpdater.show(this));updates.setContentDescription("Check companion updates");header.addView(updates,new LinearLayout.LayoutParams(d(94),d(44)));
-        View headerSpacer=new View(this);header.addView(headerSpacer,new LinearLayout.LayoutParams(0,d(44),1));
+        // Always visible on the main screen, including when offline or signing in.
+        // The value comes from the actual installed Android package, preventing
+        // our UI from incorrectly claiming a new build when an update failed.
+        TextView buildLabel=txt(installedBuildLabel(),11,PURPLE);
+        buildLabel.setGravity(Gravity.CENTER);
+        buildLabel.setMinHeight(d(44));
+        buildLabel.setMaxLines(2);
+        buildLabel.setContentDescription("Installed Realm AI version and Android build code: "+installedBuildLabel().replace("\n",", "));
+        header.addView(buildLabel,new LinearLayout.LayoutParams(0,d(44),1));
         Button settings=button("⚙",this::showSettings);settings.setContentDescription("Settings");settings.setPadding(0,0,0,0);header.addView(settings,new LinearLayout.LayoutParams(d(42),d(44)));
         connection=txt("Not running",12,MUTED);connection.setMaxLines(4);connection.setPadding(d(12),d(9),d(12),d(9));connection.setBackground(shape(PANEL));connection.setVisibility(View.VISIBLE);root.addView(connection,space(2));
         retryButton=button("Try Again",this::retryBlocked);retryButton.setContentDescription("Retry a blocked task after checking terrain, without adding a duplicate");retryButton.setVisibility(View.GONE);root.addView(retryButton,space(3));
@@ -69,6 +90,9 @@ public class MainActivity extends Activity {
         LinearLayout root=vertical();root.setPadding(d(14),d(12),d(14),d(4));root.setBackground(shape(BASE));
         LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);TextView title=txt("FIELD CONSOLE",20,WHITE);title.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));head.addView(title,new LinearLayout.LayoutParams(0,-2,1));Button emergency=button("STOP",this::stopNow);emergency.setTextColor(0xffff9ca4);head.addView(emergency,new LinearLayout.LayoutParams(d(74),d(48)));root.addView(head);
         ScrollView scroller=new ScrollView(this);LinearLayout body=vertical();body.setPadding(0,d(8),0,d(10));scroller.addView(body);root.addView(scroller,new LinearLayout.LayoutParams(-1,0,1));
+        TextView settingsBuild=txt("Installed "+installedBuildLabel().replace("\n"," · "),13,PURPLE);
+        settingsBuild.setTextIsSelectable(true);
+        body.addView(settingsBuild,space(4));
         settingsStatus=txt("Connection: "+connection.getText(),13,MUTED);settingsStatus.setMaxLines(4);settingsStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);body.addView(settingsStatus,space(3));
         body.addView(sectionLabel("ACCOUNT"),space(15));for(EditText e:new EditText[]{botField,ownerField,realmField}){if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);body.addView(e,space(6));}
         body.addView(txt("Bot and owner use different Xbox gamertags. Leave Realm blank if only one is joined.",12,MUTED),space(6));
