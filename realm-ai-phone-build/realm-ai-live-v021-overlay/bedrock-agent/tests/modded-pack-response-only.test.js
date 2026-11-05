@@ -58,13 +58,19 @@ test('only modded Realm tests Gophertunnel lowercase downloading and oneOf varia
  assert.equal(h.report.at(-1).packWireIds,1)
  assert.equal(h.report.at(-1).packWireVerified,true)
 })
-test('after modded pack is received and SHA verified, response oneOf variants 2/3 finish the stack',t=>{
+test('after modded pack is received and SHA verified, response oneOf variants 2/3 finish the stack',async t=>{
  const h=setup();t.after(h.close)
  const data=Buffer.from('foobar'),hash=crypto.createHash('sha256').update(data).digest('base64')
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
  h.c.emit('resource_pack_data_info',{pack_id:'abc',max_chunk_size:6,chunk_count:1,size:6,hash})
  h.c.emit('resource_pack_chunk_data',{pack_id:'abc',chunk_index:0,progress:0,payload:data})
  h.c.emit('resource_pack_stack',{resource_packs:[]})
+ await new Promise((resolve,reject)=>{
+   const deadline=Date.now()+3000
+   const poll=()=>h.handler.snapshot().finished?resolve():
+     Date.now()>deadline?reject(Error('Verified pack was not completed')):setTimeout(poll,10)
+   poll()
+ })
  assert.deepEqual(h.sends.map(v=>v.data[1]),[1,2,3])
  inspect(h.sends[1].data,'downloadingfinished',2)
  inspect(h.sends[2].data,'resourcepackstackfinished',3)
