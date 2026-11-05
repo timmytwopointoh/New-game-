@@ -1,0 +1,33 @@
+name: Realm AI v0422 — transfer GitHub-compiled unsigned APK for local signing
+on:
+  push:
+    branches: [fix/realm-ai-v0422-phone-pack-test-20261104]
+    paths: ['.github/workflows/realm-ai-v0422-one-time-artifact-transfer.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Download exact GitHub release unsigned compiler output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download realm-ai-live-v0422-unsigned-staging-20261104 \
+            --repo 'timmytwopointoh/New-game-' \
+            --pattern 'Realm-AI-Live-v0422-UNSIGNED-NOT-INSTALLABLE.apk' \
+            --pattern 'UNSIGNED-SHA256.txt'
+          sha256sum -c UNSIGNED-SHA256.txt
+          test -s Realm-AI-Live-v0422-UNSIGNED-NOT-INSTALLABLE.apk
+          echo 'Checked original GitHub compile'
+      - name: Transfer unsigned APK as one-day Actions artifact (never signing material)
+        uses: actions/upload-artifact@v4
+        with:
+          name: realm-v0422-unsigned-compiler-output
+          path: Realm-AI-Live-v0422-UNSIGNED-NOT-INSTALLABLE.apk
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
