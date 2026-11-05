@@ -6,12 +6,15 @@
 // v0.42.6 incorrectly patched that outer tag to 2 for Downloading. That made
 // the server parse a Downloading+8 IDs request as DownloadingFinished, likely
 // causing an immediate disconnect. Preserve the serializer's valid tag and
-// the explicitly cased response string. Other packets and no-pack behavior
-// stay unchanged. Source: Mojang 1.26.60 protocol-2225 packet 8 layout.
+// response string. v0.42.8 tests the lowercase response spelling used by
+// Gophertunnel while preserving the 0..3 oneOf tag and exact pack list.
+// The official docs display capitalized strings; this is a targeted wire A/B
+// experiment, not a proven server expectation. Unmodded worlds are unchanged.
 import {inspectTransportState} from './transport-evidence.js'
 const LEGACY={refused:0,send_packs:1,have_all_packs:2,completed:3}
 const CURRENT={refused:0,send_packs:1,have_all_packs:2,completed:3}
 const TITLES={refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}
+const WIRE_TITLES={refused:'cancel',send_packs:'downloading',have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'}
 
 function varuint(bytes,offset){
  let n=0,multiplier=1
@@ -30,11 +33,11 @@ export function encodeCurrentModdedPackResponse(client,packet){
  const status=String(packet?.response_status||'')
  if(!Object.hasOwn(CURRENT,status))throw Error('Unsupported pack response variant')
  if(typeof client?.serializer?.createPacketBuffer!=='function')throw Error('Bedrock serializer is unavailable')
- const title=TITLES[status]
+ const title=WIRE_TITLES[status]
  const clean={response_status:status,response_status_name:title,resourcepackids:status==='send_packs'?packet.resourcepackids:[]}
  if(status==='send_packs'&&(!Array.isArray(clean.resourcepackids)||clean.resourcepackids.length===0||clean.resourcepackids.length>64))
   throw Error('Invalid count of server-advertised pack IDs')
- // Keep the stable oneOf selector, canonical string and exact pack-ID sequence together.
+ // Keep the stable oneOf selector, lower-case compatibility spelling and exact pack-ID sequence together.
  const encoded=client.serializer.createPacketBuffer({name:'resource_pack_client_response',params:clean})
  if(!Buffer.isBuffer(encoded))throw Error('Unexpected Bedrock frame shape')
  const id=varuint(encoded,0)
