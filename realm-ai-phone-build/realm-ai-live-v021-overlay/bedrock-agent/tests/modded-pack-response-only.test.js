@@ -44,18 +44,18 @@ function setup(){
  return {...mock,handler,report,close(){handler.cleanup();rmSync(dir,{recursive:true,force:true})}}
 }
 
-test('only modded Realm uses 1.26.60 lowercase downloading selector 1; packet IDs and reliable send are intact',t=>{
+test('only modded Realm uses 1.26.60 official-cased Downloading selector 1; packet IDs and reliable send are intact',t=>{
  const h=setup();t.after(h.close)
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
  assert.equal(h.writes.length,0,'modded download request must not start with chunk-cache status')
  assert.equal(h.sends.length,1)
  assert.equal(h.sends[0].immediate,true)
  const frame=h.sends[0].data
- inspect(frame,'downloading',1)
+ inspect(frame,'Downloading',1)
  const decodeLegacy=Buffer.from(frame);decodeLegacy[1]=1
  assert.deepEqual(h.c.deserializer.parsePacketBuffer(decodeLegacy).data.params.resourcepackids,['abc_1.0.0'])
  assert.equal(h.report.at(-1).packWireCode,1)
- assert.equal(h.report.at(-1).packWireText,'downloading')
+ assert.equal(h.report.at(-1).packWireText,'Downloading')
  assert.equal(h.report.at(-1).packWireIds,1)
  assert.equal(h.report.at(-1).packWireVerified,true)
 })
@@ -67,8 +67,8 @@ test('after modded pack is received and SHA verified, response selectors 2/3 fin
  h.c.emit('resource_pack_chunk_data',{pack_id:'abc',chunk_index:0,progress:0,payload:data})
  h.c.emit('resource_pack_stack',{resource_packs:[]})
  assert.deepEqual(h.sends.map(v=>v.data[1]),[1,2,3])
- inspect(h.sends[1].data,'downloadingfinished',2)
- inspect(h.sends[2].data,'resourcepackstackfinished',3)
+ inspect(h.sends[1].data,'DownloadingFinished',2)
+ inspect(h.sends[2].data,'ResourcePackStackFinished',3)
  assert.equal(h.handler.snapshot().finished,true)
  assert.deepEqual(h.writes.map(w=>w.name),['resource_pack_chunk_request','client_cache_status'],'cache status follows chunk request and complete pack stack')
 })
