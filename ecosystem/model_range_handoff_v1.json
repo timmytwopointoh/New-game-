@@ -1,0 +1,91 @@
+{
+  "schema_version": "vq.model-range-handoff/1",
+  "milestone": "M13",
+  "status": "REVIEW_ONLY",
+  "source": {
+    "repository": "timmytwopointoh/Engine-build",
+    "branch": "feature/vq-model-range-android-m13-20261018",
+    "app_module": "model-range-android",
+    "android_application_id": "game.vq.modelrange",
+    "main_activity": "game.vq.runtime.GameActivity"
+  },
+  "purpose": "Standalone offline Android model inspection range; never overwrite Project-hail/New-game- or use as automatic game promotion.",
+  "model_input": {
+    "delivery": "user-selected local document; no cloud runtime requirement",
+    "supported": [
+      "glTF 2.0 .glb embedded triangle geometry (rest pose only)",
+      "OBJ triangle geometry",
+      "VQFORGE 1 bounded construction recipe"
+    ],
+    "unsupported": [
+      "glTF external buffer URLs",
+      "PBR texture evaluation",
+      "skin/animation runtime playback",
+      "nontriangle primitives",
+      "arbitrary material/IK/collision QA"
+    ],
+    "limits": {
+      "glb_max_bytes": 15000000,
+      "vertices_max": 100000,
+      "triangles_max": 60000
+    }
+  },
+  "review_positions": [
+    {
+      "role": "hero_or_main_character",
+      "station": "NEAR",
+      "x": -2.5,
+      "z": -3.5,
+      "review_target": "silhouette and visible details near camera"
+    },
+    {
+      "role": "common_enemy",
+      "station": "MID",
+      "x": 2.2,
+      "z": -12,
+      "review_target": "gameplay readability at medium distance"
+    },
+    {
+      "role": "ambient_prop_or_far_enemy",
+      "station": "FAR",
+      "x": -2.3,
+      "z": -27,
+      "review_target": "distant shape recognition and visual clutter"
+    }
+  ],
+  "interaction": {
+    "walk": true,
+    "run": true,
+    "jump": true,
+    "orbit": true,
+    "pickup_drop": true,
+    "station_fast_travel": true,
+    "interactive_asset_collision": false,
+    "motion_animation_from_imported_glb": false
+  },
+  "asset_lifecycle": {
+    "generated_model_commit": false,
+    "game_promotion": "human approval required",
+    "tested_models": "local transient imports; only source/recipes and compact results persist",
+    "user_requested_apk": "replaceable private prerelease; avoid blocked GitHub Actions artifact quota",
+    "cleanup_scope": "only confirmed unused files within new Model Range module; retain all older game assets and source"
+  },
+  "downstream_roles": {
+    "Project-hail": "Optional visual QA/legacy-game compatibility and knight preservation; no automatic engine replacement",
+    "New-game-": "Potential game-model consumer; manually export candidate to local GLB or OBJ before tester import",
+    "Trion-Assistant-Lab": "Optional future local document handoff; do not wire network or remove chat/game builder UI"
+  },
+  "evidence": {
+    "jvm_core": "Passed in Github build workflow #39098577162",
+    "android_apk_compilation": "Passed in Github build workflow #39098577162",
+    "apk_delivery": "Actions artifact attempt blocked by quota; review prerelease job is separate",
+    "android_emulator": "Pending final M13 pilot",
+    "pbr_or_animation": "Not verified on Android"
+  },
+  "guardrails": [
+    "Do not merge the M13 range directly into existing Project-hail or ECHOFORM applications",
+    "Do not assert green source tests equal graphics acceptance",
+    "No cross-repository model binaries or destructive history changes",
+    "Maintain role-specific manual or review-gated emulator policy"
+  ]
+}
