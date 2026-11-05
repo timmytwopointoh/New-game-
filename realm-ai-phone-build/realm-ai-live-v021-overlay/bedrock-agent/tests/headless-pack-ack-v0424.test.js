@@ -37,7 +37,7 @@ test('headless modded Realm asks for stack, never downloads graphical archives, 
  assert.equal(x.sent[0].frame[1],2,'headless have-all oneOf variant is 2')
  const first=x.c.deserializer.parsePacketBuffer(x.sent[0].frame).data
  assert.equal(first.params.response_status,'have_all_packs')
- assert.equal(first.params.response_status_name,'DownloadingFinished')
+ assert.equal(first.params.response_status_name,'downloadingfinished')
  assert.equal(x.writes.filter(x=>x.name==='resource_pack_chunk_request').length,0)
  assert.equal(existsSync(path.join(x.dir,'cache')),false,'No fake cached/verified files')
  x.c.emit('resource_pack_stack',{resource_packs:[]})
@@ -47,7 +47,7 @@ test('headless modded Realm asks for stack, never downloads graphical archives, 
  assert.equal(x.sent[1].frame[1],3,'completed oneOf variant is 3')
  const last=x.c.deserializer.parsePacketBuffer(x.sent[1].frame).data
  assert.equal(last.params.response_status,'completed')
- assert.equal(last.params.response_status_name,'ResourcePackStackFinished')
+ assert.equal(last.params.response_status_name,'resourcepackstackfinished')
  assert.equal(x.reports.at(-1).stage,'packs-ready')
 })
 test('headless option leaves no-pack Realm exactly on original direct response path',t=>{
