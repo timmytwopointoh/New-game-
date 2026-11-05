@@ -29,6 +29,9 @@ final class ConnectionDiagnostics {
             result.put("exactNameMatches",Math.min(100,nonnegative(input,"exactNameMatches")));
             result.put("petalNameCandidates",Math.min(100,nonnegative(input,"petalNameCandidates")));
             result.put("configuredNamePresent",Boolean.TRUE.equals(input.opt("configuredNamePresent")));
+            String selectedState=input.optString("selectedRealmState","UNKNOWN");
+            result.put("selectedRealmState",Arrays.asList("OPEN","CLOSED").contains(selectedState)?selectedState:"UNKNOWN");
+            result.put("selectedRealmExpired",Boolean.TRUE.equals(input.opt("selectedRealmExpired")));
             result.put("packStage",phase(input.optString("packStage","not-reached")));
             String reason=input.optString("packReason","none");
             Set<String> reasons=new HashSet<>(Arrays.asList("none","storage-low","storage-unknown","pack-size-limit","cdn-access-denied","cdn-missing","cdn-unavailable","network-interrupted","pack-integrity","pack-transfer-failed","server-no-pack-data","server-pack-stalled"));
