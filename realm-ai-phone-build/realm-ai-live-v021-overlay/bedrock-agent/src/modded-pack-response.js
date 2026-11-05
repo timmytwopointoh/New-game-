@@ -1,13 +1,16 @@
 // Bedrock 1.26.60 / protocol 2225 resource-pack response.
-// The oneOf alternative index remains 0..3; Mojang's response type string uses
-// its official case-sensitive values (Cancel, Downloading, ...).
+// On protocol 2225 the enum discriminator shifted from 0..3 to 1..4.
+// The stale bundled serializer still emits the old discriminator, so patch
+// just that ONE byte while retaining its proper frame, pack IDs and case-sensitive
+// response string. Source: Mojang official Bedrock 1.26.60 packet schema.
 // This changes only the modded Realm path, not the proven no-pack login route.
 // Verified against Gophertunnel 0e179fc4 (CurrentProtocol=2225) and frozen
 // external byte fixtures. Preserve the original serializer's complete frame.
 // Only the existing modded-Realm caller uses this helper; no-pack behavior,
 // authentication, native runtime and reliable/encrypted sendBuffer stay intact.
 import {inspectTransportState} from './transport-evidence.js'
-const STABLE={refused:0,send_packs:1,have_all_packs:2,completed:3}
+const LEGACY={refused:0,send_packs:1,have_all_packs:2,completed:3}
+const CURRENT={refused:1,send_packs:2,have_all_packs:3,completed:4}
 const TITLES={refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}
 
 function varuint(bytes,offset){
@@ -25,7 +28,7 @@ function varuint(bytes,offset){
 export function encodeCurrentModdedPackResponse(client,packet){
  if(String(client?.options?.version)!=='1.26.60')throw Error('Modern pack response only supported for Bedrock 1.26.60')
  const status=String(packet?.response_status||'')
- if(!Object.hasOwn(STABLE,status))throw Error('Unsupported pack response variant')
+ if(!Object.hasOwn(CURRENT,status))throw Error('Unsupported pack response variant')
  if(typeof client?.serializer?.createPacketBuffer!=='function')throw Error('Bedrock serializer is unavailable')
  const title=TITLES[status]
  const clean={response_status:status,response_status_name:title,resourcepackids:status==='send_packs'?packet.resourcepackids:[]}
@@ -36,15 +39,23 @@ export function encodeCurrentModdedPackResponse(client,packet){
  if(!Buffer.isBuffer(encoded))throw Error('Unexpected Bedrock frame shape')
  const id=varuint(encoded,0)
  const selector=varuint(encoded,id.next)
- if(id.value!==8||selector.value!==STABLE[status]||selector.next!==id.next+1)
-  throw Error('Original pack response packet is not the expected stable-2225 format')
+ if(id.value!==8||selector.value!==LEGACY[status]||selector.next!==id.next+1)
+  throw Error('Bundled serializer did not emit the exact expected legacy enum shape')
  const stringHeader=varuint(encoded,selector.next)
  const actual=encoded.subarray(stringHeader.next,stringHeader.next+stringHeader.value).toString('utf8')
  if(actual!==title)throw Error('Incorrect serialized pack response name')
- const frame=encoded
+ // Mojang 1.26.60: Cancel=1, Downloading=2,
+ // DownloadingFinished=3, ResourcePackStackFinished=4.
+ // The old mapper generated legacy selector 0..3. Correct only its one-byte
+ // discriminator; transport framing and actual packet content are preserved.
+ const frame=Buffer.from(encoded)
+ frame[id.next]=CURRENT[status]
+ const corrected=varuint(frame,id.next)
+ if(corrected.value!==CURRENT[status]||corrected.next!==selector.next)
+  throw Error('Current Bedrock 2225 response discriminator was not encoded')
  return {frame,observation:{
   available:true,verified:true,status,packIdCount:clean.resourcepackids.length,
-  version:'1.26.60',statusCode:STABLE[status],packetId:8,
+  version:'1.26.60',statusCode:CURRENT[status],packetId:8,
   byteLength:frame.length,wireText:title,
   transportConnected:inspectTransportState(client).transportReady
  }}
