@@ -34,9 +34,8 @@ test('headless modded Realm asks for stack, never downloads graphical archives, 
  assert.equal(x.h.snapshot().headlessProbeAccepted,false)
  assert.equal(x.h.snapshot().finished,false)
  assert.equal(x.sent.length,1)
- assert.equal(x.sent[0].frame[1],3,'headless have-all enum is 3')
- const firstLegacy=Buffer.from(x.sent[0].frame);firstLegacy[1]=2
- const first=x.c.deserializer.parsePacketBuffer(firstLegacy).data
+ assert.equal(x.sent[0].frame[1],2,'headless have-all oneOf variant is 2')
+ const first=x.c.deserializer.parsePacketBuffer(x.sent[0].frame).data
  assert.equal(first.params.response_status,'have_all_packs')
  assert.equal(first.params.response_status_name,'DownloadingFinished')
  assert.equal(x.writes.filter(x=>x.name==='resource_pack_chunk_request').length,0)
@@ -45,9 +44,8 @@ test('headless modded Realm asks for stack, never downloads graphical archives, 
  assert.equal(x.h.snapshot().headlessProbeAccepted,true)
  assert.equal(x.h.snapshot().finished,true)
  assert.equal(x.sent.length,2)
- assert.equal(x.sent[1].frame[1],4,'completed enum is 4')
- const lastLegacy=Buffer.from(x.sent[1].frame);lastLegacy[1]=3
- const last=x.c.deserializer.parsePacketBuffer(lastLegacy).data
+ assert.equal(x.sent[1].frame[1],3,'completed oneOf variant is 3')
+ const last=x.c.deserializer.parsePacketBuffer(x.sent[1].frame).data
  assert.equal(last.params.response_status,'completed')
  assert.equal(last.params.response_status_name,'ResourcePackStackFinished')
  assert.equal(x.reports.at(-1).stage,'packs-ready')
