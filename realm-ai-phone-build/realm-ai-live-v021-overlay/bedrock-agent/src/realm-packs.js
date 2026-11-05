@@ -539,9 +539,14 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       // sending chunk requests, as Gophertunnel does.
       p.transferId=String(packet.pack_id)
       p.chunkSize=safeNumber(packet.max_chunk_size,MAX_CHUNK_BYTES)
-      p.count=safeNumber(packet.chunk_count,65536)
+      const serverChunkCount=safeNumber(packet.chunk_count??0,65536)
       p.expected=safeNumber(packet.size,MAX_PACK_BYTES)
-      if(p.expected>p.size || p.chunkSize<1 || p.count<1 || p.count*p.chunkSize<p.expected || (p.count-1)*p.chunkSize>=p.expected)throw Error('Invalid Realm pack chunk layout')
+      // Gophertunnel calculates the number of chunks from size and chunk size.
+      // Some servers announce zero or inconsistent chunk_count while still
+      // serving the correctly sized archive; bound and derive it ourselves.
+      p.count=p.chunkSize>0?Math.ceil(p.expected/p.chunkSize):0
+      if(p.expected>p.size || p.chunkSize<1 || p.count<1 || p.count>65536)throw Error('Invalid Realm pack chunk layout')
+      p.announcedChunkCount=serverChunkCount
       p.hash=packHash(packet.hash)
       // Transfer header is authoritative about pack kind. The modern info
       // packet combines resources and addons into a single announced list.
