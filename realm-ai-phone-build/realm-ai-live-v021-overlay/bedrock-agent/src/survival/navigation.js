@@ -427,11 +427,33 @@ export class Navigation{
    }
    if(now-(this.lastUnknownTerrainRequestAt||0)>=1000){
     this.lastUnknownTerrainRequestAt=now
-    try{this.world.requestNearby(this.client)}catch(e){this.reportRuntimeError?.(e)}
+    try{this.world.requestNearby(this.client)}catch{}
    }
    // No speculative gravity, walking, collision or mining while chunks are
    // absent. We can become active again when authoritative terrain arrives.
    this.vy=0
+   // NetherNet may still need periodic neutral player inputs even while
+   // geometry is streaming. Keep the session alive without walking, flying,
+   // teleporting or assuming that missing chunks are air.
+   try{
+    const yaw=this.yaw||0,pitch=this.pitch||0,neutral={x:0,z:0}
+    this.client.queue('player_auth_input',{
+     pitch,yaw,position:{...this.world.position},move_vector:neutral,head_yaw:yaw,
+     input_data:['received_server_data'],input_mode:'touch',play_mode:'normal',
+     interaction_model:'crosshair',interact_rotation:{x:pitch,z:yaw},
+     tick:++this.tick,delta:{x:0,y:0,z:0},transaction:null,
+     item_stack_request:null,block_action:null,vehicle_rotation:null,
+     predicted_vehicle:null,analogue_move_vector:neutral,
+     camera_orientation:{x:-Math.sin(yaw*Math.PI/180)*Math.cos(pitch*Math.PI/180),y:-Math.sin(pitch*Math.PI/180),z:Math.cos(yaw*Math.PI/180)*Math.cos(pitch*Math.PI/180)},
+     raw_move_vector:neutral
+    })
+   }catch(e){
+    if(now-(this.lastWaitingInputErrorAt||0)>10000){
+     this.lastWaitingInputErrorAt=now
+     this.report('Waiting for terrain; neutral input could not be sent.')
+     this.reportRuntimeError?.(e)
+    }
+   }
    return
   }else{
    this.unknownSince=null
