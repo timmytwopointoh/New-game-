@@ -76,20 +76,62 @@ export function explainPackFailure(error){
  * per-chunk hashes and private storage rules. No add-on scripts are run.
  */
 export function selectRequiredRealmPacks(packet) {
-  const texture=packet?.texture_packs??packet?.resource_packs??[], behavior=packet?.behavior_packs??[]
-  if(!Array.isArray(texture)||!Array.isArray(behavior))throw Error('Invalid Realm pack list')
-  const advertised=[
-    ...texture.map(meta=>({meta,origin:'resource'})),
-    ...behavior.map(meta=>({meta,origin:'behavior'}))
+  // Bedrock 1.26.x can expose resource_packs, texture_packs, behavior_packs
+  // or a combination of the old and modern lists. An empty texture_packs
+  // array must NOT hide a populated resource_packs array.
+  const fields=[
+    ['resource_packs','resource'],
+    ['texture_packs','resource'],
+    ['behavior_packs','behavior']
   ]
-  if(advertised.length>MAX_PACKS)throw Error('Too many Realm packs requested')
+  const counts={resource_packs:0,texture_packs:0,behavior_packs:0}
+  const unique=new Map()
+  let duplicateListEntries=0
+  for(const [field,origin] of fields){
+    const entries=packet?.[field]??[]
+    if(!Array.isArray(entries))throw Error('Invalid Realm '+field+' list')
+    counts[field]=entries.length
+    if(entries.length>MAX_PACKS)throw Error('Too many Realm packs advertised')
+    for(const meta of entries){
+      if(!meta||typeof meta!=='object'||Array.isArray(meta))throw Error('Invalid Realm pack metadata')
+      const key=packKey(meta)
+      const previous=unique.get(key)
+      if(!previous){
+        if(unique.size>=MAX_PACKS)throw Error('Too many Realm packs requested')
+        unique.set(key,{meta:{...meta},origin})
+        continue
+      }
+      duplicateListEntries++
+      const firstSize=previous.meta.size,otherSize=meta.size
+      if(firstSize!=null&&otherSize!=null&&Number(firstSize)!==Number(otherSize))
+        throw Error('Conflicting Realm pack size across lists')
+      const firstCdn=String(previous.meta.cdn_url||'').trim()
+      const otherCdn=String(meta.cdn_url||'').trim()
+      if(firstCdn&&otherCdn&&firstCdn!==otherCdn)
+        throw Error('Conflicting Realm pack URL across lists')
+      // Keep the first (modern) list's order and metadata while filling in
+      // missing fields from legacy lists. Preserve behavior/add-on hints.
+      for(const [name,value] of Object.entries(meta)){
+        if((previous.meta[name]==null||previous.meta[name]==='')&&value!=null&&value!=='')
+          previous.meta[name]=value
+      }
+      previous.meta.addon_pack=previous.meta.addon_pack===true||meta.addon_pack===true
+      previous.meta.has_scripts=previous.meta.has_scripts===true||meta.has_scripts===true
+      if(origin==='behavior')previous.origin='behavior'
+    }
+  }
+  const required=[...unique.values()]
   return {
-    required:advertised,
-    advertised:advertised.length,
+    required,
+    advertised:required.length,
     skippedOptional:0,
     policy:'all-advertised',
     selectionKnown:true,
-    legacyBehaviorCount:behavior.length
+    legacyBehaviorCount:counts.behavior_packs,
+    resourceInfoCount:counts.resource_packs,
+    textureInfoCount:counts.texture_packs,
+    behaviorInfoCount:counts.behavior_packs,
+    duplicateListEntries
   }
 }
 
@@ -132,7 +174,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let stackReceived=false, finished=false, failed=false,infoReceived=false,downloadFinishedAcknowledged=false
   let verifiedCacheCount=0,missingPackCount=0,noPackAckTimer=null,noPackAckIssued=false,noPackDirectStack=false
   let headlessProbeSent=false,headlessProbeAccepted=false,headlessProbeSince=0
-  let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='all-advertised',legacyBehaviorCount=0
+  let totalBytes=0, skippedOptional=0, activeCdn=0,advertisedPacks=0,packSelectionPolicy='all-advertised',legacyBehaviorCount=0,resourceInfoCount=0,textureInfoCount=0,behaviorInfoCount=0,duplicateListEntries=0
   let serverWaitSince=0,lastServerPacketAt=0,serverPackHeaders=0,serverPackChunks=0,lastWaitNoticeAt=0
   const cdnQueue=[]
   // Original-working mode allows the bundled client to manage its own
@@ -277,7 +319,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
   let storageState={}
   const emit = (stage, message, done=0, total=packs.size,extra={}) => {
     if(extra.freeMB!==undefined)storageState={freeMB:extra.freeMB,neededMB:extra.neededMB,reserveMB:extra.reserveMB}
-    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,suppressedNativePackCompletions,headlessPackProbe:headlessPackProbe===true,headlessProbeSent,headlessProbeAccepted,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
+    report({stage,message,done,total,...storageState,cacheStatusIssued,downloadRequestIssued,packResponseCount,suppressedNativePackCompletions,headlessPackProbe:headlessPackProbe===true,headlessProbeSent,headlessProbeAccepted,serverPackCount:[...packs.values()].filter(p=>!p.cdn).length,cdnPackCount:[...packs.values()].filter(p=>!!p.cdn).length,packSkippedOptional:skippedOptional,packAdvertisedCount:advertisedPacks,packSelectionPolicy,packHandshakeMode:handshakeMode,packInfoReceived:infoReceived,packStackReceived:stackReceived,packVerifiedCacheCount:verifiedCacheCount,packMissingCount:missingPackCount,packNoPackDirectStack:noPackDirectStack,packLegacyBehaviorCount:legacyBehaviorCount,packResourceInfoCount:resourceInfoCount,packTextureInfoCount:textureInfoCount,packBehaviorInfoCount:behaviorInfoCount,packDuplicateListEntries:duplicateListEntries,packResourceClassifiedCount:[...packs.values()].filter(p=>p.category==='resource').length,packBehaviorClassifiedCount:[...packs.values()].filter(p=>p.category==='behavior').length,packAddonClassifiedCount:[...packs.values()].filter(p=>p.category==='addon').length,packHeadersSeenByHandler:serverPackHeaders,packChunksSeenByHandler:serverPackChunks,packWireEncoded:packRequestWire.available,packWireVerified:packRequestWire.verified,packWireVersion:packRequestWire.version,packWireCode:packRequestWire.statusCode||0,packWireBytes:packRequestWire.byteLength||0,packWireText:packRequestWire.wireText||'unknown',packWireIds:packRequestWire.packIdCount||0,packTransportConnectedAtRequest:packRequestWire.transportConnected===true,...extra})
   }
 
   const response = (name,ids=[]) => {
@@ -408,6 +450,10 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       advertisedPacks=selection.advertised
       packSelectionPolicy=selection.policy
       legacyBehaviorCount=selection.legacyBehaviorCount
+      resourceInfoCount=selection.resourceInfoCount
+      textureInfoCount=selection.textureInfoCount
+      behaviorInfoCount=selection.behaviorInfoCount
+      duplicateListEntries=selection.duplicateListEntries
       totalBytes=0
       for(const {meta,origin} of selection.required){
         const key=packKey(meta)
@@ -647,7 +693,7 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     else emit('downloading-packs','Waiting for required Realm packs before completing join')
   })
   client.once('close',()=>{clearInterval(packWatchdog);if(noPackAckTimer)clearTimeout(noPackAckTimer);cancellation.abort()})
-  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,radiusDeferred,gameStarted,skippedOptional,requested:packs.size,suppressedNativePackCompletions,headlessPackProbe:headlessPackProbe===true,headlessProbeSent,headlessProbeAccepted,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
+  return {snapshot:()=>({policy:'all-advertised',handshakeMode,infoReceived,stackReceived,verifiedCacheCount,missingPackCount,noPackDirectStack,selection:packSelectionPolicy,advertised:advertisedPacks,sourceCounts:{resource:resourceInfoCount,texture:textureInfoCount,behavior:behaviorInfoCount,duplicates:duplicateListEntries},radiusDeferred,gameStarted,skippedOptional,requested:packs.size,suppressedNativePackCompletions,headlessPackProbe:headlessPackProbe===true,headlessProbeSent,headlessProbeAccepted,verified:[...packs.values()].filter(p=>p.ready).length,wire:packRequestWire,categoryCounts:{resource:[...packs.values()].filter(p=>p.category==='resource').length,behavior:[...packs.values()].filter(p=>p.category==='behavior').length,addon:[...packs.values()].filter(p=>p.category==='addon').length},failed,finished}),cleanup:()=>{
     pendingRadius=null;client.off('start_game',onStartGame);client.off('play_status',onLoginSuccess);client.off('resource_packs_info',cacheFirst)
     if(loginCacheQueueGuard&&client.queue===loginCacheQueueGuard)client.queue=originalQueue
     if(moddedPrematureCompletionGuard&&client.write===moddedPrematureCompletionGuard)client.write=originalWrite

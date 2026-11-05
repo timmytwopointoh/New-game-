@@ -31,6 +31,7 @@ export function makeSupportSnapshot(connection,now=()=>Date.now()){
   pack:{stage:phase(base.packStage),reason:d.packReason,headers:int(base.packHeaders),chunks:int(base.packChunks),
     requested:int(survival?.connection?.packHandler?.snapshot?.().requested),verified:int(survival?.connection?.packHandler?.snapshot?.().verified),
     advertised:int(base.packAdvertisedCount),optionalSkipped:int(base.packSkippedOptional),
+    resourceListEntries:int(base.packResourceInfoCount),textureListEntries:int(base.packTextureInfoCount),behaviorListEntries:int(base.packBehaviorInfoCount),duplicateListEntries:int(base.packDuplicateListEntries),
     serverPacks:int(base.packServerCount),cdnPacks:int(base.packCdnCount),downloadRequestIssued:base.packDownloadRequestIssued===true,
     resourcePacks:int(base.packResourceClassifiedCount),behaviorPacks:int(base.packBehaviorClassifiedCount),addonPacks:int(base.packAddonClassifiedCount),
     wireVerified:base.packWireVerified===true,wireCode:int(base.packWireCode),wireIds:int(base.packWireIds),transportConnectedAtRequest:base.packTransportConnectedAtRequest===true},
