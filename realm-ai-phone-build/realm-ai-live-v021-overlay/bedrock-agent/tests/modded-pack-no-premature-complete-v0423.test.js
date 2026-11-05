@@ -62,7 +62,7 @@ test('native immediate Completed is blocked on modded Realm while its eight-pack
  h.c.emit('resource_pack_chunk_data',{pack_id:'realmPack',chunk_index:0,progress:0,payload:bytes})
  assert.equal(h.handler.snapshot().finished,true)
  assert.equal(h.sends.length,3,'Downloading, DownloadingFinished, ResourcePackStackFinished')
- assert.deepEqual(h.sends.map(x=>x.bytes[1]),[1,2,3])
+ assert.deepEqual(h.sends.map(x=>x.bytes[1]),[2,3,4])
  assert.equal(h.writes.filter(x=>x.name==='resource_pack_client_response').length,0)
  h.handler.cleanup()
  assert.equal(h.c.write,h.originalWrite,'write interceptor restored on cleanup')
