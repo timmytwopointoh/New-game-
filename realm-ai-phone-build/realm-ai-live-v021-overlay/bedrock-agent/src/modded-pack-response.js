@@ -1,16 +1,16 @@
 // Bedrock 1.26.60 / protocol 2225 resource-pack response.
-// On protocol 2225 the enum discriminator shifted from 0..3 to 1..4.
-// The stale bundled serializer still emits the old discriminator, so patch
-// just that ONE byte while retaining its proper frame, pack IDs and case-sensitive
-// response string. Source: Mojang official Bedrock 1.26.60 packet schema.
-// This changes only the modded Realm path, not the proven no-pack login route.
-// Verified against Gophertunnel 0e179fc4 (CurrentProtocol=2225) and frozen
-// external byte fixtures. Preserve the original serializer's complete frame.
-// Only the existing modded-Realm caller uses this helper; no-pack behavior,
-// authentication, native runtime and reliable/encrypted sendBuffer stay intact.
+// Mojang protocol 2225 keeps the OUTER oneOf variant tag at 0..3:
+// Cancel=0, Downloading=1, DownloadingFinished=2, StackFinished=3.
+// The 1..4 change in Mojang's changelog refers to a separate ResourcePackResponse
+// enum used in metadata, NOT the oneOf selector on the wire. v0.42.5 and
+// v0.42.6 incorrectly patched that outer tag to 2 for Downloading. That made
+// the server parse a Downloading+8 IDs request as DownloadingFinished, likely
+// causing an immediate disconnect. Preserve the serializer's valid tag and
+// the explicitly cased response string. Other packets and no-pack behavior
+// stay unchanged. Source: Mojang 1.26.60 protocol-2225 packet 8 layout.
 import {inspectTransportState} from './transport-evidence.js'
 const LEGACY={refused:0,send_packs:1,have_all_packs:2,completed:3}
-const CURRENT={refused:1,send_packs:2,have_all_packs:3,completed:4}
+const CURRENT={refused:0,send_packs:1,have_all_packs:2,completed:3}
 const TITLES={refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}
 
 function varuint(bytes,offset){
@@ -34,7 +34,7 @@ export function encodeCurrentModdedPackResponse(client,packet){
  const clean={response_status:status,response_status_name:title,resourcepackids:status==='send_packs'?packet.resourcepackids:[]}
  if(status==='send_packs'&&(!Array.isArray(clean.resourcepackids)||clean.resourcepackids.length===0||clean.resourcepackids.length>64))
   throw Error('Invalid count of server-advertised pack IDs')
- // Keep the stable selector, lowercase string and exact pack-ID sequence together.
+ // Keep the stable oneOf selector, canonical string and exact pack-ID sequence together.
  const encoded=client.serializer.createPacketBuffer({name:'resource_pack_client_response',params:clean})
  if(!Buffer.isBuffer(encoded))throw Error('Unexpected Bedrock frame shape')
  const id=varuint(encoded,0)
@@ -44,15 +44,12 @@ export function encodeCurrentModdedPackResponse(client,packet){
  const stringHeader=varuint(encoded,selector.next)
  const actual=encoded.subarray(stringHeader.next,stringHeader.next+stringHeader.value).toString('utf8')
  if(actual!==title)throw Error('Incorrect serialized pack response name')
- // Mojang 1.26.60: Cancel=1, Downloading=2,
- // DownloadingFinished=3, ResourcePackStackFinished=4.
- // The old mapper generated legacy selector 0..3. Correct only its one-byte
- // discriminator; transport framing and actual packet content are preserved.
+ // The serializer already emits the correct 0..3 oneOf variant tag.
+ // Never rewrite it to the 1..4 ResourcePackResponse metadata enum.
  const frame=Buffer.from(encoded)
- frame[id.next]=CURRENT[status]
  const corrected=varuint(frame,id.next)
  if(corrected.value!==CURRENT[status]||corrected.next!==selector.next)
-  throw Error('Current Bedrock 2225 response discriminator was not encoded')
+  throw Error('Bedrock 2225 oneOf variant tag mismatch')
  return {frame,observation:{
   available:true,verified:true,status,packIdCount:clean.resourcepackids.length,
   version:'1.26.60',statusCode:CURRENT[status],packetId:8,
