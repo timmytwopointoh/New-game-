@@ -73,7 +73,7 @@ test('modded Realm requests only server-advertised missing packs using original 
  assert.notEqual(v.c.queue,v.originalQueue,'modded Realm gates premature terrain traffic')
  const countBeforeNativeQueue=v.sent.length
  v.c.queue('client_cache_status',{enabled:false})
- assert.equal(v.sent[0].name,'client_cache_status','modded Realm reports cache capability before requesting packs')
+ assert.equal(v.sent[0].name,'resource_pack_client_response','modded Realm does not send optional cache status before Downloading')
  assert.equal(v.sent.length,countBeforeNativeQueue,'native queued duplicate cache status must be suppressed')
  v.h.cleanup()
  assert.equal(v.c.queue,v.originalQueue,'the original queue is restored on cleanup')
