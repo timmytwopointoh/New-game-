@@ -1,13 +1,14 @@
-// Stable Bedrock 1.26.60 / protocol 2225 pack-response wire contract.
-// The Response oneOf alternative tag is 0..3, and its string is lowercase.
-// Mojang's separately documented enum values 1..4 are not this variant tag.
+// Bedrock 1.26.60 / protocol 2225 resource-pack response.
+// The oneOf alternative index remains 0..3; Mojang's response type string uses
+// its official case-sensitive values (Cancel, Downloading, ...).
+// This changes only the modded Realm path, not the proven no-pack login route.
 // Verified against Gophertunnel 0e179fc4 (CurrentProtocol=2225) and frozen
 // external byte fixtures. Preserve the original serializer's complete frame.
 // Only the existing modded-Realm caller uses this helper; no-pack behavior,
 // authentication, native runtime and reliable/encrypted sendBuffer stay intact.
 import {inspectTransportState} from './transport-evidence.js'
 const STABLE={refused:0,send_packs:1,have_all_packs:2,completed:3}
-const TITLES={refused:'cancel',send_packs:'downloading',have_all_packs:'downloadingfinished',completed:'resourcepackstackfinished'}
+const TITLES={refused:'Cancel',send_packs:'Downloading',have_all_packs:'DownloadingFinished',completed:'ResourcePackStackFinished'}
 
 function varuint(bytes,offset){
  let n=0,multiplier=1
