@@ -2,7 +2,11 @@ name: Realm AI v0.42.3 — GitHub hosted phone APK build (unsigned staging)
 on:
   push:
     branches: [fix/realm-ai-v0423-pack-lifecycle-20261104]
-    paths: ['.github/workflows/realm-ai-v0423-phone-unsigned-build.yml']
+    paths:
+      - '.github/workflows/realm-ai-v0423-phone-unsigned-build.yml'
+      - 'realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/**'
+      - 'realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/**'
+      - 'realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build.gradle'
   workflow_dispatch:
 permissions:
   contents: write
