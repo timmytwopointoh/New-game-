@@ -1,0 +1,128 @@
+name: Realm AI v0.42.4 — publish verified original-key APK for browser download
+on:
+  push:
+    branches: [fix/realm-ai-v0424-visible-build-20261105]
+    paths: ['.github/workflows/realm-ai-v0424-publish-signed-browser-apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    if: github.repository == 'timmytwopointoh/New-game-'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Retrieve exact previously compiled v0424 unsigned Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-build
+          gh run download 41974291748 --repo "${{ github.repository }}" \
+            --name realm-ai-live-v0424-unsigned-200057 --dir release-build
+          test -s release-build/Realm-AI-Live-v0424-UNSIGNED-NOT-INSTALLABLE.apk
+          echo 'c231f5e2448f0425d07aed4374893d9cb4250b9460d22181b9af63b6b9c43037  release-build/Realm-AI-Live-v0424-UNSIGNED-NOT-INSTALLABLE.apk' | sha256sum -c -
+          echo 'Original GitHub compiler artifact validated'
+      - name: Decode reproducible throwaway signer and PUBLIC original-certificate patch
+        run: |
+          set -euo pipefail
+          cd release-build
+          base64 -d ../realm-ai-phone-build/v0423-public-reconstruction/dummy-test-keystore.p12.b64.txt > dummy-only.p12
+          base64 -d ../realm-ai-phone-build/v0424-public-reconstruction/signed-from-dummy.patch.zst.b64.txt > original-public-signatures.patch.zst
+          echo 'd65204f63a1f06c05994d8aa49f4a174b2f125153614f40bbc5ef29aa3365dfc  dummy-only.p12' | sha256sum -c -
+          echo '12295cda7a48eb4d7280a3eed4da0bac7883b6ef1aa77e6c9a5a46ce291deeeb  original-public-signatures.patch.zst' | sha256sum -c -
+          # The committed dummy key is NOT the user's original permanent key.
+          # The binary delta contains only existing publicly verifiable signatures.
+      - name: Reconstruct exact previously verified signed APK without actual signing private key
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$BT/zipalign"
+          test -x "$BT/apksigner"
+          command -v zstd
+          cd release-build
+          "$BT/zipalign" -f -p 4 \
+            Realm-AI-Live-v0424-UNSIGNED-NOT-INSTALLABLE.apk \
+            aligned-unsigned.apk
+          echo 'c231f5e2448f0425d07aed4374893d9cb4250b9460d22181b9af63b6b9c43037  aligned-unsigned.apk' | sha256sum -c -
+          "$BT/apksigner" sign --ks dummy-only.p12 --ks-type PKCS12 \
+            --ks-key-alias realm-live-update \
+            --ks-pass pass:DUMMY_TEST_ONLY_1234 \
+            --out dummy-signed.apk aligned-unsigned.apk
+          echo '264b5c8b343c3ee8051db2fced5892e8444ee221465f2815048c56ba0fe6aa78  dummy-signed.apk' | sha256sum -c -
+          zstd --patch-from=dummy-signed.apk -d original-public-signatures.patch.zst \
+            -o Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk
+          echo 'a7b643cf5fabb6500fda0f87868f7a430e259f378944d5cf2e5eb645a592e6a2  Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk' | sha256sum -c -
+          echo 'Exact signed Android APK reconstructed; original private signing key never present'
+      - name: Verify permanent signer, installed-app identity, and native engine payload
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          APK="release-build/Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" > release-build/signature-check.txt
+          grep -qi 'Signer #1 certificate SHA-256 digest: 77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22' release-build/signature-check.txt
+          "$BT/aapt" dump badging "$APK" > release-build/package-check.txt
+          grep -q "package: name='com.veilforge.realmagent.live' versionCode='200057'" release-build/package-check.txt
+          grep -q "launchable-activity: name='com.veilforge.realmagent.MainActivity'" release-build/package-check.txt
+          "$BT/zipalign" -c -p 4 "$APK"
+          python3 - <<'PY'
+          import zipfile
+          p='release-build/Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk'
+          with zipfile.ZipFile(p) as z:
+            assert z.testzip() is None
+            for item in ('lib/arm64-v8a/libnode.so','lib/arm64-v8a/libveilforge_bridge.so',
+                         'assets/nodejs-project/src/connection.js',
+                         'assets/nodejs-project/src/realm-packs.js',
+                         'assets/nodejs-project/src/survival/navigation.js'):
+              assert item in z.namelist(), item
+          print('Verified Android native agent and updated connection source')
+          PY
+          cp "$APK" Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk
+          sha256sum Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk > SHA256SUMS.txt
+      - name: Create permanent GitHub Release with real APK for phone installation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=realm-ai-live-v0424-headless-plan-b-20261105
+          cat > release-notes.txt <<'TXT'
+          Realm AI Live v0.42.4 — Experimental headless Realm Plan B APK.
+          Android package: com.veilforge.realmagent.live
+          Android versionCode: 200057
+          Expected permanent signer certificate SHA256: 77694d4f0068469cb6f7fd951f84946a4bbb833ae2702dc2f87b9e0c2adabf22
+          Install as an UPDATE without uninstalling to preserve saved Microsoft login.
+          This BUILD 200057 experiments with headless-only resource-pack stack acknowledgment.
+          It does not download graphics, reuse Minecraft private files, or run external mods.
+          The server may reject this shortcut. If it does, export the diagnostics ZIP.
+          The app always shows its actual installed build number at the top.
+          Passing build tests does not prove a live modded Realm join.
+          Export ALL DIAGNOSTICS ZIP from Realm AI Settings if joining fails.
+          Original signing private key and password were never transferred to GitHub.
+          TXT
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$TAG" Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk SHA256SUMS.txt \
+              --clobber --repo "${{ github.repository }}"
+          else
+            gh release create "$TAG" Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk SHA256SUMS.txt \
+              --repo "${{ github.repository }}" --target "$GITHUB_SHA" \
+              --title 'Realm AI Live v0.42.4 — Headless Plan B Android APK' \
+              --notes-file release-notes.txt
+          fi
+          echo 'VF_REALM_AI_V0423_BROWSER_APK_PUBLISHED: yes'
+      - name: Verify GitHub release has downloadable APK asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view realm-ai-live-v0424-headless-plan-b-20261105 --repo "${{ github.repository }}" \
+            --json assets --jq '.assets[] | select(.name == "Realm-AI-Live-v0.42.4-PLAN-B-PHONE-TEST.apk") | [.name, .size, .url] | @tsv' \
+            | tee /tmp/realm-v0424-asset.txt
+          test -s /tmp/realm-v0424-asset.txt
