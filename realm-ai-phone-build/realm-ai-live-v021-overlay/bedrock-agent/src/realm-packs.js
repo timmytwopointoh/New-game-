@@ -9,6 +9,7 @@ import {classifyPack,packDirectory,packFilePath,priorPackLocations,PACK_CATEGORI
 import {inspectPackResponseWire} from './pack-protocol-observer.js'
 import {markPackTransportRequest} from './transport-evidence.js'
 import {sendCurrentModdedPackResponse} from './modded-pack-response.js'
+import {createPackChunkWindow} from './pack-chunk-window.js'
 
 const MAX_PACKS = 64
 const MAX_PACK_BYTES = 512 * 1024 * 1024
@@ -522,9 +523,23 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
       fs.mkdirSync(path.dirname(p.file),{recursive:true,mode:0o700})
       p.tmp=p.file+'.download'
       p.fd=fs.openSync(p.tmp,'w',0o600)
-      p.hashContext=crypto.createHash('sha256')
-      p.next=0;p.written=0;p.requested=true
-      client.write('resource_pack_chunk_request',{pack_id:p.uuid,chunk_index:0})
+      // Gophertunnel-style bounded per-pack sliding window. Queue multiple
+      // requests in one Bedrock batch, rather than waiting for chunk zero.
+      // Uses private disk random-access writes and full-file SHA-256 after.
+      p.written=0;p.requested=true;p.verifying=false
+      p.window=createPackChunkWindow({
+        chunkSize:p.chunkSize,chunkCount:p.count,size:p.expected,
+        request:index=>{
+          const send=typeof client.queue==='function'?client.queue:client.write
+          send.call(client,'resource_pack_chunk_request',{pack_id:p.uuid,chunk_index:index})
+        },
+        write:(data,offset)=>{
+          const count=fs.writeSync(p.fd,data,0,data.length,offset)
+          if(count!==data.length)throw Error('Short Realm pack disk write')
+          p.written+=count
+        }
+      })
+      p.window.pump()
       emit('downloading-packs',`Downloading Realm packs: 0/${packs.size}`)
     }catch(e){failure(e)}
   })
@@ -532,21 +547,36 @@ export function attachRealmPacks(client, cacheDir, report = () => {},
     if(failed)return
     try{
       const key=byUuid.get(String(packet.pack_id));const p=key?packs.get(key):null
-      if(!p || !p.requested || p.ready)throw Error('Unexpected pack data chunk')
-      if(packet.chunk_index!==p.next)throw Error('Out-of-order Realm pack chunk')
-      const data=Buffer.isBuffer(packet.payload)?packet.payload:Buffer.from(packet.payload||[])
-      if(data.length>p.chunkSize || p.written+data.length>p.expected || !data.length)throw Error('Invalid Realm pack chunk size')
-      if(BigInt(packet.progress??p.written)!==BigInt(p.written))throw Error('Realm pack offset mismatch')
-      fs.writeSync(p.fd,data,0,data.length,p.written);p.hashContext.update(data)
-      p.written+=data.length;p.next++
-      serverPackChunks++;lastServerPacketAt=now()
-      if(p.next<p.count){client.write('resource_pack_chunk_request',{pack_id:p.uuid,chunk_index:p.next});return}
+      if(!p||!p.requested||!p.window)throw Error('Unexpected pack data chunk')
+      // A late duplicate is not a failed transfer. Keep the authoritative
+      // requested index/offset and size checks even after verification.
+      if(p.ready)return
+      const result=p.window.accept({
+        index:packet.chunk_index,offset:packet.progress,
+        payload:packet.payload
+      })
+      lastServerPacketAt=now()
+      if(result.duplicate)return
+      serverPackChunks++
+      if(!result.complete||p.verifying)return
+      p.verifying=true
+      if(p.written!==p.expected)throw Error('Incomplete Realm pack download')
       fs.closeSync(p.fd);p.fd=undefined
-      if(p.written!==p.expected || p.hashContext.digest('hex')!==p.hash){const e=Error('Downloaded Realm pack failed SHA-256 verification');e.code='PACK_INTEGRITY_FAILED';throw e}
-      fs.renameSync(p.tmp,p.file);p.tmp=null
-      fs.writeFileSync(p.file+'.sha256',p.hash,{mode:0o600})
-      p.ready=true
-      progress()
+      // Out-of-order downloads cannot be incrementally SHA-256 hashed in
+      // arrival order. Stream the finished file in *file* order, without
+      // reading a 512MB pack into mobile memory or executing any add-on.
+      hashStoredFile(p.tmp).then(digest=>{
+        if(failed||cancellation.signal.aborted)return
+        if(digest!==p.hash){
+          const e=Error('Downloaded Realm pack failed SHA-256 verification')
+          e.code='PACK_INTEGRITY_FAILED'
+          throw e
+        }
+        fs.renameSync(p.tmp,p.file);p.tmp=null
+        fs.writeFileSync(p.file+'.sha256',p.hash,{mode:0o600})
+        p.ready=true
+        progress()
+      }).catch(failure)
     }catch(e){failure(e)}
   })
   client.on('resource_pack_stack',()=>{
