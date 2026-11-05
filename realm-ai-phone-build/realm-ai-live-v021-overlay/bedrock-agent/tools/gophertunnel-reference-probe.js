@@ -17,10 +17,14 @@ preparePackResponseWire({version:'1.26.60'},undefined,{strategy:'original-workin
 const dir=mkdtempSync(path.join(os.tmpdir(),'vf-gophertunnel-ref-'))
 const client=createClient({
   host:'127.0.0.1',port,version:'1.26.60',transport:'raknet',
-  offline:true,username:'VFReferenceProbe',skipPing:true,autoInitPlayer:false
+  offline:true,username:'VFReferenceProbe',skipPing:true,autoInitPlayer:false,
+  raknetBackend:'jsp-raknet',
+  conLog:(...args)=>console.log('VF_REF_BOT_CONNECTION: '+args.map(String).join(' ').slice(0,250))
 })
 let headers=0,chunks=0,ready=false,closed=false,packInfo=false,infoCount=0
 let handler
+for(const event of ['connect_allowed','session','join','play_status','network_settings','server_to_client_handshake'])
+  client.on(event,()=>console.log('VF_REF_BOT_EVENT: '+event))
 function end(ok,why){
   if(closed)return
   closed=true
@@ -51,6 +55,6 @@ client.on('resource_pack_data_info',()=>{
 client.on('resource_pack_chunk_data',()=>{chunks++})
 client.on('resource_pack_stack',()=>{console.log('VF_REF_BOT_STACK: received')})
 client.on('start_game',()=>{console.log('VF_REF_BOT_START_GAME: true');end(headers>0,'start-game')})
-client.on('error',e=>console.error('VF_REF_BOT_CLIENT_ERROR: '+String(e?.message||e).slice(0,220)))
+client.on('error',e=>console.error('VF_REF_BOT_CLIENT_ERROR: '+String(e?.stack||e?.message||e).slice(0,550)))
 client.on('close',()=>end(headers>0,'closed'))
 setTimeout(()=>end(headers>0,'bounded-timeout'),30000)
