@@ -10,7 +10,7 @@ import {attachRealmPacks} from '../src/realm-packs.js'
 import {preparePackResponseWire} from '../src/bedrock-pack-wire-compat.js'
 
 const require=createRequire(import.meta.url)
-const {createSerializer}=require('bedrock-protocol/src/transforms/serializer.js')
+const {createSerializer,createDeserializer}=require('bedrock-protocol/src/transforms/serializer.js')
 preparePackResponseWire({version:'1.26.60'},undefined,{strategy:'original-working'})
 function harness(t){
  const c=new EventEmitter(),writes=[],frames=[]
@@ -19,6 +19,7 @@ function harness(t){
  c.queue=originalQueue;c.write=originalWrite
  c.sendBuffer=(buf,immediate)=>frames.push({buf,immediate})
  c.serializer=createSerializer('1.26.60')
+ c.deserializer=createDeserializer('1.26.60')
  c.options={version:'1.26.60',transport:'nethernet'}
  c.connection={connected:true}
  const dir=mkdtempSync(path.join(tmpdir(),'vf-0431-gophertunnel-'))
@@ -51,7 +52,7 @@ test('Gophertunnel timing: cache status on login success before the first pack-i
  assert.equal(h.frames[0].buf[1],1)
  h.c.queue('client_cache_status',{enabled:false}) // upstream's delayed duplicate
  assert.equal(statusWrites(h).length,1,'native post-info cache packet must be suppressed')
- assert.equal(h.reports.some(r=>r.packCacheStatusIssued===true),true)
+ assert.equal(h.reports.some(r=>r.cacheStatusIssued===true),true)
  const payload=Buffer.from('gophertunnel-fixture-data')
  assert.equal(payload.length,25)
  const completeId=id+'_'+version
