@@ -44,17 +44,17 @@ function setup(){
  return {...mock,handler,report,close(){handler.cleanup();rmSync(dir,{recursive:true,force:true})}}
 }
 
-test('only modded Realm tests Gophertunnel lowercase downloading and oneOf variant 1; packet IDs and reliable send are intact',t=>{
+test('only modded Realm tests Mojang canonical Downloading and oneOf variant 1; packet IDs and reliable send are intact',t=>{
  const h=setup();t.after(h.close)
  h.c.emit('resource_packs_info',{texture_packs:[{uuid:'abc',version:'1.0.0',size:6}]})
  assert.equal(h.writes.length,0,'modded response precedes optional blob-cache status')
  assert.equal(h.sends.length,1)
  assert.equal(h.sends[0].immediate,true)
  const frame=h.sends[0].data
- inspect(frame,'downloading',1)
+ inspect(frame,'Downloading',1)
  assert.deepEqual(h.c.deserializer.parsePacketBuffer(frame).data.params.resourcepackids,['abc_1.0.0'])
  assert.equal(h.report.at(-1).packWireCode,1)
- assert.equal(h.report.at(-1).packWireText,'downloading')
+ assert.equal(h.report.at(-1).packWireText,'Downloading')
  assert.equal(h.report.at(-1).packWireIds,1)
  assert.equal(h.report.at(-1).packWireVerified,true)
 })
@@ -72,8 +72,8 @@ test('after modded pack is received and SHA verified, response oneOf variants 2/
    poll()
  })
  assert.deepEqual(h.sends.map(v=>v.data[1]),[1,2,3])
- inspect(h.sends[1].data,'downloadingfinished',2)
- inspect(h.sends[2].data,'resourcepackstackfinished',3)
+ inspect(h.sends[1].data,'DownloadingFinished',2)
+ inspect(h.sends[2].data,'ResourcePackStackFinished',3)
  assert.equal(h.handler.snapshot().finished,true)
  assert.deepEqual(h.writes.map(w=>w.name),['resource_pack_chunk_request','client_cache_status'],'defer optional cache announcement until after actual transfer completes')
 })
