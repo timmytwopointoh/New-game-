@@ -69,7 +69,7 @@ test('native immediate Completed is blocked on modded Realm while its eight-pack
 })
 test('original unmodded Realm path stays identical, including native automatic complete',t=>{
  const h=harness();t.after(()=>h.cleanup())
- h.c.emit('resource_packs_info',{texture_packs:[],behavior_packs:[]})
+ h.c.emit('resource_packs_info',{texture_packs:[]})
  assert.equal(h.c.write,h.originalWrite,'unmodded must never install interception')
  assert.equal(h.sends.length,0)
  assert.deepEqual(h.writes.filter(x=>x.name==='resource_pack_client_response').map(x=>x.params.response_status),
