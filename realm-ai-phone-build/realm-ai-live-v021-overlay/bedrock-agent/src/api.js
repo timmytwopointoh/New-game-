@@ -113,13 +113,20 @@ export function createApi(config,connection,log=console.log){
    if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
    const companion=connection.survival?.companion?.handle(raw)
    if(companion)return companion
+   // Recognized owner action, not a conversational ping, temporarily yields
+   // the home task. Both phone API and owner-only Realm chat use this path.
+   connection.survival?.companion?.beforeOwnerAction(raw)
    if(/^(?:try again|retry blocked|retry task)$/i.test(String(raw).trim())){
      const nav=connection.survival?.navigation
      if(nav?.job?.kind==='follow')return nav.retryBlockedFollow()
      return connection.survival?.commandPlans?.retryBlocked()||{accepted:false,message:'Join the Realm first.'}
    }
    if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
-     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();connection.cancelAutoRecovery?.();const result=connection.survival?.handle('stop');return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
+     const finishingFollow=/^(?:stop following(?: me)?|finish task)$/i.test(String(raw).trim())
+     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();connection.cancelAutoRecovery?.()
+     const result=connection.survival?.handle('stop')
+     if(finishingFollow)connection.survival?.companion?.social?.finishTask()
+     return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
    }
    let output
    if(connection.survival?.commandPlans){
@@ -248,6 +255,7 @@ export function createApi(config,connection,log=console.log){
      }
     }catch(e){connection.trace?.error(e);output={accepted:false,queued:false,message:'An internal command error was recorded. Export Settings → Bug reports → Export ZIP. '+String(e.message||e).slice(0,100),plans:plans.snapshot()}}
    }else output=planner.handle(raw)||(planner.snapshot().state==='running'?{accepted:true,queued:false,message:'A plan is running; cancel it first.'}:chatDispatch(raw,connection))
+   connection.survival?.companion?.afterOwnerAction(raw,output)
    return output
  }
  const controller={planner,message}
