@@ -72,7 +72,7 @@ export function observeHomeMaterials(world){
  return {stock,dirt,trees,observedBlocks:seen.length}
 }
 
-export function decideFirstHome(world,plot,{serverTime=null,serverTimeAt=0,now=Date.now(),pick=Math.random}={}){
+export function decideFirstHome(world,plot,{serverTime=null,serverTimeAt=0,now=Date.now(),pick=Math.random,mind=null}={}){
  if(!plot||!known(plot.center)||!world||plot.dimension!==world.dimension)throw Error('Home choice requires verified owner land and matching Realm dimension.')
  const deadline=daylightDeadline(serverTime,{receivedAt:serverTimeAt,now})
  const resources=observeHomeMaterials(world)
@@ -94,6 +94,10 @@ export function decideFirstHome(world,plot,{serverTime=null,serverTimeAt=0,now=D
  const sum=candidates.reduce((n,c)=>n+Math.max(0,c.weight),0),roll=clamp(pick())*sum
  let cumulative=0,selected=candidates[candidates.length-1]
  for(const candidate of candidates){cumulative+=Math.max(0,candidate.weight);if(roll<cumulative){selected=candidate;break}}
+ // A fresh real-world observation defines valid choices. Saved experience only
+ // changes their weights; it can NEVER vote an unseen material into inventory.
+ const observedBiome=world.biomeAt?.()?.name||null
+ selected=mind?.choose?.('foundation',candidates,{biome:observedBiome,pick})||selected
  const plan=planUniqueHome(plot,{pick})
  const origin={...site.origin}
  const rooms=['entrance','bedroom','chest-storage','crafting-workshop']
@@ -102,8 +106,11 @@ export function decideFirstHome(world,plot,{serverTime=null,serverTimeAt=0,now=D
  plan.rooms=rooms.map((name,i)=>({name,level:0,
   origin:{x:origin.x+cells[i].x,y:origin.y+1,z:origin.z+cells[i].z},width:roomW,length:roomL}))
  plan.footprint={origin,width,length:width,height:7}
- plan.style=selected.kind==='earthwork'?choice(['burrow-cottage','earthwork-hideaway','hilltop-den'],pick):
-  choice(['woodland-cabin','timber-workshop','forest-hideout'],pick)
+ const viableStyles=selected.kind==='earthwork'?['burrow-cottage','earthwork-hideaway','hilltop-den']:
+   ['woodland-cabin','timber-workshop','forest-hideout']
+ const styleCandidates=viableStyles.map(material=>({material,weight:1}))
+ plan.style=mind?.choose?.('style',styleCandidates,{biome:observedBiome,pick})?.material||
+  choice(viableStyles,pick)
  plan.materials=[selected.material,selected.material,selected.material]
  plan.estimatedBlocks={foundation:width*width,wallShell:(width*4-4)*4,
   roof:width*width,furniture:'bed and stations require server-confirmed inventory and recipes',knownExact:false}
@@ -114,5 +121,5 @@ export function decideFirstHome(world,plot,{serverTime=null,serverTimeAt=0,now=D
  return {design:plan,choice:{kind:selected.kind,foundation:selected.material,width,style:plan.style},
   site:{...site,readiness},materials:{observedDirt:resources.dirt,observedTrees:resources.trees.filter(t=>t.observed).map(t=>t.wood),
    inventoryFoundation:Number(resources.stock[selected.material]||0)},
-  daylight:deadline,priority:deadline.urgent?'starter-shelter-first':'shelter-before-furnishings'}
+  daylight:deadline,learnedPreferenceUsed:!!mind,priority:deadline.urgent?'starter-shelter-first':'shelter-before-furnishings'}
 }
