@@ -41,7 +41,7 @@ test('unknown custom blocks do not get treated like empty harmless terrain',()=>
  const x=constructionExposure(w,[{x:0,y:64,z:0}])
  assert.equal(x.state,'protected')
  assert.equal(x.near.name,'testaddon:mystery')
- const risky={block:(p,layer)=>p.x===0&&p.y===64&&layer===0?null:{name:'stone',shapes:[[0,0,0,1,1,1]]}}
+ const risky={block:(p,layer=0)=>p.x===0&&p.y===64&&layer===0?null:{name:'stone',shapes:[[0,0,0,1,1,1]]}}
  assert.equal(vanillaPathRisk(risky,{x:0,y:64,z:0}),Infinity)
 })
 test('owner grants only exact action and coordinates, with two-minute acknowledgement',()=>{
