@@ -142,3 +142,5 @@ jobs:
 # never the idle no-close state after a completed task.
 
 # Re-run exact full Android lifecycle tests after correcting Robolectric teardown.
+
+# Retry after fixing persistent-home resume fallthrough and owner confirmation regex.
