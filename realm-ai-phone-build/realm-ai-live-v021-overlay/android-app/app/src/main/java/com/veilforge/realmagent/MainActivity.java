@@ -118,7 +118,7 @@ public class MainActivity extends Activity {
         activateButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
         LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask or tell me a task…");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
         input.setOnEditorActionListener((v,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_SEND){send(input.getText().toString());return true;}return false;});
-        rovekin=new RovekinEntryOverlay(this,rovekinStage,root,null);
+        rovekin=new RovekinEntryOverlay(this,rovekinStage,root,RovekinInternalAccess.internalDebugBuildOnly(this));
         rovekin.attach();
         if(recoverMissingBot){
             // Only on a foreground Activity launch; do not run an unseen
