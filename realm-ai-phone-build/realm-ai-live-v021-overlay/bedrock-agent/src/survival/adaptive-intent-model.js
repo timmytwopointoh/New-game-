@@ -57,7 +57,7 @@ export class AdaptiveIntentModel {
   this.examples=Object.create(null);this.error='';this.readOnly=false
   if(!this.file||!fs.existsSync(this.file))return
   try{
-   const saved=readPrivateJson(this.file)
+   const saved=readPrivateJson(this.file,262144)
    if(!safeExamples(saved))throw Error('Invalid model metadata')
    for(const item of saved.examples){
     if(typeof item!=='object'||!item||typeof item.word!=='string'||typeof item.target!=='string')throw Error()
