@@ -47,6 +47,9 @@ public final class RovekinChatPanel {
         this.activity=activity;this.router=router;this.authorization=authorization;
     }
     private int dp(float v){return (int)(v*activity.getResources().getDisplayMetrics().density+.5f);}
+    static int safeBottomPaddingPx(int bottomInsetPx,int minPx,int gutterPx){
+        return Math.max(minPx,Math.max(0,bottomInsetPx)+gutterPx);
+    }
     private GradientDrawable grad(int[] colors,int border,int corner){
         GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TL_BR,colors);
         g.setCornerRadius(dp(corner));g.setStroke(dp(1.6f),border);return g;
@@ -105,7 +108,7 @@ public final class RovekinChatPanel {
                 Insets ime=insets.getInsets(WindowInsets.Type.ime());
                 bottom=Math.max(nav.bottom,ime.bottom);
             }else bottom=insets.getSystemWindowInsetBottom();
-            view.setPadding(0,0,0,Math.max(dp(18),bottom+dp(12)));
+            view.setPadding(0,0,0,safeBottomPaddingPx(bottom,dp(18),dp(12)));
             return insets;
         });
         root.post(root::requestApplyInsets);
