@@ -162,7 +162,7 @@ export class Navigation{
    // that a straight line through trees, holes, hills or water is walkable.
    // Try a few short lateral detours, checking each full route with the
    // current collision, no-water and supported-ground pathfinder.
-   for(const segment of segments.slice(0,12)){
+   for(const segment of segments.slice(0,18)){
     const plan=this.routeTo(segment.goal,start,{
      allowSteps:true,maxNodes:768,allowDirt:true,allowWater:false
     })
