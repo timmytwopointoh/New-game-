@@ -111,7 +111,15 @@ public class MainActivity extends Activity {
         activateButton=button("▶",this::activateQueuedPlans);activateButton.setTextSize(22);activateButton.setBackground(circle(0xff208b66));activateButton.setContentDescription("Activate all waiting commands");actions.addView(activateButton,new FrameLayout.LayoutParams(d(74),d(74),Gravity.CENTER));
         commandsButton=button("Commands",this::showJobs);commandsButton.setBackground(shape(0xff963b49));commandsButton.setContentDescription("Commands: open the supported command picker");actions.addView(commandsButton,new FrameLayout.LayoutParams(d(100),d(60),Gravity.END|Gravity.CENTER_VERTICAL));
         // Chat controls the production app; raw command cards belong to the test APK only.
-        final boolean developerBuild=(getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0;
+        // Release on physical phones is chat-only. The pre-existing private
+        // Android emulator lab may use the advanced command picker for isolated
+        // controller tests; no remote service or authentication bypass added.
+        String product=Build.PRODUCT==null?"":Build.PRODUCT.toLowerCase(java.util.Locale.ROOT);
+        String fingerprint=Build.FINGERPRINT==null?"":Build.FINGERPRINT.toLowerCase(java.util.Locale.ROOT);
+        final boolean emulatorLab=product.contains("sdk_gphone") ||
+            fingerprint.contains("sdk_gphone") || fingerprint.startsWith("generic/");
+        final boolean developerBuild=((getApplicationInfo().flags &
+            android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0)||emulatorLab;
         commandsButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
         activateButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
         LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask or tell me a task…");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
