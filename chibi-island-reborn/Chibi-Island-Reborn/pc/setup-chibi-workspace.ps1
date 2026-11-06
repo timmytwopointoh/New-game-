@@ -18,8 +18,17 @@ if ($PublishPrivateGitHub) {
   if (-not $gh) { throw "gh command unavailable" }
   & gh auth status *> $null
   if ($LASTEXITCODE -ne 0) { throw "gh not authenticated" }
-  & gh repo view $Repo --json visibility *> $null
-  if ($LASTEXITCODE -eq 0) { throw "Target repo already exists; no overwrite" }
+  # A missing destination is expected. PowerShell 5.1 can emit a NativeCommandError
+  # for gh stderr before $LASTEXITCODE can be evaluated under Stop preference.
+  $prior = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & gh repo view $Repo --json visibility *> $null
+    $alreadyExists = ($LASTEXITCODE -eq 0)
+  } finally {
+    $ErrorActionPreference = $prior
+  }
+  if ($alreadyExists) { throw "Target repo already exists; no overwrite" }
 }
 New-Item -ItemType Directory -Path $dest -ErrorAction Stop | Out-Null
 Get-ChildItem -LiteralPath $SourceFolder -Force | Copy-Item -Destination $dest -Recurse -Force
