@@ -10,7 +10,7 @@ function show(id){for(let n of ["front","crewScreen","creditsScreen","miniScreen
 function note(text){const n=$("notice");n.textContent=text;n.style.opacity="1";toastTimer=performance.now()+3000;}
 function crewCard(c){let locked=c.locked&&!profile.unlockedIds.includes(c.id),selected=chosen===c.id,icon=c.id==="jimothy"?"🦝":c.id==="spooderman"?"🕷️":c.id==="eddie"?"🏒":c.id==="tera"?"🍹":c.id==="tim"?"🪣":"🧑‍🍳";return '<button type="button" class="crewCard '+(selected?"active ":"")+(locked?"locked":"")+'" data-id="'+c.id+'" style="--personColor:'+c.color+'"><span class="portrait">'+icon+'</span><strong>'+c.name+'</strong><small>'+c.job+'</small><em>'+(locked?"🔒 "+c.cost+" coins":c.coinMult+"× COINS")+'</em></button>';}
 function roster(){const box=$("crewCards");box.innerHTML=D.crew.map(crewCard).join("");box.querySelectorAll("[data-id]").forEach(el=>el.addEventListener("click",()=>{chosen=el.dataset.id;roster();}));let c=byId(chosen),locked=c.locked&&!profile.unlockedIds.includes(c.id);$("crewDetails").textContent=c.perk+" · "+c.coinMult+"× coins"+(locked?" · Unlock for "+c.cost+" coins":"")+" · Wallet "+profile.coins;
- $("startShift").textContent=locked?"UNLOCK CREW":"START SHIFT";box.querySelector(".crewCard.active")?.scrollIntoView({block:"nearest",inline:"nearest"});}
+ $("startShift").textContent=locked?"UNLOCK CREW":"START SHIFT";{let selectedCard=box.querySelector(".crewCard.active");if(selectedCard)selectedCard.scrollIntoView({block:"nearest",inline:"nearest"});}}
 function start(){let role=byId(chosen);if(!role)return;if(role.locked&&!profile.unlockedIds.includes(role.id)){if(profile.coins<role.cost){note("Earn "+(role.cost-profile.coins)+" more coins to unlock "+role.name);return;}profile.coins-=role.cost;profile.unlockedIds.push(role.id);save();roster();note(role.name+" unlocked!");return;}
  profile.selected=chosen;S.roleId=chosen;S.player.x=clamp(profile.x||15,1,46);S.player.z=clamp(profile.z||20,2,34);S.playing=true;S.paused=false;activeMini=null;S.clock=(.18+profile.shiftSeconds/170)%1;show(null);hud();save();note("Welcome to the cove, "+role.name+"!");}
 function circuit(){let r=byId(S.roleId)||D.crew[0];return D.circuits[r.kind]||D.circuits.server;}
@@ -48,7 +48,7 @@ function miniOpen(s){
   }
  });
 }
-function pause(){if(!S.playing)return;if(activeMini){activeMini.challenge?.stop();activeMini=null;S.paused=false;}S.paused=true;save();show("pauseScreen");}
+function pause(){if(!S.playing)return;if(activeMini){(activeMini.challenge&&activeMini.challenge.stop());activeMini=null;S.paused=false;}S.paused=true;save();show("pauseScreen");}
 function resume(){if(!S.playing)return;S.paused=false;show(null);}
 function menu(){save();activeMini=null;S.paused=false;S.playing=false;show("front");}
 let joy={x:0,y:0},keys=new Set(),pointer=null;
@@ -81,7 +81,7 @@ function tick(t){if(S.last&&t-S.last<30){requestAnimationFrame(tick);return;}if(
 function exportReport(){
  const record={schema:1,game:"Peks Plunder",build:"Peks Engine 0.2 TEST",generatedAt:new Date().toISOString(),
   day:profile.days,coins:profile.coins,stars:profile.stars,completed:profile.completed,
-  role:S.roleId,shiftSeconds:Math.round(profile.shiftSeconds),task:target()?.id||null,
+  role:S.roleId,shiftSeconds:Math.round(profile.shiftSeconds),task:target()&&target().id||null,
   position:S.playing?{x:Math.round(S.player.x*100)/100,z:Math.round(S.player.z*100)/100}:null,
   viewport:{width:innerWidth,height:innerHeight},webgl2:!!(document.createElement("canvas").getContext("webgl2")),
   errors:(S.errors||[]).slice(-20)};
@@ -101,7 +101,7 @@ function init(){load();chosen=profile.selected&&byId(profile.selected)?profile.s
  $("creditsButton").addEventListener("click",()=>show("creditsScreen"));$("creditsBack").addEventListener("click",()=>show("front"));
  $("reportBtn").addEventListener("click",exportReport);$("pauseBtn").addEventListener("click",pause);$("resumeBtn").addEventListener("click",resume);$("menuBtn").addEventListener("click",menu);
  $("actionBtn").addEventListener("click",()=>{let n=nearest(),s=target();if(n.d>2.6){note("Move closer to a work station");return;}if(!s||n.s.id!==s.id){note("Your next task is at "+(s?s.name:"the cove"));return;}miniOpen(n.s);});
- $("miniLeave").addEventListener("click",()=>{if(activeMini)activeMini.challenge?.stop();activeMini=null;S.paused=false;show(null);});
+ $("miniLeave").addEventListener("click",()=>{if(activeMini)(activeMini.challenge&&activeMini.challenge.stop());activeMini=null;S.paused=false;show(null);});
  addEventListener("keydown",e=>{let k=e.key.toLowerCase();keys.add(k);if(k.startsWith("arrow")||k===" ")e.preventDefault();if(k==="escape"&&S.playing)pause();if(k==="e"&&S.playing&&!S.paused)$("actionBtn").click();});
  addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));addEventListener("blur",()=>{keys.clear();if(S.playing)save();});
  addEventListener("error",e=>{S.errors.push(String(e.message||"Unknown error").slice(0,240));if(S.errors.length>30)S.errors.shift();});bindJoy();roster();show("front");requestAnimationFrame(tick);}

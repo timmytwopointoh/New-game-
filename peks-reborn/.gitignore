@@ -1,0 +1,12 @@
+# Peks Engine output / local machine dependencies
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/
+builds/
+.DS_Store
+*.log
+*.apk
+*.aab
+*.keystore
+*.jks
