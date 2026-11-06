@@ -222,3 +222,6 @@ jobs:
             --title "Rovekin v0.44.4 — separate-install UI preview" \
             --notes-file rovekin-output/release-notes.txt
           gh release view "$TAG" --repo "timmytwopointoh/New-game-" --json assets --jq '.assets[] | select(.name == "Rovekin-v0444-200076-INSTALLABLE-SEPARATE-PREVIEW.apk") | [.name, .size, .url] | @tsv'
+
+# One corrective execution after preserving the Microsoft-dialog regression and
+# updating old view-layout tests to the new real native Rovekin surface.
