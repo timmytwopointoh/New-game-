@@ -24,8 +24,9 @@ const isRecord=value=>value!==null&&typeof value==='object'&&!Array.isArray(valu
 const entriesFor=kind=>kind==='action'?'actions':kind==='material'?'materials':null
 const wordPattern=word=>word.split(' ').map(escapeRegex).join('[ _-]+')
 export class CommandVocabulary{
- constructor({directory=null,scope=null}={}){this.directory=directory;this.setScope(scope)}
+ constructor({directory=null,scope=null,intentModel=null}={}){this.directory=directory;this.intentModel=intentModel;this.setScope(scope)}
  setScope(scope){
+  this.intentModel?.setScope(scope)
   this.scope=scope||null;this.actions=Object.create(null);this.materials=Object.create(null);this.definitions=Object.create(null);this.readOnly=false;this.error=''
   this.file=this.directory&&scope?path.join(this.directory,crypto.createHash('sha256').update(String(scope)).digest('hex')+'.json'):null
   if(!this.file||!fs.existsSync(this.file))return
@@ -82,12 +83,14 @@ export class CommandVocabulary{
   if(!Object.hasOwn(this[field],key)&&Object.keys(this.actions).length+Object.keys(this.materials).length>=200)throw Error('Vocabulary holds 200 mappings. Forget an old mapping before adding another.')
   const actions={...this.actions},materials={...this.materials};(kind==='action'?actions:materials)[key]=learned
   this.persist(actions,materials);this.actions=actions;this.materials=materials
+  if(kind==='action')try{this.intentModel?.train(key,learned,{existingOwnerMapping:true})}catch{}
   return {accepted:true,queued:false,message:`Learned ${JSON.stringify(key)} as ${kind} ${learned}. It is saved for this Realm; complete direct instructions can run without Activate, while saved cards remain manual.`}
  }
  forget(kind,word){
   const field=entriesFor(kind),key=normalize(word);if(!field||!Object.hasOwn(this[field],key))throw Error('That learned word is not saved in this Realm.')
   const actions={...this.actions},materials={...this.materials};delete (kind==='action'?actions:materials)[key]
   this.persist(actions,materials);this.actions=actions;this.materials=materials
+  if(kind==='action')try{this.intentModel?.forget(key)}catch{}
   return {accepted:true,queued:false,message:`Forgot the learned ${kind} word ${JSON.stringify(key)} for this Realm. Built-in vocabulary is unchanged.`}
  }
  list(){return {scopeKnown:!!this.scope,actions:copy(this.actions),materials:copy(this.materials),count:Object.keys(this.actions).length+Object.keys(this.materials).length,capacity:200,source:'owner-confirmed corrections',error:this.error}}
@@ -116,7 +119,10 @@ export function suggestAction(raw,vocabulary){
  const canonical=commandCatalog.map(d=>[normalize(d.template.split(/[ {]/)[0]),d.id])
  const entries=[...canonical,...Object.entries(actionAliases).flatMap(([id,words])=>words.map(word=>[normalize(word),id])),...Object.entries(vocabulary?.actions||{})]
  const best=entries.map(([word,id])=>({word,id,distance:distance(first,word)})).sort((a,b)=>a.distance-b.distance||a.word.localeCompare(b.word))[0]
- if(!best||best.distance>Math.max(1,Math.floor(first.length*0.22)))return null
+ if(!best||best.distance>Math.max(1,Math.floor(first.length*0.22))){
+   const suggestion=vocabulary?.intentModel?.suggest(first)
+   return suggestion?{word:first,id:suggestion.id,source:'trained',confidence:suggestion.confidence,matched:suggestion.matched}:null
+ }
  return best
 }
 export function resolveActionTarget(raw){
