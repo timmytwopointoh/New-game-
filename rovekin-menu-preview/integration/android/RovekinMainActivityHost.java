@@ -37,6 +37,7 @@ public final class RovekinMainActivityHost implements RovekinActionRouter.Host {
     @Override public void openSavedPlans() { activity.showPlans(); }
     @Override public void activateQueue() { activity.activateQueuedPlans(); }
     @Override public void stopCurrentJob() { activity.stopNow(); }
+    @Override public void startBotService() { activity.startBot(); }
     @Override public void retryBlockedJob() { activity.retryBlocked(); }
     @Override public void openSignIn() { activity.showAuth(); }
     @Override public void openAppUpdates() { AppUpdater.show(activity); }
