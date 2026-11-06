@@ -7,6 +7,27 @@ import {isTreeLog} from './internal-skills.js'
 
 const MAX=384
 const finite=p=>p&&[p.x,p.y,p.z].every(Number.isSafeInteger)
+const cleanName=n=>String(n||'').replace(/^minecraft:/,'').toLowerCase()
+const cleanQuery=n=>cleanName(n).replace(/[^a-z0-9_ -]/g,'').trim().replace(/[ -]+/g,'_').slice(0,72)
+const hypot=(a,b)=>a&&b?Math.hypot(a.x-b.x,a.z-b.z):Infinity
+// A server biome palette is indexed at the remembered BLOCK, not just at
+// the player. biomeAt expects eye-height coordinates for its Y subtraction.
+export const biomeAtBlock=(world,p)=>{
+ if(!finite(p)||typeof world?.biomeAt!=='function')return null
+ const result=world.biomeAt({x:p.x+.5,y:p.y+1.62,z:p.z+.5})
+ const name=cleanName(result?.name)
+ return name&&/^[a-z0-9_]{2,64}$/.test(name)?name:null
+}
+const familyMatch=(name,query)=>{
+ const n=cleanName(name),q=cleanQuery(query)
+ if(!q)return false
+ if(n===q||n.replace(/_/g,' ').includes(q.replace(/_/g,' ')))return true
+ if(['wood','log','logs','timber','tree','trees'].includes(q))return /_(?:log|wood|stem|hyphae)$/.test(n)
+ if(['stone','rock','rocks'].includes(q))return /(?:stone|andesite|granite|diorite|cobblestone|tuff|deepslate)/.test(n)
+ if(['dirt','soil','earth'].includes(q))return /^(?:dirt|grass_block|coarse_dirt|rooted_dirt|podzol|mycelium|mud)$/.test(n)
+ if(q==='wool')return /_wool$/.test(n)
+ return false
+}
 export const noteworthy=name=>isTreeLog(name)||/(?:_ore|ancient_debris|chest|crafting_table|spawner|lava|water)$/.test(name)
 const kind=name=>isTreeLog(name)?'tree':/(?:_ore|ancient_debris)$/.test(name)?'ore':'landmark'
 const identifier=(b)=>`${b.dimension}:${b.kind}:${b.kind==='tree'?`${b.x},${b.z}`:`${b.x},${b.y},${b.z}`}`
@@ -37,7 +58,7 @@ export class LandmarkMemory{
   let newRecords=0
   for(const p of visible||[]){
    if(!finite(p)||!noteworthy(p.name))continue
-   const item={x:p.x,y:p.y,z:p.z,dimension,kind:kind(p.name),name:p.name,lastSeenAt:now}
+   const item={x:p.x,y:p.y,z:p.z,dimension,kind:kind(p.name),name:p.name,biome:typeof p.biome==='string'?cleanName(p.biome):null,lastSeenAt:now}
    const id=identifier(item),existing=this.entries.findIndex(b=>identifier(b)===id)
    if(existing>=0){const previous=this.entries[existing];if(item.kind==='tree'&&previous.y<item.y)item.y=previous.y;this.entries[existing]=item}
    else{this.entries.push(item);newRecords++}
@@ -53,7 +74,7 @@ export class LandmarkMemory{
   // Short aggregate observation, rather than saving thousands of ordinary
   // dirt/stone positions. These are actual exposed, line-of-sight materials.
   const materials=(visible?.counts||[]).slice(0,6).map(([name,count])=>[String(name).slice(0,72),count])
-  const entry={...pos,dimension:world.dimension,materials,biome:world.biomeAt?.()?.name||null,lastSeenAt:now}
+  const entry={...pos,dimension:world.dimension,materials,biome:biomeAtBlock(world,pos),lastSeenAt:now}
   this.checkpoints=this.checkpoints.filter(p=>p.dimension!==entry.dimension||Math.hypot(p.x-pos.x,p.z-pos.z)>2)
   this.checkpoints.unshift(entry);this.checkpoints=this.checkpoints.slice(0,128)
   this.persist()
@@ -63,18 +84,56 @@ export class LandmarkMemory{
   // World.scan first checks received blocks and real line of sight; no blind
   // chunk-cache probing or scanning through solid terrain is permitted.
   const results=world.scan(null,{yaw,fov,range:8,filter:noteworthy,maxFound:96})
-  const updated=this.remember(results?.found,world.dimension,now)
-  const nearby=world.scan(null,{yaw,fov,range:4,maxFound:64,filter:name=>typeof name==='string'&&!['air','cave_air','void_air'].includes(name)})?.found||[]
-  if(this.scope&&!this.readOnly){for(const p of nearby){if(!finite(p)||!p.name||['air','cave_air','void_air'].includes(p.name))continue;const id=q=>`${q.dimension}:${q.name}:${Math.floor(q.x/8)},${Math.floor(q.y/8)},${Math.floor(q.z/8)}`,record={x:p.x,y:p.y,z:p.z,name:p.name,dimension:world.dimension,biome:world.biomeAt?.()?.name||null,lastSeenAt:now};this.materials=this.materials.filter(q=>id(q)!==id(record));this.materials.unshift(record)}this.materials=this.materials.slice(0,768)}
+  const updated=this.remember((results?.found||[]).map(p=>({...p,biome:biomeAtBlock(world,p)})),world.dimension,now)
+  const nearby=world.scan(null,{yaw,fov,range:8,maxFound:128,filter:name=>typeof name==='string'&&!['air','cave_air','void_air'].includes(cleanName(name))})?.found||[]
+  if(this.scope&&!this.readOnly){for(const p of nearby){if(!finite(p)||!p.name||['air','cave_air','void_air'].includes(p.name))continue;const id=q=>`${q.dimension}:${q.name}:${Math.floor(q.x/8)},${Math.floor(q.y/8)},${Math.floor(q.z/8)}`,record={x:p.x,y:p.y,z:p.z,name:p.name,dimension:world.dimension,biome:biomeAtBlock(world,p),lastSeenAt:now};this.materials=this.materials.filter(q=>id(q)!==id(record));this.materials.unshift(record)}this.materials=this.materials.slice(0,768)}
   this.recordCheckpoint(world,{yaw,now});if(nearby.length)this.persist()
   return updated
  }
- treeCandidates(dimension,position,{exclude=new Set()}={}){
+ // Coordinates are observed historical clues; never treat a remembered
+ // resource or biome as a fresh server block, mining approval or safe route.
+ resourceCandidates(raw,dimension,position,{biome=null,limit=8}={}){
+  const q=cleanQuery(raw),filterBiome=biome?cleanQuery(biome):null
+  if(!q||!Number.isSafeInteger(dimension))return []
+  const candidates=[...this.materials,...this.entries]
+   .filter(p=>p.dimension===dimension&&finite(p)&&familyMatch(p.name,q)&&
+    (!filterBiome||p.biome&&cleanQuery(p.biome).includes(filterBiome)))
+   .sort((a,b)=>hypot(a,position)-hypot(b,position)||b.lastSeenAt-a.lastSeenAt)
+  const found=[],seen=new Set()
+  for(const p of candidates){
+   const identity=`${p.dimension}:${p.x},${p.y},${p.z}:${p.name}`
+   if(seen.has(identity))continue
+   seen.add(identity);found.push({...p,source:'remembered-server-observation',confirmedNow:false})
+   if(found.length>=Math.min(12,Math.max(1,limit)))break
+  }
+  return found
+ }
+ biomeCandidates(raw,dimension,position,{limit=8}={}){
+  const q=cleanQuery(raw),all=[...this.checkpoints,...this.materials,...this.entries]
+  const recent=all.filter(p=>p.dimension===dimension&&finite(p)&&p.biome&&
+   (!q||cleanQuery(p.biome).includes(q))).sort((a,b)=>hypot(a,position)-hypot(b,position)||b.lastSeenAt-a.lastSeenAt)
+  const out=[],seen=new Set()
+  for(const p of recent){
+   const k=p.dimension+':'+p.biome+':'+Math.floor(p.x/16)+':'+Math.floor(p.z/16)
+   if(seen.has(k))continue
+   seen.add(k);out.push({x:p.x,y:p.y,z:p.z,biome:p.biome,dimension:p.dimension,
+    lastSeenAt:p.lastSeenAt,source:'remembered-server-biome',confirmedNow:false})
+   if(out.length>=Math.min(12,Math.max(1,limit)))break
+  }
+  return out
+ }
+ biomeSummary(dimension){
+  const counts=new Map()
+  for(const p of [...this.checkpoints,...this.materials,...this.entries])
+   if(p.dimension===dimension&&p.biome)counts.set(p.biome,(counts.get(p.biome)||0)+1)
+  return [...counts].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([biome,observations])=>({biome,observations}))
+ }
+  treeCandidates(dimension,position,{exclude=new Set()}={}){
   if(!position)return []
   return this.entries.filter(p=>p.dimension===dimension&&p.kind==='tree'&&!exclude.has(identifier(p)))
    .sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z))
  }
  forgetTree(pos,dimension){const target={...pos,kind:'tree',dimension};const before=this.entries.length;this.entries=this.entries.filter(e=>identifier(e)!==identifier(target));if(before!==this.entries.length)this.persist()}
  materialCandidates(names,dimension,position){const allowed=new Set(Array.isArray(names)?names:[names]);return this.materials.filter(p=>p.dimension===dimension&&allowed.has(p.name)).sort((a,b)=>Math.hypot(a.x-position.x,a.y-(position.y-1.62),a.z-position.z)-Math.hypot(b.x-position.x,b.y-(position.y-1.62),b.z-position.z))}
- snapshot(){return {rememberedMaterials:this.materials.length,scopeKnown:!!this.scope,locations:this.entries.length,checkpoints:this.checkpoints.length,trees:this.entries.filter(x=>x.kind==='tree').length,ores:this.entries.filter(x=>x.kind==='ore').length,error:this.error}}
+ snapshot(){return {rememberedMaterials:this.materials.length,scopeKnown:!!this.scope,locations:this.entries.length,checkpoints:this.checkpoints.length,biomeKnownSamples:[...this.materials,...this.checkpoints].filter(p=>p.biome).length,trees:this.entries.filter(x=>x.kind==='tree').length,ores:this.entries.filter(x=>x.kind==='ore').length,error:this.error}}
 }
