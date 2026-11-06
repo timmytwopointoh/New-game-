@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
     LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton,retryButton;String displayedAuthCode="",lastPresentedMicrosoftCode="";AlertDialog settingsDialog;
     String token="",lastProgressText=""; long cursor=0,serviceRevision=0,lastApiSuccessAt=0,serviceStateSince=0; boolean active=false,serviceStarted=false,apiConnected=false;
     final int PORT=8765;
+    RovekinEntryOverlay rovekin; // UI-only wrapper around existing on-device bot and native controller
     int d(int v){return (int)(v*getResources().getDisplayMetrics().density);}
     GradientDrawable shape(int color){GradientDrawable r=new GradientDrawable();r.setColor(color);r.setCornerRadius(d(14));return r;}
     GradientDrawable circle(int color){GradientDrawable r=new GradientDrawable();r.setColor(color);r.setShape(GradientDrawable.OVAL);return r;}
@@ -85,7 +86,7 @@ public class MainActivity extends Activity {
         }
         botField=edit("AI Xbox gamertag");ownerField=edit("Your Xbox gamertag");realmField=edit("Realm name");
         botField.setText(getPreferences(MODE_PRIVATE).getString("botTag",""));ownerField.setText(getPreferences(MODE_PRIVATE).getString("ownerTag",""));realmField.setText(getPreferences(MODE_PRIVATE).getString("realmName",""));
-        LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{BASE,0xff10262b}));setContentView(root);
+        LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{BASE,0xff10262b}));FrameLayout rovekinStage=new FrameLayout(this);rovekinStage.addView(root,new FrameLayout.LayoutParams(-1,-1));setContentView(rovekinStage);
         root.setOnApplyWindowInsetsListener((v,insets)->{int l=0,t=0,r=0,b=0;if(Build.VERSION.SDK_INT>=30){android.graphics.Insets i=insets.getInsets(android.view.WindowInsets.Type.systemBars());l=i.left;t=i.top;r=i.right;b=i.bottom;}else{l=insets.getSystemWindowInsetLeft();t=insets.getSystemWindowInsetTop();r=insets.getSystemWindowInsetRight();b=insets.getSystemWindowInsetBottom();}v.setPadding(d(10)+l,d(8)+t,d(10)+r,d(6)+b);return insets;});root.requestApplyInsets();
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header,space(1));
         powerButton=button("●",this::toggleBotService);powerButton.setPadding(0,0,0,0);header.addView(powerButton,new LinearLayout.LayoutParams(d(42),d(42)));renderPowerButton();
@@ -124,6 +125,8 @@ public class MainActivity extends Activity {
         activateButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
         LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask or tell me a task…");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
         input.setOnEditorActionListener((v,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_SEND){send(input.getText().toString());return true;}return false;});
+        rovekin=new RovekinEntryOverlay(this,rovekinStage,root,RovekinInternalAccess.internalDebugBuildOnly(this));
+        rovekin.attach();
         if(recoverMissingBot){
             // Only on a foreground Activity launch; do not run an unseen
             // background poller or retry indefinitely. Existing private
@@ -450,6 +453,7 @@ public class MainActivity extends Activity {
         if(batch!=null)connection.setText(connection.getText()+" · queued command "+(batch.optInt("total")-batch.optInt("remaining")+1)+"/"+batch.optInt("total"));
         else if(savedPlans!=null&&savedPlans.optInt("pending")>0)connection.setText(connection.getText()+" · "+savedPlans.optInt("pending")+" command(s) waiting");
         updateSettingsStatus(null);
+        if(rovekin!=null)rovekin.onStatus(r,connection.getText().toString());
         if(plan!=null){String progress=plan.optString("id","?")+":"+plan.optString("state","idle")+":"+plan.optInt("current")+":"+plan.optInt("total")+":"+plan.optString("lastResult","");if(!progress.equals(lastProgressText)&&!"idle".equals(plan.optString("state"))){lastProgressText=progress;bubble("Progress","Plan "+plan.optString("id")+" · "+plan.optString("state")+" · "+plan.optInt("current")+"/"+plan.optInt("total")+" steps. "+plan.optString("lastResult",""),false);}}
         JSONObject challenge=r.optJSONObject("authChallenge");
         String code=challenge==null?"":challenge.optString("userCode","").trim();
