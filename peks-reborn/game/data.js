@@ -1,4 +1,4 @@
-/* Original data-driven roster; all new gameplay under peks-reborn. */
+/* Original data-driven roster; all game runtime is independently rebuilt. */
 window.PEKS_DATA={
   "name": "Peks Plunder",
   "subtitle": "The Ghost Shift",
@@ -332,8 +332,8 @@ window.PEKS_DATA={
     {
       "id": "pier",
       "name": "Pier",
-      "x": 4,
-      "z": 17,
+      "x": 0,
+      "z": 13,
       "w": 10,
       "h": 20,
       "kind": "deck"
@@ -341,8 +341,8 @@ window.PEKS_DATA={
     {
       "id": "tiki",
       "name": "Tiki Bar",
-      "x": 10,
-      "z": 10.8,
+      "x": 6,
+      "z": 2,
       "w": 12,
       "h": 12,
       "kind": "deck"
@@ -377,8 +377,8 @@ window.PEKS_DATA={
     {
       "id": "prep",
       "name": "Prep Room",
-      "x": 38.3,
-      "z": 30.5,
+      "x": 32,
+      "z": 24,
       "w": 12,
       "h": 9,
       "kind": "tile"
@@ -386,8 +386,8 @@ window.PEKS_DATA={
     {
       "id": "freezer",
       "name": "Walk-in",
-      "x": 42,
-      "z": 17.2,
+      "x": 39,
+      "z": 10,
       "w": 7,
       "h": 12,
       "kind": "tile"
@@ -398,7 +398,7 @@ window.PEKS_DATA={
       "id": "tiki",
       "name": "Tiki Bar",
       "x": 10,
-      "z": 8,
+      "z": 10.8,
       "kind": "tiki"
     },
     {
@@ -468,14 +468,14 @@ window.PEKS_DATA={
       "id": "prep",
       "name": "Prep Station",
       "x": 38,
-      "z": 28,
+      "z": 30.5,
       "kind": "prep"
     },
     {
       "id": "freezer",
       "name": "Walk-in Freezer",
       "x": 42,
-      "z": 14,
+      "z": 17.2,
       "kind": "prep"
     },
     {
