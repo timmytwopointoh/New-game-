@@ -18,7 +18,7 @@ export const biomeAtBlock=(world,p)=>{
  const name=cleanName(result?.name)
  return name&&/^[a-z0-9_]{2,64}$/.test(name)?name:null
 }
-const familyMatch=(name,query)=>{
+export const familyMatch=(name,query)=>{
  const n=cleanName(name),q=cleanQuery(query)
  if(!q)return false
  if(n===q||n.replace(/_/g,' ').includes(q.replace(/_/g,' ')))return true
