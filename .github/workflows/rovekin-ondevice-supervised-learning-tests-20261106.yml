@@ -39,3 +39,5 @@ jobs:
             tests/tool-language-memory.test.js \
             tests/owner-chat-action-handoff.test.js \
             tests/rovekin-session-retention.test.js
+
+# Retry after bounding the number of raw study words before deduplication.
