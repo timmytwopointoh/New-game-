@@ -18,6 +18,9 @@ public final class RovekinDripBar extends View {
     private final Paint brush=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final long started=System.nanoTime();
     private final float[] droplets={.075f,.17f,.28f,.42f,.55f,.69f,.82f,.945f};
+    private boolean active=true;
+    @Override protected void onAttachedToWindow(){super.onAttachedToWindow();active=true;invalidate();}
+    @Override protected void onDetachedFromWindow(){active=false;super.onDetachedFromWindow();}
     public RovekinDripBar(Context context){
         super(context);
         setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -43,6 +46,6 @@ public final class RovekinDripBar extends View {
             brush.setColor(0x88e6bcff);
             canvas.drawCircle(x-radius*.32f,depth-radius*.3f,Math.max(1f,radius*.21f),brush);
         }
-        if(getWindowVisibility()==VISIBLE)postInvalidateDelayed(72);
+        if(active && getWindowVisibility()==VISIBLE)postInvalidateDelayed(72);
     }
 }
