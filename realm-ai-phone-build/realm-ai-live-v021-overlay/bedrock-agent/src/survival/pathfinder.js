@@ -20,7 +20,11 @@ export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSte
   }
   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
    for(const dy of (allowSteps?[0,1,...Array.from({length:Math.min(5,Math.max(1,Math.floor(maxDrop)))},(_,i)=>-i-1)]:[0])){
-    const p={x:current.p.x+dx,y:current.p.y+dy,z:current.p.z+dz},water=!!world.shallowWater?.(p),wet=water?current.wet+1:0,pk=sid(p,wet),g=current.g+(dy?1.6+Math.max(0,-dy-1)*.4:1)+(water?waterPenalty:0)
+    const p={x:current.p.x+dx,y:current.p.y+dy,z:current.p.z+dz},water=!!world.shallowWater?.(p),wet=water?current.wet+1:0,pk=sid(p,wet)
+    // Prefer low-risk vanilla surfaces; refuse unknown/modded hazard penalties.
+    const penalty=world.terrainPenalty?.(p)??0
+    if(!Number.isFinite(penalty)||penalty<0)continue
+    const g=current.g+(dy?1.6+Math.max(0,-dy-1)*.4:1)+(water?waterPenalty:0)+penalty
     if(wet>waterBudget||visited.has(pk)||metric(start,p)>maxDistance||!world.walkable(p)||g>=(cost.get(pk)??Infinity))continue
     if(dy===1&&!world.canJumpBetween?.(current.p,p))continue
     if(dy<0&&!world.canDropBetween?.(current.p,p,{maxDrop}))continue
