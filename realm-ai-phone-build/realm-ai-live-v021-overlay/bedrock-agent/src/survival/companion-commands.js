@@ -105,7 +105,7 @@ export class CompanionCommands {
    this.fieldTrial.start()
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
-  if(/^confirm home proximity \\d{6}$/.test(s)||s==='cancel home proximity')
+  if(/^confirm home proximity \d{6}$/.test(s)||s==='cancel home proximity')
    return this.homeProject.confirmProximity(s,this.editScope().realm)
   if(s==='resume working on your house'||s==='go back to your house'||s==='resume house work'){
    const restored=this.resumeSavedHome();if(restored)return restored
