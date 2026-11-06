@@ -120,10 +120,12 @@ public final class RovekinEntryOverlay {
         scroller.setFillViewport(true);scroller.setVerticalScrollBarEnabled(false);
         FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(-1,-1);
         frame.addView(scroller,fp);
+        scroller.setOnClickListener(v->{if(screen==Screen.SPLASH){beginTapped=true;showFirstStep();}});
         LinearLayout bounds=column();
         bounds.setPadding(dp(22),dp(12),dp(22),dp(24));
         bounds.setGravity(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
         scroller.addView(bounds,new ScrollView.LayoutParams(-1,-1));
+        bounds.setOnClickListener(v->{if(screen==Screen.SPLASH){beginTapped=true;showFirstStep();}});
         overlayPanel=column();
         overlayPanel.setPadding(dp(20),dp(17),dp(20),dp(18));
         overlayPanel.setBackground(shape(PANEL,0xff6bcf50,25));
@@ -154,9 +156,9 @@ public final class RovekinEntryOverlay {
         msg.setGravity(Gravity.CENTER);center(overlayPanel,msg,14);
         TextView tap=text("TAP ANYWHERE TO BEGIN",17,LIGHT,true);
         tap.setGravity(Gravity.CENTER);center(overlayPanel,tap,25);
-        tap.animate().translationY(-dp(5)).setDuration(850)
-            .withEndAction(()->{if(screen==Screen.SPLASH)
-                tap.animate().translationY(dp(5)).setDuration(850).start();}).start();
+        android.animation.ObjectAnimator pulse=android.animation.ObjectAnimator.ofFloat(tap,"translationY",0f,-dp(5),0f);
+        pulse.setDuration(2000);pulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        pulse.setInterpolator(new DecelerateInterpolator());pulse.start();
         frame.setOnClickListener(v->{if(screen==Screen.SPLASH){beginTapped=true;showFirstStep();}});
         overlayPanel.setOnClickListener(v->{if(screen==Screen.SPLASH){beginTapped=true;showFirstStep();}});
     }
@@ -239,7 +241,7 @@ public final class RovekinEntryOverlay {
         add(overlayPanel,button("EDIT ACCOUNT",false,()->showAiName("")),8);
         TextView statusFooter=text("Existing Bedrock connection, Realm packs, account and work plans are kept unchanged.",11,MUTED,false);
         statusFooter.setGravity(Gravity.CENTER);add(overlayPanel,statusFooter,13);
-        if(autoConnect)connect();
+        if(autoConnect && !a.serviceStarted)connect();
         if(lastStatus!=null)drawRealStatus(lastStatus);
     }
     private void connect(){
