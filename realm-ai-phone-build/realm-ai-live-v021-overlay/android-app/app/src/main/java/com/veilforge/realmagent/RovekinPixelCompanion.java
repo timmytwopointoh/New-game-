@@ -84,10 +84,13 @@ public final class RovekinPixelCompanion extends View {
     private static boolean active(String state){
         if(state==null||state.isEmpty())return false;
         switch(state){
-            case "idle":case "complete":case "completed":case "ready":
-            case "blocked":case "waiting":case "stopped":case "cancelled":
-            case "failed":case "interrupted":return false;
-            default:return true;
+            case "building":case "placing":case "waiting-for-placement":
+            case "mining":case "excavating":case "breaking":
+            case "working":case "running":case "crafting":
+            case "preparing":case "collecting":case "storage":
+            case "approaching":case "approaching-workshop":
+                return true;
+            default:return false;
         }
     }
     private void rect(Canvas c,int color,float x,float y,float w,float h){
