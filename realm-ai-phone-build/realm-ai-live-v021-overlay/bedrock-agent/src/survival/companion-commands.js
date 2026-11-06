@@ -4,21 +4,22 @@ import {constructionExposure,EditConfirmations} from './construction-guard.js'
 import {HomeProject} from './home-project.js'
 import {HomeRoutine} from './home-routine.js'
 import {NEW_HOME_SPOT,decideFirstHome} from './home-instinct.js'
+import {HomeSocialLoop} from './home-social-loop.js'
 
 // Read-only house design and one-job edit consent. Only the bearer-authenticated
 // local phone API or an owner-allowlisted in-game command can call this handler.
 export class CompanionCommands {
  constructor(controller,scope=null){
   this.c=controller;this.scope=scope||null
-  this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller)
+  this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller);this.social=new HomeSocialLoop(this)
  }
- setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.c.world.editApproval=null}
+ setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.social.reset();this.c.world.editApproval=null}
  editScope(){return {realm:this.scope||this.c.commandPlans.scope||null,dimension:this.c.world.dimension}}
- reset(){this.edits.reset();this.homeProject.stop('Realm session interrupted; owner must confirm before resuming.');this.homeRoutine.reset(true);this.c.world.editApproval=null}
- tick(now=Date.now()){this.homeRoutine.tick(now);this.homeProject.tick(now)}
+ reset(){this.edits.reset();this.homeProject.stop('Realm session interrupted; owner must confirm before resuming.');this.homeRoutine.reset(true);this.social.manualHold();this.c.world.editApproval=null}
+ tick(now=Date.now()){this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)}
  onServerTime(p,now=Date.now()){this.homeRoutine.onServerTime(p,now)}
  onServerSystemText(p,now=Date.now()){this.homeRoutine.onSystemText(p,now)}
- snapshot(){return {plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
+ snapshot(){return {plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,social:this.social.snapshot(),homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
  check(kind,descriptor,positions,execute){
   const c=this.c
   if(!c.connection.spawned)return {accepted:false,queued:false,message:'Join and spawn in the Realm before editing.'}
@@ -37,16 +38,27 @@ export class CompanionCommands {
   catch(e){return {accepted:false,queued:false,message:String(e.message||e).slice(0,180)}}
  }
  mine(position,execute){return this.check('mine',null,[position],execute)}
+ hearName(message,now=Date.now()){return this.social.hearName(message,now)}
+ beforeOwnerAction(raw,now=Date.now()){return this.social.beforeOwnerAction(raw,now)}
+ afterOwnerAction(raw,result,now=Date.now()){return this.social.afterOwnerAction(raw,result,now)}
  handle(raw){
   const s=String(raw||'').trim().toLowerCase().replace(/[.!?]+$/,'').replace(/^(?:please |can you |could you )/,'')
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
+  if(/^confirm home proximity \\d{6}$/.test(s)||s==='cancel home proximity')
+   return this.homeProject.confirmProximity(s,this.editScope().realm)
+  if(s==='resume working on your house'||s==='go back to your house'||s==='resume house work'){
+   this.social.mode='house'
+   const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm)
+   if(result.accepted)return result
+   return this.homeProject.requestAuthorization(this.editScope().realm)
+  }
   if(s==='cancel edit'){this.edits.reset();return {accepted:true,queued:false,message:'Edit approval cancelled. No work started.'}}
   if(/^confirm clearance \d{6}$/.test(s)||s==='cancel clearance')return this.homeProject.confirmClearance(s,String(this.editScope().realm??''))
   if(/^confirm home \d{6}$/.test(s))return this.homeProject.confirm(s,this.editScope().realm)
   if(s==='cancel home')return this.homeProject.confirm(s,this.editScope().realm)
-  if(s==='pause home'||s==='stop home building')return this.homeProject.stop()
-  if(s==='resume home'||s==='resume building home')return this.homeProject.requestAuthorization(this.editScope().realm)
+  if(s==='pause home'||s==='stop home building'){this.social.manualHold();return this.homeProject.stop()}
+  if(s==='resume home'||s==='resume building home'){this.social.mode='house';const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm);return result.accepted?result:this.homeProject.requestAuthorization(this.editScope().realm)}
   if(s==='home status'||s==='check home')return {accepted:true,queued:false,message:this.homeRoutine.inspect().message+' '+this.homeProject.snapshot().reason,home:this.homeRoutine.snapshot(),project:this.homeProject.snapshot()}
   if(s==='bed supplies'||s==='how to get a bed'||s==='how do you get a bed'||s==='find home bed')return this.homeRoutine.inspect()
   if(s==='craft home bed'||s==='make a home bed'||s==='craft a bed')return this.homeRoutine.craftBed()
@@ -71,7 +83,7 @@ export class CompanionCommands {
     decision=decideFirstHome(this.c.world,plot,{
      serverTime:this.homeRoutine.serverTime,serverTimeAt:this.homeRoutine.serverTimeAt
     })
-    this.plot=plot;this.design=decision.design;this.firstHomeDecision={
+    this.plot=plot;this.design=decision.design;this.social.mode='house';this.firstHomeDecision={
      choice:decision.choice,daylight:decision.daylight,site:decision.site,
      materials:decision.materials,priority:decision.priority}
     this.homeRoutine.setPlot(plot)
