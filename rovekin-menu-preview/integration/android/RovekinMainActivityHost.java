@@ -42,6 +42,18 @@ public final class RovekinMainActivityHost implements RovekinActionRouter.Host {
     @Override public void openSignIn() { activity.showAuth(); }
     @Override public void openAppUpdates() { AppUpdater.show(activity); }
     @Override public void openLearning() { activity.showLearning(); }
+    @Override public void openResearchPrompt() {
+        EditText query = activity.edit("What should the AI research?");
+        LinearLayout panel = activity.vertical();
+        panel.setPadding(activity.d(16),activity.d(12),activity.d(16),activity.d(8));
+        panel.addView(query,activity.space(4));
+        new AlertDialog.Builder(activity).setTitle("Ask Rovekin to research")
+            .setView(panel)
+            .setPositiveButton("Ask",(dialog,which)->{
+                String text=query.getText().toString().trim();
+                if(!text.isEmpty()) activity.send("Research "+text);
+            }).setNegativeButton("Cancel",null).show();
+    }
     @Override public void stopBotService() {
         if (isOwner()) activity.stopServiceNow();
     }
