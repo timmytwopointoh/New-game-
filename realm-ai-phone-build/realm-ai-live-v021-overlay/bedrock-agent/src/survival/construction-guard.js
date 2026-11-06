@@ -23,7 +23,7 @@ export function approvedEdit(world,kind,positions,now=Date.now()) {
 // Work-stage scanning uses a SINGLE expanded box, not 256 separate sphere scans.
 // Unloaded cells within three blocks cause a conservative "unverified" state.
 // No scanning/chunk loading can establish provenance for all natural materials.
-export function constructionExposure(world,positions,{radius=CONSTRUCTION_BUFFER}={}) {
+export function constructionExposure(world,positions,{radius=CONSTRUCTION_BUFFER,ignoreVerifiedProjectBlocks=null}={}) {
  if(!world?.block||!Array.isArray(positions)||!positions.length||positions.length>256||!positions.every(valid)||radius!==CONSTRUCTION_BUFFER)
   return {state:'unverified',reason:'Valid observed work coordinates are required.'}
  const min={x:Math.min(...positions.map(p=>p.x)),y:Math.min(...positions.map(p=>p.y)),z:Math.min(...positions.map(p=>p.z))}
@@ -38,6 +38,7 @@ export function constructionExposure(world,positions,{radius=CONSTRUCTION_BUFFER
  const placed=world.ownedPlacements
  if(placed&&typeof placed.values==='function')for(const p of placed.values()){
   if(p.dimension!==world.dimension||!valid(p))continue
+  if(ignoreVerifiedProjectBlocks?.has(key(p))&&world.block(p)?.name===p.name)continue
   const d=distanceSq(p.x,p.y,p.z)
   if(d<=radius*radius&&d<closest){closest=d;near={position:{x:p.x,y:p.y,z:p.z},name:p.name||'previously-placed block',distance:Math.sqrt(d)}}
  }
@@ -49,6 +50,8 @@ export function constructionExposure(world,positions,{radius=CONSTRUCTION_BUFFER
   const p={x,y,z},block=world.block(p),overlay=world.block(p,1)
   seen++
   if(!block||!overlay){if(d<=9)unknownNear=true;continue}
+  const own=world.ownedPlacements?.get(`${world.dimension}:${key(p)}`)
+  if(ignoreVerifiedProjectBlocks?.has(key(p))&&own?.name===block.name)continue
   for(const b of [block,overlay]){
    if(builtBlockEvidence(b.name)&&d<closest){closest=d;near={position:p,name:b.name,distance:Math.sqrt(d)}}
   }
