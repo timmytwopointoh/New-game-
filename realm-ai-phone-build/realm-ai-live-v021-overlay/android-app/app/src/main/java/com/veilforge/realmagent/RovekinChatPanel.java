@@ -94,7 +94,7 @@ public final class RovekinChatPanel {
     public View create(View existingTranscriptScroll){
         root=new FrameLayout(activity);
         root.setBackground(grad(new int[]{0xff052718,0xff123c28,0xff061d1d},0xff063923,0));
-        root.addView(new RovekinParticleVeil(activity),new FrameLayout.LayoutParams(-1,-1));
+        // Particles belong to each newly appearing AI reply, NOT the chat background.
         LinearLayout body=column();
         body.setPadding(dp(12),dp(8),dp(12),dp(10));
         root.addView(body,new FrameLayout.LayoutParams(-1,-1));
@@ -102,13 +102,17 @@ public final class RovekinChatPanel {
         // Android 11+ supplies actual system/IME insets; older devices rely
         // on adjustResize with an additional comfortable 18dp bottom gutter.
         root.setOnApplyWindowInsetsListener((view,insets)->{
-            int bottom=0;
+            int bottom=0,top=0;
             if(Build.VERSION.SDK_INT>=30){
                 Insets nav=insets.getInsets(WindowInsets.Type.navigationBars());
                 Insets ime=insets.getInsets(WindowInsets.Type.ime());
+                Insets systemTop=insets.getInsets(WindowInsets.Type.statusBars());
                 bottom=Math.max(nav.bottom,ime.bottom);
-            }else bottom=insets.getSystemWindowInsetBottom();
-            view.setPadding(0,0,0,safeBottomPaddingPx(bottom,dp(18),dp(12)));
+                top=systemTop.top;
+            }else {bottom=insets.getSystemWindowInsetBottom();top=insets.getSystemWindowInsetTop();}
+            // On edge-to-edge phones, keep the top control BELOW the actual status bar.
+            // On legacy non-edge-to-edge phones retain a quiet extra gutter.
+            view.setPadding(0,Math.max(dp(14),top+dp(12)),0,safeBottomPaddingPx(bottom,dp(18),dp(12)));
             return insets;
         });
         root.post(root::requestApplyInsets);
@@ -118,16 +122,18 @@ public final class RovekinChatPanel {
         logo.setLetterSpacing(.12f);logo.setShadowLayer(dp(7),0,dp(1),0xaa87e46f);
         // This is a small recessed utility built INTO the top border,
         // not an extra main action button.
-        TextView reconnect=label("↻",23,VIOLET,true);
+        TextView reconnect=label("↻",25,VIOLET,true);
         reconnect.setGravity(Gravity.CENTER);
         reconnect.setContentDescription("Reconnect to Realm with saved login");
         reconnect.setBackground(new RippleDrawable(ColorStateList.valueOf(0x66f6dbff),
             grad(new int[]{0xff1f453c,0xff162a38,0xff1c1635},0xffb17ef5,13),null));
         reconnect.setOnClickListener(v->dispatch(RovekinFeatureContract.Feature.START_SERVICE));
-        LinearLayout.LayoutParams reconnectLP=new LinearLayout.LayoutParams(dp(38),dp(36));
+        // Minimum 48dp touch target, inset into the header border rather than
+        // floating in the Android clock / status-bar area.
+        LinearLayout.LayoutParams reconnectLP=new LinearLayout.LayoutParams(dp(50),dp(48));
         reconnectLP.rightMargin=dp(9);
         top.addView(reconnect,reconnectLP);
-        top.addView(logo,new LinearLayout.LayoutParams(0,dp(38),1));
+        top.addView(logo,new LinearLayout.LayoutParams(0,dp(48),1));
         logo.setContentDescription("Rovekin");
         // All advanced operations remain in original host, not on the public screen.
         logo.setOnLongClickListener(v->{
@@ -138,7 +144,7 @@ public final class RovekinChatPanel {
         statusText=label("Connecting to your AI…",11,DIM,false);
         statusText.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
         statusText.setMaxLines(2);statusText.setMaxWidth(dp(180));
-        top.addView(statusText,new LinearLayout.LayoutParams(-2,dp(38)));
+        top.addView(statusText,new LinearLayout.LayoutParams(-2,dp(48)));
         body.addView(top,below(0));
         RovekinDripBar drips=new RovekinDripBar(activity);
         body.addView(drips,new LinearLayout.LayoutParams(-1,dp(19)));
