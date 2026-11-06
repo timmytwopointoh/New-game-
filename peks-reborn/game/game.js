@@ -1,7 +1,7 @@
 /* Peks Plunder Reborn — progression, controls and task loop; independent of old game. */
 (function(global){"use strict";
 const D=global.PEKS_DATA,$=id=>document.getElementById(id),clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),KEY="peks-reborn-prealpha-v1";
-const S={playing:false,paused:false,player:{x:15,z:20},roleId:"bailey",clock:.20,npcs:[],last:0};
+const S={errors:[],playing:false,paused:false,player:{x:15,z:20},roleId:"bailey",clock:.20,npcs:[],last:0};
 let profile={coins:0,days:1,stars:0,completed:0,unlockedIds:[],selected:"bailey",shiftSeconds:0,taskIndex:0,x:15,z:20},engine,chosen="bailey",activeMini=null,toastTimer=0,uiTimer=0;
 const byId=id=>D.crew.find(x=>x.id===id),station=id=>D.stations.find(s=>s.id===id);
 function load(){try{let raw=localStorage.getItem(KEY);if(raw){let p=JSON.parse(raw);if(p&&Number.isFinite(p.coins)){profile=Object.assign(profile,p);profile.coins=Math.max(0,Math.floor(profile.coins));profile.unlockedIds=Array.isArray(profile.unlockedIds)?profile.unlockedIds.filter(id=>byId(id)&&byId(id).locked):[];profile.days=Math.max(1,Math.floor(profile.days));profile.shiftSeconds=Math.max(0,Math.min(100000,Number(profile.shiftSeconds)||0));profile.completed=Math.max(0,Math.floor(profile.completed||0));profile.taskIndex=Math.max(0,Math.floor(profile.taskIndex||0));profile.x=clamp(Number(profile.x)||15,1,46);profile.z=clamp(Number(profile.z)||20,2,34);}}}catch(e){console.warn("Save read failed",e);}}
@@ -77,17 +77,33 @@ function tick(t){if(S.last&&t-S.last<30){requestAnimationFrame(tick);return;}if(
  if(t>toastTimer)$("notice").style.opacity="0";
  S.marker=target();try{engine.render(t,S);}catch(err){console.error(err);$("notice").textContent="3D rendering error: "+err.message;$("notice").style.opacity="1";return;}
  requestAnimationFrame(tick);}
+/* Owner-only test report. No credentials, precise location or private files are included. */
+function exportReport(){
+ const record={schema:1,game:"Peks Plunder",build:"Peks Engine 0.2 TEST",generatedAt:new Date().toISOString(),
+  day:profile.days,coins:profile.coins,stars:profile.stars,completed:profile.completed,
+  role:S.roleId,shiftSeconds:Math.round(profile.shiftSeconds),task:target()?.id||null,
+  position:S.playing?{x:Math.round(S.player.x*100)/100,z:Math.round(S.player.z*100)/100}:null,
+  viewport:{width:innerWidth,height:innerHeight},webgl2:!!(document.createElement("canvas").getContext("webgl2")),
+  errors:(S.errors||[]).slice(-20)};
+ const json=JSON.stringify(record,null,2);
+ if(global.PeksNative&&typeof global.PeksNative.exportDiagnostics==="function"){
+  global.PeksNative.exportDiagnostics(json);note("Choose where to save your Peks diagnostics");return;
+ }
+ const blob=new Blob([json],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download="Peks-Plunder-DIAGNOSTICS.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ note("Saved browser diagnostics");
+}
 function init(){load();chosen=profile.selected&&byId(profile.selected)?profile.selected:"bailey";
  for(let i=0;i<10;i++){let p=D.crew[i],a=D.stations[(i*3+3)%D.stations.length];S.npcs.push({id:p.id,x:a.x+(i%3)*.6,z:a.z+((i+1)%3)*.5});}
  try{engine=new global.PeksEngine.Engine($("world"));}catch(err){console.error(err);$("notice").textContent="Peks Engine: "+err.message;$("notice").style.opacity="1";return;}
  $("newGame").addEventListener("click",()=>{if(profile.completed>0&&!confirm("Start a fresh profile? Existing rebuilt-game progress will be cleared."))return;profile={coins:0,days:1,stars:0,completed:0,unlockedIds:[],selected:"bailey",shiftSeconds:0,taskIndex:0,x:15,z:20};chosen="bailey";roster();show("crewScreen");save();});
  $("continueGame").addEventListener("click",()=>{chosen=profile.selected||"bailey";roster();show("crewScreen");});$("crewBack").addEventListener("click",()=>show("front"));$("startShift").addEventListener("click",start);
  $("creditsButton").addEventListener("click",()=>show("creditsScreen"));$("creditsBack").addEventListener("click",()=>show("front"));
- $("pauseBtn").addEventListener("click",pause);$("resumeBtn").addEventListener("click",resume);$("menuBtn").addEventListener("click",menu);
+ $("reportBtn").addEventListener("click",exportReport);$("pauseBtn").addEventListener("click",pause);$("resumeBtn").addEventListener("click",resume);$("menuBtn").addEventListener("click",menu);
  $("actionBtn").addEventListener("click",()=>{let n=nearest(),s=target();if(n.d>2.6){note("Move closer to a work station");return;}if(!s||n.s.id!==s.id){note("Your next task is at "+(s?s.name:"the cove"));return;}miniOpen(n.s);});
  $("miniLeave").addEventListener("click",()=>{if(activeMini)activeMini.challenge?.stop();activeMini=null;S.paused=false;show(null);});
  addEventListener("keydown",e=>{let k=e.key.toLowerCase();keys.add(k);if(k.startsWith("arrow")||k===" ")e.preventDefault();if(k==="escape"&&S.playing)pause();if(k==="e"&&S.playing&&!S.paused)$("actionBtn").click();});
  addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));addEventListener("blur",()=>{keys.clear();if(S.playing)save();});
- bindJoy();roster();show("front");requestAnimationFrame(tick);}
+ addEventListener("error",e=>{S.errors.push(String(e.message||"Unknown error").slice(0,240));if(S.errors.length>30)S.errors.shift();});bindJoy();roster();show("front");requestAnimationFrame(tick);}
 global.PeksApp={save,pause,profile:()=>({...profile})};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
 })(window);

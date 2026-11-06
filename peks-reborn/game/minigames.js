@@ -14,7 +14,7 @@ const EMOJI={lime:"🍋",pineapple:"🍍",ice:"🧊",berry:"🍓",mint:"🌿",fi
 const clean=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
 const ordered=(arr,seed)=>arr.map((v,i)=>({v,sort:(i*17+seed*11)%13})).sort((a,b)=>a.sort-b.sort).map(x=>x.v);
 function create(opts){
- const stage=opts.stage,button=opts.button,kind=opts.kind,steps=8;
+ const stage=opts.stage,button=opts.button,kind=opts.kind,steps=(kind==="dishes"||kind==="tiki"||kind==="prep")?3:(kind==="truck"||kind==="crab")?5:6;
  let round=0,errors=0,active=true,position=0,grid=Array(20).fill(false),rot=0;
  let allowed=POOLS[kind]||POOLS.server;
  const completed=()=>{if(!active)return;active=false;stage.innerHTML='<div class="challengeWin">✨ GREAT WORK! ✨</div>';button.hidden=true;opts.onComplete({rounds:round,errors:errors});};
@@ -22,7 +22,7 @@ function create(opts){
  const mistake=(msg)=>{errors++;if(opts.onProgress)opts.onProgress(round,steps,msg||"Try again");};
  const rows=(choices,answer,title)=>'<div class="challengeHeader">'+title+'</div><div class="challengeChoices">'+choices.map(c=>'<button class="challengeTile" data-choice="'+clean(c)+'">'+(EMOJI[c]||"✦")+'<span>'+clean(c)+'</span></button>').join("")+'</div>';
  const banner=(a,b)=>'<div class="challengeHeader">'+clean(a)+'</div><div class="challengeSub">'+clean(b)+'</div>';
- const frame=()=>Math.floor((performance.now()/19)%100);
+ function animateGauge(){if(!active||kind!=="cook")return;const needle=stage.querySelector(".heatNeedle");if(needle)needle.style.left=((performance.now()/19+round*17)%100)+"%";requestAnimationFrame(animateGauge);}
  function render(){
  if(!active)return;
  button.hidden=!(kind==="cook"||kind==="truck");button.textContent=kind==="cook"?"PLATE NOW":"ROTATE CRATE";
@@ -87,7 +87,7 @@ function create(opts){
  }
  function onButton(){if(kind==="truck"){rot++;render();}else if(kind==="cook")answer("plate");}
  stage.addEventListener("click",onClick);stage.addEventListener("pointermove",onMove);button.addEventListener("click",onButton);
- render();if(opts.onProgress)opts.onProgress(0,steps,"Start the challenge");
+ render();if(kind==="cook")requestAnimationFrame(animateGauge);if(opts.onProgress)opts.onProgress(0,steps,"Start the challenge");
  return {stop(){active=false;stage.removeEventListener("click",onClick);stage.removeEventListener("pointermove",onMove);button.removeEventListener("click",onButton);button.hidden=false;},progress(){return round;},errors(){return errors;},kind};
 }
 global.PeksChallenges={create};

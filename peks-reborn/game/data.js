@@ -460,8 +460,8 @@ window.PEKS_DATA={
     {
       "id": "dishes",
       "name": "Triple Sink",
-      "x": 35,
-      "z": 22,
+      "x": 36.2,
+      "z": 20.9,
       "kind": "dishes"
     },
     {
