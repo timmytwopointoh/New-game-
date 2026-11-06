@@ -10,7 +10,7 @@ const key=p=>p.x+','+p.y+','+p.z
 const distance=(a,b)=>a&&b?Math.hypot(a.x-b.x-.5,a.y-b.y-1.62,a.z-b.z-.5):Infinity
 export class HomeProject {
  constructor(controller){this.c=controller;this.supply=new HomeSupply(controller);this.clear()}
- clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null}
+ clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null;this.ownerPauseRequested=false;this.proximityReview=null;this.proximityApproval=null}
  preview(plot,design){
   this.clear()
   this.plan=physicalHomePlan(plot,design);this.plot=plot;this.state='preview'
@@ -50,9 +50,32 @@ export class HomeProject {
   this.reason='Starter shelter invited by the owner. Checking observed terrain and resources; never overwrite other builds.'
   return {accepted:true,queued:true,message:this.reason,project:this.snapshot()}
  }
+ // Home construction is the default companion job. An owner request
+ // temporarily suspends it, with the exact stage and materials retained.
+ pauseForOwner(reason='Helping my owner with another task.'){
+  if(this.state!=='running')return false
+  const nav=this.c.navigation
+  const building=this.plan?.stages?.[this.stage]?.status==='building'&&(nav?.job?.kind==='build'||nav?.building?.job)
+  if(building){this.ownerPauseRequested=true;this.reason='Finishing the already-sent block stage before helping the owner.';return true}
+  this.ownerPauseRequested=false
+  if(this.supply.childStarted)this.c.acquisition?.cancel?.('Home supply work yielded to owner.')
+  if(nav?.job&&['walk','mine','build'].includes(nav.job.kind))nav.stop?.('Owner needs the companion.',false)
+  this.state='owner-paused';this.plan.status='owner-paused';this.reason=reason
+  this.c.world.editApproval=null;this.supply.reset()
+  return true
+ }
+ resumeAfterOwnerTask(scope){
+  if(this.state!=='owner-paused')return {accepted:false,queued:false,message:'Home is not in an owner-task pause.'}
+  if(this.ownerScope!==safeScope(scope)||!this.c.connection.spawned||
+     this.c.world.dimension!==this.plot?.dimension||this.c.companion?.plot!==this.plot)
+   return {accepted:false,queued:false,message:'Cannot resume home automatically without the same owner Realm, dimension, and plot.'}
+  this.state='running';this.plan.status='running';this.lastAttempt=0
+  this.reason='Back to my house! Rechecking terrain and supplies for the saved stage.'
+  return {accepted:true,queued:true,message:this.reason}
+ }
  stop(reason='Owner paused home construction.'){
   if(this.state==='running'){this.state='paused';this.plan.status='paused';this.reason=reason}
-  this.pending=null;this.review=null;this.clearance=null
+  this.pending=null;this.review=null;this.clearance=null;this.proximityReview=null;this.ownerPauseRequested=false
   if(this.supply.childStarted)this.c.acquisition?.cancel?.('Owner paused the parent home project.')
   this.supply.reset()
   this.c.world.editApproval=null
@@ -64,6 +87,7 @@ export class HomeProject {
  }
  snapshot(){
   return {state:this.state,reason:this.reason,stage:this.stage,stages:this.plan?.stagesTotal||0,placementsVerified:this.plan?.placementsVerified||0,placementsPlanned:this.plan?.placementsPlanned||0,
+   ownerPauseRequested:this.ownerPauseRequested,proximityReview:this.proximityReview?{stage:this.stage,nearby:this.proximityReview.nearby,expires:this.proximityReview.expires}:null,
    furniture:this.plan?.furniture?.map(x=>({name:x.name,confirmed:x.confirmed}))||[],
    confirmationPending:!!this.pending,clearanceReview:this.review?{position:this.review.position,expires:this.review.expires,reason:this.review.reason}:null,supply:this.supply.snapshot(),completion:this.plan?.completion||'unverified'}
  }
@@ -75,6 +99,32 @@ export class HomeProject {
   this.reason='Before I remove '+decision.name+' at '+key(decision.position)+': '+decision.reason+
     ' Reply "confirm clearance '+code+'" to allow this one block, or "cancel clearance".'
   this.c.report?.(this.reason)
+ }
+ requestProximityReview(risk,now=Date.now()){
+  if(this.proximityReview?.stage===this.stage)return
+  const code=String(Math.floor(100000+Math.random()*900000))
+  this.proximityReview={code,stage:this.stage,dimension:this.plot.dimension,
+   scope:this.ownerScope,expires:now+120000,
+   nearby:risk.near?.name||'unidentified construction'}
+  this.reason='I found '+this.proximityReview.nearby+
+   ' within 15 blocks of this house stage. Can I build nearby without changing it? '+
+   'Reply "confirm home proximity '+code+'" to allow this EXACT stage, or "cancel home proximity".'
+  this.c.report?.(this.reason)
+ }
+ confirmProximity(raw,scope,now=Date.now()){
+  const s=String(raw||'').toLowerCase().trim(),p=this.proximityReview
+  if(s==='cancel home proximity'){
+   this.proximityReview=null;this.state='paused';this.plan.status='paused'
+   this.reason='Owner declined building near protected construction; saved stage was not changed.'
+   return {accepted:true,queued:false,message:this.reason}
+  }
+  if(!p||s!=='confirm home proximity '+p.code||p.expires<now||
+    p.scope!==safeScope(scope)||p.dimension!==this.c.world.dimension||p.stage!==this.stage)
+   return {accepted:false,queued:false,message:'No matching current home proximity approval; no edit was sent.'}
+  this.proximityApproval={stage:this.stage,scope:p.scope,dimension:p.dimension}
+  this.proximityReview=null
+  this.reason='Owner authorized only this empty-cell home stage near existing construction; no neighboring block removal is authorized.'
+  return {accepted:true,queued:true,message:this.reason}
  }
  confirmClearance(raw,scope,now=Date.now()){
   const v=String(raw||'').trim().toLowerCase(),p=this.review
@@ -148,6 +198,9 @@ export class HomeProject {
  tick(now=Date.now()){
   if(this.state!=='running'||!this.plan||!this.plot||now-(this.lastAttempt||0)<500)return
   this.lastAttempt=now
+  if(this.ownerPauseRequested&&this.plan?.stages?.[this.stage]?.status!=='building'){
+   this.ownerPauseRequested=false;this.pauseForOwner();return
+  }
   const c=this.c,w=c.world,n=c.navigation
   if(!c.connection.spawned||w.dimension!==this.plot.dimension||!w.editModeVerified)return this.block('Realm, dimension or player build permission is not confirmed')
   if(w.attributes['minecraft:health']!==undefined&&w.attributes['minecraft:health']<=6)return this.block('Health too low to continue construction')
@@ -168,8 +221,16 @@ export class HomeProject {
    const verified=s.positions.every(p=>w.ownedPlacements?.has(`${w.dimension}:${key(p)}`))
    if(!correct||!verified)return this.block('A stage ended without server-confirmed matching blocks at every target')
    s.serverConfirmed=s.positions.length;s.status='confirmed';this.plan.placementsVerified+=s.positions.length
-   this.stage++;w.editApproval=null;this.moveAttempts=0;this.supply.reset();this.clearance=null
+   this.stage++;w.editApproval=null;this.moveAttempts=0;this.supply.reset();this.clearance=null;this.proximityApproval=null
    c.report?.(`Home stage ${this.stage}/${this.plan.stagesTotal} verified, ${this.plan.placementsVerified} blocks confirmed.`)
+   if(this.ownerPauseRequested){this.ownerPauseRequested=false;this.pauseForOwner();return}
+   return
+  }
+  if(this.proximityReview){
+   if(now>this.proximityReview.expires){
+    this.proximityReview=null;this.state='paused';this.plan.status='paused'
+    this.reason='Home stage near other construction was not approved; no edit was made.'
+   }
    return
   }
   if(this.review){
@@ -198,7 +259,12 @@ export class HomeProject {
   // Being invited to create a home never authorizes damaging neighboring
   // builds. Recognized nearby construction must be reviewed separately.
   const risk=constructionExposure(w,s.positions,{ignoreVerifiedProjectBlocks:owned})
-  if(risk.state==='protected')return this.block('Other construction is within the protected 15-block buffer; owner review needed before building here.')
+  if(risk.state==='protected'){
+   if(!this.proximityApproval||this.proximityApproval.stage!==this.stage||
+      this.proximityApproval.dimension!==w.dimension||this.proximityApproval.scope!==this.ownerScope){
+    this.requestProximityReview(risk,now);return
+   }
+  }
   if(risk.state==='unverified'){w.requestNearby?.(n.client);this.reason=risk.reason||'Waiting for reliable construction safety evidence.';return}
   // Recheck authorization against this exact blueprint at every stage.
   if(!s.positions.every(p=>p.x>=this.plot.bounds.min.x&&p.x<=this.plot.bounds.max.x&&p.y>=this.plot.bounds.min.y&&p.y<=this.plot.bounds.max.y&&p.z>=this.plot.bounds.min.z&&p.z<=this.plot.bounds.max.z))
