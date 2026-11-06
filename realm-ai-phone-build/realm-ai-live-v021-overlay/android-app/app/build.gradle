@@ -3,11 +3,11 @@ android {
     namespace 'com.veilforge.realmagent'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.veilforge.realmagent.live'
+        applicationId 'com.rovekin.companion'
         minSdk 28
         targetSdk 35
         versionCode 200078
-        versionName '0.44.5-rovekin-clean-follow-preview'
+        versionName '1.0.0-rovekin-follow'
         ndk { abiFilters 'arm64-v8a' }
     }
     sourceSets.main.assets.srcDir "$buildDir/generated/node-assets"
