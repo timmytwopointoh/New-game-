@@ -8,12 +8,12 @@ export class Mining{
   const eye=this.world.position,dx=eye.x-position.x-.5,dy=eye.y-position.y-.5,dz=eye.z-position.z-.5
   const face=Math.abs(dy)>=Math.max(Math.abs(dx),Math.abs(dz))?(dy>=0?1:0):Math.abs(dx)>=Math.abs(dz)?(dx>=0?5:4):(dz>=0?3:2)
   const click={x:face===4?0:face===5?1:.5,y:face===0?0:face===1?1:.5,z:face===2?0:face===3?1:.5}
-  this.job={protocol:this.world.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',initialVersion:this.world.blockVersion(position),face,click,position:{...position},name:assessment.block.name,stateId:assessment.block.stateId,started:now,duration:assessment.durationMs,heldSlot:this.world.selectedSlot,heldStackId:assessment.held.stack_id,heldId:assessment.held.network_id,toolEffective:assessment.toolEffective,canHarvest:assessment.canHarvest,options,finishedRequest:false}
+  this.job={approvalUsed:!!(this.world.editApproval?.kind==='mine'&&this.world.editApproval?.targets?.has(position.x+','+position.y+','+position.z)),protocol:this.world.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',initialVersion:this.world.blockVersion(position),face,click,position:{...position},name:assessment.block.name,stateId:assessment.block.stateId,started:now,duration:assessment.durationMs,heldSlot:this.world.selectedSlot,heldStackId:assessment.held.stack_id,heldId:assessment.held.network_id,toolEffective:assessment.toolEffective,canHarvest:assessment.canHarvest,options,finishedRequest:false}
   this.pending.push({action:'start_break',position:{...position},face});this.result='mining'
   return {accepted:true,queued:true,message:`Mining request: ${assessment.block.name}, held item ${assessment.tool}${assessment.toolEffective?' (effective tool)':' (hand-speed mining)'}. Estimated ${(assessment.durationMs/1000).toFixed(2)}s; ${assessment.canHarvest?'a drop may be possible':'the held tool is not suitable for a drop'}. I will wait for the server to confirm the break and inventory to confirm any collection.`}
  }
  cancel(reason='Mining cancelled.'){
-  if(this.job)this.pending.push({action:'abort_break',position:this.job.position,face:this.job.face})
+  if(this.job){this.pending.push({action:'abort_break',position:this.job.position,face:this.job.face});if(this.job.approvalUsed)this.world.editApproval=null}
   this.job=null;this.result='cancelled';this.reason=reason
  }
  tick(now=Date.now()){
@@ -21,7 +21,7 @@ export class Mining{
   if(!job)return out
   const block=this.world.block(job.position)
   if(block&&this.world.blockVersion(job.position)>job.initialVersion&&block.stateId!==job.stateId){
-   if(['air','cave_air','void_air'].includes(block.name)){out.actions=[];this.job=null;this.result='confirmed';this.reason='Server confirms target is now air; item collection is not yet confirmed.';this.report(this.reason)}
+   if(['air','cave_air','void_air'].includes(block.name)){out.actions=[];if(job.approvalUsed)this.world.editApproval=null;this.job=null;this.result='confirmed';this.reason='Server confirms target is now air; item collection is not yet confirmed.';this.report(this.reason)}
    else{this.cancel('Target changed to another block; mining completion is not confirmed.');out.actions.push(...this.pending.splice(0));this.report(this.reason)}
    return out
   }
@@ -36,6 +36,6 @@ export class Mining{
   }else if(now>job.started)out.actions.push({action:'continue_break',position:job.position,face:job.face})
   job.lastTick=now;return out
  }
- reset(){this.job=null;this.pending=[];this.result='idle';this.reason=''}
+ reset(){if(this.job?.approvalUsed)this.world.editApproval=null;this.job=null;this.pending=[];this.result='idle';this.reason=''}
  snapshot(){return {state:this.result,target:this.job?.position||null,protocol:this.job?.protocol||null,holding:!!this.job,estimatedMs:this.job?.duration||null,elapsedMs:this.job?Math.max(0,Date.now()-this.job.started):0,toolEffective:this.job?.toolEffective??null,reason:this.reason||''}}
 }
