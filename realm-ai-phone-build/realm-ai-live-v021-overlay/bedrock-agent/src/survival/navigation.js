@@ -16,7 +16,7 @@ const flatDistance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z)
 export class Navigation{
  constructor(world,report=()=>{}){
   this.world=world;this.report=report;this.client=null;this.timer=null;this.route=null;this.state='idle';this.reason='';this.tick=0n;this.lastInputAt=0;this.lastPoseAt=0;this.listeners=[];this.lastRequestAt=0
-  this.hazards=new HazardRecovery(this);this.vy=0;this.progress=new ProgressTracker();this.mining=new Mining(world,report);this.building=new Building(world,report);this.climbing=new Climbing(world,report);this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.blocked=new Map();this.recoveryAttempts=0;this.decisions=[];this.pendingFlags=[];this.sprinting=false;this.survey=null;this.pickup=new Pickup(world);this.defense={lastAttempt:0,lastStrike:0,strikes:0,attackedId:null,state:'idle',reason:'',threat:null}
+  this.hazards=new HazardRecovery(this);this.vy=0;this.progress=new ProgressTracker();this.mining=new Mining(world,report);this.building=new Building(world,report);this.climbing=new Climbing(world,report);this.job=null;this.pendingFollow=null;this.flight=null;this.pendingFlightRecovery=null;this.blocked=new Map();this.recoveryAttempts=0;this.decisions=[];this.pendingFlags=[];this.sprinting=false;this.survey=null;this.pickup=new Pickup(world);this.defense={lastAttempt:0,lastStrike:0,strikes:0,attackedId:null,state:'idle',reason:'',threat:null}
  }
  note(action,reason){this.decisions.push({action,reason});this.decisions=this.decisions.slice(-6);this.reason=reason;this.report(reason)}
  attach(client){
@@ -132,11 +132,48 @@ export class Navigation{
   return {accepted:true,queued:!!this.route.length,message:this.route.length?`${pace==='run'?'Running when safe, walking on difficult terrain.':'Walking.'} Solo route: ${this.route.length} steps${plan.dirtRequired?`, using ${plan.dirtRequired} server-confirmed dirt placements`:""}. I will try another route if blocked${allowMining?', then consider one natural-looking, easy block if necessary':''}.`:'Already in that block according to the client position.'}
  }
  follow(name){
-  const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
   if(!this.spawned||!this.client)return {accepted:false,queued:false,message:'Join and spawn in the Realm first.'}
+  const blocked=this.movementBlock()
+  if(blocked){
+   if(this.world.attributes['minecraft:health']===0)return {accepted:false,queued:false,message:blocked}
+   // The owner's requested follow is not discarded just because the server
+   // is still sending abilities, waiting for terrain or landing the avatar.
+   // No movement input occurs until movementBlock() passes without exception.
+   this.stop('',false)
+   this.pendingFollow={name,createdAt:Date.now(),lastReason:blocked,lastReportAt:Date.now()}
+   this.state='waiting-for-readiness'
+   this.reason='Following '+name+' when movement is safe. '+blocked
+   try{if(!this.world.terrainKnown())this.world.requestNearby(this.client)}catch{}
+   return {accepted:true,queued:true,message:this.reason,pendingMovement:true}
+  }
   this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.job={kind:'follow',name,allowMining:true};this.state='following';this.lastFollowPlan=0
   this.updateFollow(Date.now(),true)
   return {accepted:true,queued:!!this.route?.length,message:`${this.state}: ${name}. ${this.reason||'Route prepared; server movement remains unverified.'}`}
+ }
+ resumePendingFollow(now=Date.now()){
+  const p=this.pendingFollow
+  if(!p)return
+  if(!this.client||!this.spawned||!this.world.enabled){this.pendingFollow=null;return}
+  if(now-p.createdAt>300000){
+   this.pendingFollow=null;this.state='blocked'
+   this.reason='Follow paused: movement was not verified within five minutes. Recheck movement status and ask again.'
+   this.report(this.reason);return
+  }
+  if(this.job)return
+  const blocked=this.movementBlock()
+  if(blocked){
+   if(this.world.attributes['minecraft:health']===0){
+    this.pendingFollow=null;this.reason='Follow paused because the player died.';return
+   }
+   this.state='waiting-for-readiness'
+   this.reason='Follow will resume when safe. '+blocked
+   if(now-(p.lastReportAt||0)>15000){p.lastReportAt=now;this.report(this.reason)}
+   return
+  }
+  this.pendingFollow=null
+  const result=this.follow(p.name)
+  if(result.accepted)this.report('Movement is now verified. Following '+p.name+' along safe observed routes.')
+  else{this.state='blocked';this.reason='Follow could not resume: '+(result.message||'unknown readiness error');this.report(this.reason)}
  }
  updateFollow(now,force=false){
   if(this.job?.kind!=='follow'||this.pendingFlightRecovery||this.pillar||this.flight||this.climbing.steps.size||this.mining.job||this.clearing)return
@@ -398,7 +435,7 @@ export class Navigation{
  stop(reason='Stopped moving and mining.',notify=true){
   const active=!!this.job||this.route!==null||!!this.flight||!!this.mining.job
   if(this.flight)this.vy=this.flight.vy
-  this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
+  this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.pendingFollow=null;this.flight=null;this.pendingFlightRecovery=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
   if(this.sprinting){this.pendingFlags.push('stop_sprinting');this.sprinting=false}
   if(this.edgeSneaking){this.pendingFlags.push('stop_sneaking');this.edgeSneaking=false}
   this.pickup.stop();this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason);this.survey=null
@@ -432,6 +469,7 @@ export class Navigation{
   }
   try{this.finishLoading()}catch(e){this.stop('Loading acknowledgement failed: '+String(e.message||e).slice(0,100));this.detach();return}
   this.checkVerification?.()
+  this.resumePendingFollow(now)
   this.defend(now)
   this.surveyTick(now)
   const health=this.world.attributes['minecraft:health']
@@ -597,6 +635,6 @@ export class Navigation{
   }catch(e){this.stop('Input packet failed: '+String(e.message||e).slice(0,100));this.detach()}
   try{this.onResourceTick?.(now)}catch(e){this.reportRuntimeError?.(e);this.stop('Internal resource task error.');this.onResourceError?.(e)}
  }
- snapshot(){return {pillar:this.pillar?{confirmed:this.pillar.done,total:this.pillar.rise,phase:this.pillar.phase}:null,environmentRecovery:this.hazards.snapshot(),state:this.state,pace:this.job?.pace||'walk',sprinting:this.sprinting===true,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,flightRecovery:this.pendingFlightRecovery?{state:this.state,landing:this.pendingFlightRecovery.landing}:null,reason:this.reason,waterRisk:{shallowWading:this.shallowWading(),crossingPlanned:!!this.job?.waterRouting,maxConsecutiveWaterBlocks:8,deepWaterSupported:false},physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
- detach(){this.externalMotion=null;this.motionTick=undefined;this.followTarget=null;this.routeAlignment=null;this.lastClearanceBlock=null;this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.pendingFlags=[];this.sprinting=false;this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
+ snapshot(){return {pendingFollow:this.pendingFollow?{waiting:true,reason:this.reason,ageMs:Math.max(0,Date.now()-this.pendingFollow.createdAt)}:null,pillar:this.pillar?{confirmed:this.pillar.done,total:this.pillar.rise,phase:this.pillar.phase}:null,environmentRecovery:this.hazards.snapshot(),state:this.state,pace:this.job?.pace||'walk',sprinting:this.sprinting===true,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,flightRecovery:this.pendingFlightRecovery?{state:this.state,landing:this.pendingFlightRecovery.landing}:null,reason:this.reason,waterRisk:{shallowWading:this.shallowWading(),crossingPlanned:!!this.job?.waterRouting,maxConsecutiveWaterBlocks:8,deepWaterSupported:false},physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
+ detach(){this.externalMotion=null;this.motionTick=undefined;this.followTarget=null;this.routeAlignment=null;this.lastClearanceBlock=null;this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.pendingFollow=null;this.flight=null;this.pendingFlightRecovery=null;this.pendingFlags=[];this.sprinting=false;this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
 }
