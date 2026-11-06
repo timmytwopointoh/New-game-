@@ -268,6 +268,65 @@ public class MainActivity extends Activity {
     }
     static final int REQUEST_EXPORT_REPORT=41022;
     void showBugReports(){new AlertDialog.Builder(this).setTitle("All-in-one Bug Report ZIP").setMessage(SupportBundle.issues(this)).setPositiveButton("Export ONE ZIP",(d,w)->exportBugReport()).setNegativeButton("Close",null).show();}
+    volatile boolean diagnosticReconnectPending=false;
+    static String reconnectDiagnosticFilename(long timestamp){
+        return "Rovekin-ALL-DIAGNOSTICS-"+timestamp+".zip";
+    }
+    /**
+     * Save the current all-in-one, SANITIZED report BEFORE a rejoin can clear
+     * live crash/transport evidence, then reuse the existing Microsoft cache.
+     * Android Q+ writes to the public Downloads/Rovekin folder without a
+     * storage permission or interrupting the user's task with a picker.
+     */
+    void saveDiagnosticsAndReconnect(){
+        if(diagnosticReconnectPending)return;
+        diagnosticReconnectPending=true;
+        if(Build.VERSION.SDK_INT<Build.VERSION_CODES.Q){
+            diagnosticReconnectPending=false;
+            exportBugReport(); // older devices use Android's safe file chooser
+            startOrRejoinBot();
+            return;
+        }
+        supportIo.submit(()->{
+            Uri file=null;
+            String name=reconnectDiagnosticFilename(System.currentTimeMillis());
+            boolean saved=false;
+            try{
+                JSONObject live=null;
+                if(serviceStarted&&token!=null&&!token.isEmpty())
+                    try{live=request("GET","/support/snapshot",null);}catch(Exception ignored){}
+                ContentValues values=new ContentValues();
+                values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,name);
+                values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE,"application/zip");
+                values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS+"/Rovekin");
+                values.put(android.provider.MediaStore.MediaColumns.IS_PENDING,1);
+                file=getContentResolver().insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);
+                if(file==null)throw new IOException("Downloads unavailable");
+                try(OutputStream out=getContentResolver().openOutputStream(file)){
+                    if(out==null)throw new IOException("Download stream unavailable");
+                    SupportBundle.export(this,out,live);
+                }
+                ContentValues finished=new ContentValues();
+                finished.put(android.provider.MediaStore.MediaColumns.IS_PENDING,0);
+                getContentResolver().update(file,finished,null,null);
+                saved=true;SupportLog.record(this,"report_exported");
+            }catch(Exception e){
+                SupportLog.record(this,"report_failed");
+                if(file!=null)try{getContentResolver().delete(file,null,null);}catch(Exception ignored){}
+            }
+            final boolean didSave=saved;
+            ui.post(()->{
+                diagnosticReconnectPending=false;
+                if(isFinishing()||isDestroyed())return;
+                bubble("Progress",didSave?
+                    "Saved one all-in-one ZIP to Downloads/Rovekin/"+name+". Reconnecting with saved login.":
+                    "Could not save ZIP to Downloads. Use All-in-one Bug Report export to save it manually. Reconnecting without deleting your login.",false);
+                startOrRejoinBot();
+            });
+        });
+    }
     void exportBugReport(){Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/zip");save.putExtra(Intent.EXTRA_TITLE,"Realm-AI-Live-ALL-DIAGNOSTICS-"+System.currentTimeMillis()+".zip");try{startActivityForResult(save,REQUEST_EXPORT_REPORT);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open a save location for the report.",false);}}
     void writeBugReport(Uri destination){supportIo.submit(()->{
         JSONObject live=null;
