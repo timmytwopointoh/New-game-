@@ -19,6 +19,19 @@ export function parseResourceGoal(raw){
  if(/^(?:go )?(?:get|gather|collect|chop(?: down)?) (?:some )?(?:wood|logs|tree logs)$/.test(s))return {kind:'tree-harvest',target:'tree_trunks',maxBlocks:null,maxDistance:8,needsPickup:true}
  const trees=s.match(/^gather (\d+) trees$/)
  if(trees){const count=Number(trees[1]);return count>=1&&count<=16?{kind:'mine-material',target:'tree_trunks',sourceFamily:'logs',requiredTrees:count,maxBlocks:512,maxDistance:8,needsPickup:true,continuousSearch:true}:{error:'Choose 1–16 trees.'}}
+ // Players naturally say both "mine 200 oak logs" AND "mine oak logs 200".
+ // Reorder the quantity only after an exact grammar match; never guess a
+ // goal from arbitrary chat, and retain the same inventory/break verification.
+ const trailing=s.match(/^(?:go )?(?:gather|collect|mine|get|harvest|chop) (.+?) (\d{1,4})$/)
+ if(trailing){
+  const quantity=Number(trailing[2]),raw=trailing[1].replace(/ blocks?$/,'')
+  const target=resolveMaterial(raw)
+  if(!target||quantity<1||quantity>2304)
+   return {error:'Choose a known material and a quantity from 1–2304.'}
+  return {kind:'mine-material',target,maxBlocks:Math.min(4096,quantity*4+16),
+   quantity,maxDistance:8,needsPickup:true,continuousSearch:true,
+   sourceFamily:/^(?:wood|logs|log)$/.test(raw)?'logs':null}
+ }
  const gather=s.match(/^(?:gather|collect|mine|get) (\d{1,4}) (.+)$/)
  if(gather){const quantity=Number(gather[1]),raw=gather[2].replace(/ blocks?$/,''),target=resolveMaterial(raw);if(!target||quantity<1||quantity>2304)return {error:'Choose a known material and a quantity from 1–2304.'};return {kind:'mine-material',target,maxBlocks:Math.min(4096,quantity*4+16),quantity,maxDistance:8,needsPickup:true,continuousSearch:true,sourceFamily:/^(?:wood|logs|log)$/.test(raw)?'logs':null}}
  const m=s.match(/^(?:go )?(?:find and mine|find and break|locate and mine|search for and mine) (?:some |a |the )?(.+)$/)
