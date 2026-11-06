@@ -131,3 +131,6 @@ jobs:
           retention-days: 3
           if-no-files-found: error
           compression-level: 0
+
+# Regression retry: recovery requires observed transport-close or transport-end,
+# never the idle no-close state after a completed task.
