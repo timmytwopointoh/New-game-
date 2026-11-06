@@ -40,7 +40,13 @@ export function classifyHomeObstruction(world,plot,pos,{ownedProjectBlocks=new S
   if(!canopy)return {action:unknown?'observe':'ask',reason:'Log without an observed natural canopy may be part of a build.',position:pos,name:n}
  }
  const ext=constructionExposure(world,[pos],{ignoreVerifiedProjectBlocks:ownedProjectBlocks})
- if(ext.state==='protected')return {action:'ask',reason:'An existing structure is within the protected 15-block buffer.',near:ext.near,position:pos,name:n}
+ // The owner gave this 50x50 plot for work. Tiny naturally removable
+ // ground cover can be cleared when it is MORE than three blocks from
+ // observed construction, even if a sign/torch is elsewhere in the broader
+ // 15-block buffer. Solid mining, trees, actual builds and unknown blocks
+ // always keep the full 15-block protection and all other safety checks.
+ if(ext.state==='protected'&&!(n==='leaf_litter'&&ext.near?.distance>3))
+  return {action:'ask',reason:'An existing structure is within the protected 15-block buffer.',near:ext.near,position:pos,name:n}
  if(ext.state==='unverified')return {action:'observe',reason:ext.reason,position:pos,name:n}
  const above=world.block({...pos,y:pos.y+1})
  if(!above)return {action:'observe',reason:'Overhead block not yet received.'}
