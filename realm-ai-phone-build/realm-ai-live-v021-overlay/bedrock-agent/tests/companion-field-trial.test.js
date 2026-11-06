@@ -15,7 +15,7 @@ function fixture(){
  const companion={c,homeProject:{state:'idle'},editScope:()=>({realm:scope}),
   handle(message){calls.push(['home',message]);return {accepted:true,project:{state:'running'},message:'Home build started.'}}}
  const field=new CompanionFieldTrial(companion)
- return {field,calls,w,navigation,owner,companion,setScope:value=>{scope=value}}
+ return {field,c,calls,w,navigation,owner,companion,setScope:value=>{scope=value}}
 }
 function observation(f,now,x,y=65.62,z=40){
  f.w.serverPosition={x,y,z};f.navigation.lastPoseAt=now
