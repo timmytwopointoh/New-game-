@@ -148,6 +148,11 @@ public final class RovekinChatPanel {
         Button connect=featureButton(RovekinFeatureContract.Feature.START_SERVICE,"CONNECT",false,false);
         header.addView(connect,new LinearLayout.LayoutParams(px(105),px(48)));
         body.addView(header,line(0));
+        RovekinDripBar purpleDrips=new RovekinDripBar(activity);
+        LinearLayout.LayoutParams dropParams=new LinearLayout.LayoutParams(-1,px(18));
+        dropParams.topMargin=px(3);
+        body.addView(purpleDrips,dropParams);
+
 
         statusText=label("Not connected • waiting for on-device player",12,FADED,false);
         statusText.setPadding(px(13),px(11),px(13),px(11));
