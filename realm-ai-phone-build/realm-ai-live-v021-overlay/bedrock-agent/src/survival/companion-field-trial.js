@@ -59,11 +59,12 @@ export class CompanionFieldTrial{
    return {accepted:true,queued:true,message:'I am already looking for '+this.owner+'. '+this.reason}
   if(this.companion.homeProject.state==='running'||this.companion.homeProject.state==='furnishing')
    return {accepted:false,queued:false,message:'I already have a house project underway. Ask for home status first.'}
-  if(c.navigation.job||c.navigation.survey||c.resources?.active||c.acquisition?.active||
+  const alreadyFollowing=c.navigation.job?.kind==='follow'&&c.navigation.job?.name?.toLowerCase()===owner.toLowerCase()
+  if((c.navigation.job&&!alreadyFollowing)||c.navigation.survey||c.resources?.active||c.acquisition?.active||
     c.miningJobs?.active||c.exploration?.active||c.operations?.pending)
    return {accepted:false,queued:false,message:'Another task is running. Say Stop before starting the home field trial.'}
   if(!Number.isSafeInteger(c.world.dimension))return {accepted:false,queued:false,message:'The current Realm dimension is not confirmed.'}
-  const followed=c.navigation.follow(owner)
+  const followed=alreadyFollowing?{accepted:true,queued:true,message:'Continuing existing Follow'}:c.navigation.follow(owner)
   if(!followed?.accepted)return {...followed,message:'I could not safely start following '+owner+': '+String(followed?.message||'not ready')}
   // Set after navigation.follow() (which resets old jobs). Use XYZ only when
   // player locator data is absent; terrain collision still gates each step.
