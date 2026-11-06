@@ -1,4 +1,5 @@
 import {findPath} from './pathfinder.js'
+import {routeSearchWaypoint} from './player-locator.js'
 import {mediumAt} from './situation.js'
 import {ProgressTracker,miningAssessment,recoveryDecision} from './obstacles.js'
 import {Mining} from './mining.js'
@@ -139,8 +140,11 @@ export class Navigation{
  }
  updateFollow(now,force=false){
   if(this.job?.kind!=='follow'||this.pendingFlightRecovery||this.pillar||this.flight||this.climbing.steps.size||this.mining.job||this.clearing)return
-  const player=[...this.world.players.values()].find(p=>p.name.toLowerCase()===this.job.name.toLowerCase())
-  if(!player){this.route=null;this.state='waiting-for-player';this.reason='Waiting for that player to be visible in the loaded Realm.';return}
+  const player=this.world.findPlayer?.(this.job.name)||[...this.world.players.values()].find(p=>p.name.toLowerCase()===this.job.name.toLowerCase())
+  if(!player){
+   this.route=null;this.state='waiting-for-player';this.reason='No fresh, named player location received. Waiting for player-list or locator update; never guessing from marker color.'
+   return
+  }
   const start=this.world.standPosition(),target=player.position
   if(!start)return
   if(flatDistance(this.world.position,target)<2.2&&Math.abs(this.world.position.y-target.y)<.6){this.route=null;this.state='following';this.reason='Close to the followed player.';return}
@@ -148,6 +152,27 @@ export class Navigation{
   if(!force&&now-(this.lastFollowPlan||0)<1000)return
   this.followTarget={...target}
   this.lastFollowPlan=now
+  // The headless Bedrock locator-bar signal can describe a named player
+  // beyond chunk simulation distance. Travel only through OBSERVED terrain,
+  // in short segments, never directly into unknown far-away coordinates.
+  if(flatDistance(start,target)>21){
+   const segment=routeSearchWaypoint(this.world,start,target,{maxSegment:14})
+   if(!segment?.goal){
+    this.route=null;this.state='waiting-for-terrain'
+    this.reason='Player bearing received from server, but no grounded dry waypoint is observed in that direction. Scanning nearby chunks.'
+    try{this.world.requestNearby(this.client)}catch{}
+    return
+   }
+   const plan=this.routeTo(segment.goal,start,{allowSteps:true,maxNodes:768,allowDirt:true,allowWater:false})
+   if(plan.ok){
+    this.job.goal=segment.goal;this.assignRoute(plan)
+    this.reason='Following '+this.job.name+' using '+player.source+' data. Planning a safe local segment; '+Math.round(segment.remaining)+' blocks remain toward last reported player position.'
+    return
+   }
+   this.route=null;this.state='waiting-for-terrain';this.reason='Locator heading known, but the next segment is unsafe or lacks verified terrain: '+String(plan.reason||'no safe route')
+   try{this.world.requestNearby(this.client)}catch{}
+   return
+  }
   const candidates=[]
   for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(let dy=-5;dy<=5;dy++){
    const p={x:Math.floor(target.x)+dx,y:start.y+dy,z:Math.floor(target.z)+dz}
@@ -165,7 +190,7 @@ export class Navigation{
  }
  // Replan the same continuous Follow task, preserving the single active job.
  retryBlockedFollow(){
-  if(this.job?.kind!=='follow'||!['blocked','waiting-for-terrain'].includes(this.state))return {accepted:false,queued:false,message:'No blocked Follow job is available. Do not start a duplicate Follow.'}
+  if(this.job?.kind!=='follow'||!['blocked','waiting-for-terrain','waiting-for-player'].includes(this.state))return {accepted:false,queued:false,message:'No blocked Follow job is available. Do not start a duplicate Follow.'}
   if(!this.client||!this.spawned||!this.world.position)return {accepted:false,queued:false,message:'Realm spawn/position unavailable.'}
   try{this.world.requestNearby(this.client)}catch(e){return {accepted:false,queued:false,message:'Terrain refresh could not be requested: '+String(e.message||e)}}
   if(!this.world.terrainKnown())return {accepted:false,queued:false,message:'Requested missing nearby terrain. Try Again when the server sends those chunks; original Follow stays active.'}
