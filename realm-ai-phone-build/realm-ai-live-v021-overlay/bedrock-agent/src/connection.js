@@ -24,7 +24,7 @@ export class Connection extends EventEmitter {
   constructor(config,log=console.log){
     super()
     this.config=config;this.log=log
-    this.client=null;this.connected=false;this.joined=false;this.spawned=false;this.loadingLiveness=new JoinLoadingLiveness();this.recoveryAttempts=0;this.recoveryTimer=null;this.recoveryNextAt=0;this.manualRecoveryStop=false;this.loadingTicker=setInterval(()=>this.checkLoading(),5000);this.loadingTicker.unref?.()
+    this.client=null;this.connected=false;this.joined=false;this.spawned=false;this.loadingLiveness=new JoinLoadingLiveness();this.recoveryAttempts=0;this.recoveryTimer=null;this.recoveryNextAt=0;this.manualRecoveryStop=false;this.wasSpawnedThisSession=false;this.sessionCloseWindowAt=0;this.sessionCloseCount=0;this.lastSessionCloseCause='none';this.loadingTicker=setInterval(()=>this.checkLoading(),5000);this.loadingTicker.unref?.()
     this.survival=new SurvivalController(this,{plansDirectory:path.join(root,'private','command-plans'),scope:this.config.minecraft.realmId?String(this.config.minecraft.realmId):null});this.lastRejoinAt=0
     this.chatDiagnostics={textPackets:0,playerChatPackets:0,aiRequests:0,ownerRequests:0,nonOwnerRequests:0,ignoredSelf:0,replyAttempts:0,replyQueued:0,replyFailures:0,lastPacketAt:null,lastCommandAt:null,lastRejection:'none',lastReplyError:'none'}
     this.username='';this.authChallenge=null;this.authState='starting';this.lastPhase='starting';this.packRequestAt=0;this.packHeadersReceived=0;this.packChunksReceived=0;this.packBytesReceived=0;this.transportCloseReason='';this.transportCloseKind='none';this.transportCloseCode=0;this.transportCloseLabel='unobserved';this.transportCloseOrigin='unknown';this.transportCloseSnapshot=null;this.transportEvidence=null;this.packHandshakeAudit=null;this.packStatus={stage:'not-reached',message:'Pack stage not reached',done:0,total:0};this.lastError='';this.recentMessages=[];this.lastCommand='';this.nextEventId=0;this.events=[];this.realmDiscovery={state:'not-reached',joinedRealmsCount:0,exactNameMatches:0,petalNameCandidates:0,configuredNamePresent:false}
@@ -33,6 +33,30 @@ export class Connection extends EventEmitter {
     this.manualRecoveryStop=true
     if(this.recoveryTimer){clearTimeout(this.recoveryTimer);this.recoveryTimer=null}
     this.recoveryNextAt=0
+  }
+  /**
+   * An actual Bedrock transport END/CLOSE, not a finished command, is the
+   * only event permitted to run post-spawn automatic recovery.
+   * This method also refuses server kicks, protocol failures, owner shutdown,
+   * and login challenges. Two retries per ten-minute window prevent thrashing.
+   */
+  recoverUnexpectedPlayedSession(){
+    if(!this.wasSpawnedThisSession||this.manualRecoveryStop||this.lastFailure||
+       this.authChallenge?.userCode||this.authState==='sign-in-required')return false
+    if(!['none','transport-close','transport-end'].includes(this.transportCloseKind))return false
+    if(!['remote-transport','unknown','network-error'].includes(this.transportCloseOrigin))return false
+    const now=Date.now()
+    if(!this.sessionCloseWindowAt||now-this.sessionCloseWindowAt>600000){
+      this.sessionCloseWindowAt=now;this.sessionCloseCount=0
+    }
+    if(this.sessionCloseCount>=2)return false
+    const result=this.scheduleLoadingRecovery('spawned','unexpected-session-close')
+    if(result){
+      this.sessionCloseCount++
+      this.lastSessionCloseCause=this.transportCloseKind+'/'+this.transportCloseOrigin
+      this.log('Unexpected played Realm transport loss; automatic saved-session rejoin '+this.sessionCloseCount+'/2 scheduled. No task or STOP command closed the session.')
+    }
+    return result
   }
   scheduleLoadingRecovery(stage,reason){
     // A quiet, connected Realm download is not grounds for an automatic reconnect.
@@ -115,6 +139,7 @@ export class Connection extends EventEmitter {
     }catch(e){this.lastError=String(e.message||e);this.authState='error';return {accepted:false,queued:false,message:'Rejoin failed: '+this.lastError}}
   }
   start(){
+    this.wasSpawnedThisSession=false
     this.loadingLiveness.reset()
     this.lastFailure=null;this.titleTokenRecoveryAttempted=false;this.realmDiscovery={state:'not-reached',joinedRealmsCount:0,exactNameMatches:0,petalNameCandidates:0,configuredNamePresent:false}
     const m=this.config.minecraft
@@ -294,7 +319,7 @@ export class Connection extends EventEmitter {
       }
 this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='negotiating-packs';this.log('Bedrock handshake accepted; negotiating required Realm packs.')})
     client.on('spawn',()=>{
-      this.spawned=true;this.loadingLiveness.waiting=false;this.recoveryAttempts=0;this.cancelAutoRecovery();this.manualRecoveryStop=false;this.lastPhase='spawned'
+      this.spawned=true;this.wasSpawnedThisSession=true;this.loadingLiveness.waiting=false;this.recoveryAttempts=0;this.cancelAutoRecovery();this.manualRecoveryStop=false;this.lastPhase='spawned'
       this.authChallenge=null;this.authState='spawned';this.lastError=''
       this.username=client.profile?.name||client.username||m.botPlayerName
       this.log('Spawn event received. Display name reported: '+this.username)
@@ -372,6 +397,9 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       if(earlyPackClose)this.scheduleLoadingRecovery('pack-request','early-transport-close')
       this.authChallenge=null;this.authState='disconnected'
       if(!this.lastFailure&&this.loadingLiveness.stalled()&&!this.manualRecoveryStop)this.scheduleLoadingRecovery(priorLoadingStage,'loading-stalled')
+      // A genuine post-spawn transport close is distinct from completing a
+      // task. Do not reconnect on successful task/plan termination.
+      this.recoverUnexpectedPlayedSession()
     })
     client.on('end',()=>{
       if(this.client!==client)return
@@ -379,6 +407,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
       this.emit('session-end');this.connected=false;this.joined=false;this.spawned=false
       if(!this.lastError)this.lastError='Connection ended at '+this.lastPhase+'; no server reason was sent.'
       this.authChallenge=null;this.authState='disconnected'
+      this.recoverUnexpectedPlayedSession()
     })
     return client
   }
