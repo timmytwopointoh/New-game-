@@ -126,6 +126,32 @@ export function createApi(config,connection,log=console.log){
   }).catch(e=>{if(epoch===researchEpoch)publish("I couldn't confirm that meaning online. Could you describe how you are using the word?")}).finally(()=>{researching=false})
   return {accepted:true,queued:true,message:'Let me look into that word and its related meanings.'}
  }
+ function researchConversation(question,{replyToRealm=false}={}){
+  // Free-form public-topic lookup is optional and never an executor.
+  // Do not upload Realm identities, credentials, raw game telemetry or
+  // apparently private account content to an external research provider.
+  if(!google.configured()||!connection.survival)return null
+  if(/\b(?:password|token|login code|device code|secret|my account|realm id|real name|address|email)\b/i.test(question))
+   return null
+  if(googleAbort)return {accepted:true,queued:false,message:"I'm finishing the last lookup. Ask me again afterward."}
+  const survival=connection.survival,scope=survival.commandVocabulary?.scope,epoch=researchEpoch
+  if(!scope)return null
+  const abort=new AbortController()
+  googleAbort=abort
+  google.answer(question,{signal:abort.signal}).then(result=>{
+   if(epoch!==researchEpoch||abort.signal.aborted||scope!==connection.survival?.commandVocabulary?.scope)return
+   const message=result?.available?result.text:"I couldn't find a clear answer this time. Can you tell me more about what you mean?"
+   const styled=survival.voice?.frame(message,{input:question,world:survival.world})||message
+   survival.report(styled)
+   if(replyToRealm&&connection.spawned)connection.say(styled.slice(0,240))
+  }).catch(()=>{
+   if(epoch!==researchEpoch||abort.signal.aborted)return
+   const message='My online lookup is unavailable right now, but I can still use what I already know.'
+   survival.report(message)
+   if(replyToRealm&&connection.spawned)connection.say(message)
+  }).finally(()=>{if(googleAbort===abort)googleAbort=null})
+  return {accepted:true,queued:true,message:"Let me check that and get back to you with a clear answer."}
+ }
  const message=(raw,{replyToRealm=false}={})=>{
    if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
    const addressed=interpretNameUtterance(raw,
@@ -259,7 +285,10 @@ export function createApi(config,connection,log=console.log){
       const reply=respondToConversation(text,{vocabulary,world:connection.survival?.world,navigation:connection.survival?.navigation})
       const offline=offlineMinecraftResponse(text,{world:connection.survival?.world})
       let descriptor=null;try{descriptor=parseDescriptor(reply)}catch{}
-      output=offline||(descriptor&&['status','movement','inventory','about','recipe'].includes(descriptor.id)?connection.survival.handle(renderDescriptor(descriptor)):{accepted:true,queued:false,message:reply,plans:plans.snapshot()})
+      const needResearch=typeof reply==='string'&&/I don.t have a reliable answer to that question yet/i.test(reply)
+      output=offline||(needResearch?researchConversation(text,{replyToRealm}):null)||
+       (descriptor&&['status','movement','inventory','about','recipe'].includes(descriptor.id)?
+        connection.survival.handle(renderDescriptor(descriptor)):{accepted:true,queued:false,message:reply,plans:plans.snapshot()})
      }else{
       const candidate=vocabulary.expandMaterials(text.replace(/[.!?]+$/,'').trim()).text;let descriptor=null
       try{descriptor=parseDescriptor(candidate)}catch{}
@@ -287,6 +316,11 @@ export function createApi(config,connection,log=console.log){
     }catch(e){connection.trace?.error(e);output={accepted:false,queued:false,message:'An internal command error was recorded. Export Settings → Bug reports → Export ZIP. '+String(e.message||e).slice(0,100),plans:plans.snapshot()}}
    }else output=planner.handle(raw)||(planner.snapshot().state==='running'?{accepted:true,queued:false,message:'A plan is running; cancel it first.'}:chatDispatch(raw,connection))
    connection.survival?.companion?.afterOwnerAction(raw,output)
+   if(output?.message){
+    const framed=connection.survival?.voice?.frame?.(output.message,{input:raw,
+      world:connection.survival?.world,accepted:output.accepted,queued:output.queued})
+    if(framed)output={...output,message:framed}
+   }
    return output
  }
  const controller={planner,message}
