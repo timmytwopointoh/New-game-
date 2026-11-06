@@ -65,7 +65,8 @@ const activity=read("android/app/src/main/java/com/peks/plunder/rebuilt/MainActi
 assert.match(manifest,/peks_crab_icon/);
 assert.match(activity,/ACTION_CREATE_DOCUMENT/);
 assert.match(activity,/setAllowUniversalAccessFromFileURLs\(false\)/);
-assert.match(activity,/loadUrl\("file:\/\/\/android_asset\/index.html"\)/);
+assert.match(activity,/startPage = "classic"\.equals\(getIntent\(\)\.getStringExtra\("peks_preview_mode"\)\)/);
+assert.match(activity,/game\.loadUrl\("file:\/\/\/android_asset\/" \+ startPage\)/);
 assert.match(gradle,/applicationId = "com.peks.plunder.rebuilt"/);
 assert.match(gradle,/syncPeksGame/);
 
