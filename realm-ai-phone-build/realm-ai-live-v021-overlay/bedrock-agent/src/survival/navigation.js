@@ -32,6 +32,33 @@ export class Navigation{
   on('change_dimension',p=>{this.externalMotion=null;this.motionTick=undefined;this.loading={state:'waiting-for-terrain',id:p.loading_screen_id??null,dimension:true};this.stop('Dimension changed; work cancelled.');this.progress.reset();this.blocked.clear();this.lastServerTick=null;this.vy=0})
   on('close',()=>this.detach());on('disconnect',()=>this.stop('Disconnected. Rejoin the Realm before moving.'))
  }
+ // A confirmed Realm spawn can outlive this navigation loop if Android
+ // suspended it or an earlier input error detached its listeners. Recover at
+ // most ONCE for the same client, only on an explicit owner Follow request
+ // and only with server-observed abilities, collision and ground support.
+ // This does not synthesize a position or an input packet.
+ recoverFromLiveSpawn(client,{serverSpawned=false}={}){
+  if(this.spawned&&this.timer)return {ok:true,recovered:false}
+  if(!serverSpawned||!client||client!==this.client||client._closed===true||
+    !this.world.enabled||!this.world.position||!this.world.serverPosition||
+    !this.world.entityId||this.loading?.dimension||
+    !this.world.movementVerified||!this.world.terrainKnown()||
+    !this.world.grounded()||!this.world.clearBody(this.world.position))
+   return {ok:false,reason:'The live server spawn and safe ground have not both been verified.'}
+  if(this.spawnRecoveryClient!==client){this.spawnRecoveryClient=client;this.spawnRecoveryCount=0}
+  if(this.spawnRecoveryCount>=1)return {ok:false,reason:'The one safe navigation reattachment was already attempted in this Realm session.'}
+  this.spawnRecoveryCount++
+  // Reattach missing listener registrations after an isolated navigation
+  // teardown. The client itself stays connected and authentication untouched.
+  if(this.listeners.length===0)this.attach(client)
+  this.spawned=true
+  this.loading={state:'complete',id:null,dimension:false}
+  if(this.timer)clearInterval(this.timer)
+  this.timer=setInterval(()=>this.step(),50);this.timer.unref?.()
+  this.state='idle'
+  this.reason='Movement loop reattached to the existing verified Realm session.'
+  return {ok:true,recovered:true}
+ }
  // Bedrock supplies actual motion, not a request to teleport or change mode.
  observeMotion(p,now=Date.now()){
   if(String(p.runtime_entity_id)!==this.world.entityId||this.world.attributes['minecraft:health']===0)return false
