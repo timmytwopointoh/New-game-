@@ -120,7 +120,8 @@ export class CompanionCommands {
   if(s==='cancel home')return this.homeProject.confirm(s,this.editScope().realm)
   if(s==='pause home'||s==='stop home building'){this.homeMemory.saveProgress({autoResume:false});this.social.manualHold();return this.homeProject.stop()}
   if(s==='resume home'||s==='resume building home'){
-   const restored=this.resumeSavedHome();if(restored)return restoredthis.social.mode='house';const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm);return result.accepted?result:this.homeProject.requestAuthorization(this.editScope().realm)}
+   const restored=this.resumeSavedHome();if(restored)return restored
+   this.social.mode='house';const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm);return result.accepted?result:this.homeProject.requestAuthorization(this.editScope().realm)}
   if(s==='home status'||s==='check home')return {accepted:true,queued:false,message:this.homeRoutine.inspect().message+' '+this.homeProject.snapshot().reason+(this.homeMemory.record?' Permanent home: '+Object.values(this.homeMemory.record.plot.center).join(', ')+'.':''),home:this.homeRoutine.snapshot(),permanentHome:this.homeMemory.summary(),project:this.homeProject.snapshot()}
   if(s==='bed supplies'||s==='how to get a bed'||s==='how do you get a bed'||s==='find home bed')return this.homeRoutine.inspect()
   if(s==='craft home bed'||s==='make a home bed'||s==='craft a bed')return this.homeRoutine.craftBed()
