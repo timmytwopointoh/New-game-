@@ -74,6 +74,7 @@ class Engine{
  for(let z of [20,23,26]){let bob=Math.sin(time*.002+z)*.05;m.sphere(5,1.49+bob,z,.32,PAL.red,1.25,.38,.9);for(let dx of [-.55,.55])m.sphere(5+dx,1.48+bob,z-.14,.13,PAL.red);}
  if(Math.sin(time*.00019)>.95)m.sphere(-1,.6+Math.abs(Math.sin(time*.002))*2.5,15,.58,PAL.surf,2,.55,.8);
  for(let a of (state.npcs||[])){const role=global.PEKS_DATA.crew.find(v=>v.id===a.id)||global.PEKS_DATA.crew[0];drawActor(m,a.x,a.z,role,time*.001,false);}
+ if(playing&&state.marker){const p=state.marker;const rise=2.45+Math.sin(time*.003)*.18;m.sphere(p.x,rise,p.z,.25,PAL.gold,1,.55,1);m.cylinder(p.x,rise-.4,p.z,.08,.4,PAL.white);}
  if(playing){const role=global.PEKS_DATA.crew.find(v=>v.id===state.roleId)||global.PEKS_DATA.crew[0];drawActor(m,state.player.x,state.player.z,role,time*.001,true);}
  upload(gl,this.dynamic,m);gl.bindVertexArray(this.dynamic.vao);gl.drawArrays(gl.TRIANGLES,0,this.dynamic.count);gl.bindVertexArray(null);}
 }

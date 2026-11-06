@@ -332,8 +332,8 @@ window.PEKS_DATA={
     {
       "id": "pier",
       "name": "Pier",
-      "x": 0,
-      "z": 13,
+      "x": 4,
+      "z": 17,
       "w": 10,
       "h": 20,
       "kind": "deck"
@@ -341,8 +341,8 @@ window.PEKS_DATA={
     {
       "id": "tiki",
       "name": "Tiki Bar",
-      "x": 6,
-      "z": 2,
+      "x": 10,
+      "z": 10.8,
       "w": 12,
       "h": 12,
       "kind": "deck"
@@ -377,8 +377,8 @@ window.PEKS_DATA={
     {
       "id": "prep",
       "name": "Prep Room",
-      "x": 32,
-      "z": 24,
+      "x": 38.3,
+      "z": 30.5,
       "w": 12,
       "h": 9,
       "kind": "tile"
@@ -386,8 +386,8 @@ window.PEKS_DATA={
     {
       "id": "freezer",
       "name": "Walk-in",
-      "x": 39,
-      "z": 10,
+      "x": 42,
+      "z": 17.2,
       "w": 7,
       "h": 12,
       "kind": "tile"
@@ -411,7 +411,7 @@ window.PEKS_DATA={
     {
       "id": "crab",
       "name": "Crab Tanks",
-      "x": 5,
+      "x": 7.5,
       "z": 22,
       "kind": "crab"
     },
@@ -489,7 +489,7 @@ window.PEKS_DATA={
       "id": "trash",
       "name": "Trash & Recycling",
       "x": 33,
-      "z": 29,
+      "z": 30.5,
       "kind": "trash"
     },
     {
