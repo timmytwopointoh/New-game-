@@ -15,7 +15,7 @@ const diskReserve=64*1024*1024 // leave room for the OS, downloads and Realm pac
 export class KnowledgeMemory{
  constructor({directory=null,scope=null}={}){this.directory=directory;this.scope=null;this.error='';this.readOnly=false;this.setScope(scope)}
  setScope(scope){
-  this.scope=scope?String(scope):null;this.readOnly=false;this.error=''
+  this.scope=scope?String(scope):null;this.readOnly=false;this.error='';this.summaryCache=null
   this.base=this.directory&&this.scope?path.join(this.directory,crypto.createHash('sha256').update(this.scope).digest('hex')):null
  }
  filename(word){
@@ -69,7 +69,7 @@ export class KnowledgeMemory{
    const tmp=file+'.tmp'
    fs.writeFileSync(tmp,payload,{mode:0o600})
    fs.renameSync(tmp,file)
-   this.error=''
+   this.error='';this.summaryCache=null
    return true
   }catch{
    this.error='Could not save knowledge; previously saved records are unchanged.'
@@ -92,6 +92,7 @@ export class KnowledgeMemory{
   return {primary,linked}
  }
  summary(){
+  if(this.summaryCache&&Date.now()-this.summaryCache.at<60000)return {...this.summaryCache.value,error:this.error}
   if(!this.base)return {realmScoped:false,storage:'unavailable until Realm identified',error:this.error}
   let words=0
   try{
@@ -100,6 +101,7 @@ export class KnowledgeMemory{
     words+=fs.readdirSync(path.join(this.base,shard.name)).filter(x=>/^[a-f0-9]{64}\.json$/.test(x)).length
    }
   }catch{this.error='Could not count stored knowledge; memories were not removed.'}
-  return {realmScoped:true,words,storage:'private on-phone app files; limited by available device storage, not a preset word count',diskFreeReserveMB:64,error:this.error}
+  const value={realmScoped:true,words,storage:'private on-phone app files; limited by available device storage, not a preset word count',diskFreeReserveMB:64,error:this.error}
+  this.summaryCache={at:Date.now(),value};return value
  }
 }
