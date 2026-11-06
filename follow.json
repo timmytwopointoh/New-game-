@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "sequence": 1,
+  "channel": "realm-follow-safe",
+  "issuedAt": "2026-11-06T00:00:00.000Z",
+  "expiresAt": "2026-12-31T23:59:59.000Z",
+  "policy": {
+    "replanIntervalMs": 1250,
+    "waypointCooldownMs": 120000,
+    "waypointMaxVisits": 2,
+    "maxSegmentBlocks": 14,
+    "candidateLimit": 24,
+    "maxRouteNodes": 768,
+    "maxApproachBlocks": 4
+  },
+  "signature": "OAxtbC/UFMPFRc4OdI4ElCBZIW9Be/m9MTcasoBbdw/iPSXKmhX3CAbAvY8WUnT2oowKvE8Uug1OCoR9Ui+lAQ=="
+}
