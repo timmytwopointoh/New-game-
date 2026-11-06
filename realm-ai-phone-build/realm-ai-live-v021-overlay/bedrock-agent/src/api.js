@@ -72,10 +72,19 @@ export function createApi(config,connection,log=console.log){
    }).catch(e=>{if(epoch===researchEpoch&&!abort.signal.aborted)survival?.report('Automatic Google research blocked: '+String(e.message||e).slice(0,150))}).finally(()=>{if(googleAbort===abort)googleAbort=null})
    return {accepted:true,queued:true,message:'Researching with Google AI and validating the result against observed Realm terrain. Supported steps will launch automatically; no Activate tap. Stop cancels pending research.'}
  }
- function studyTerm(word,original=null){
+ function studyTerm(word,original=null,{replyToRealm=false}={}){
+  const publish=text=>{
+   connection.survival?.report?.(text)
+   if(replyToRealm&&connection.spawned)connection.say?.(text.slice(0,240))
+  }
   const survival=connection.survival,scope=survival?.commandVocabulary?.scope,epoch=researchEpoch
   const builtIn=offlineMinecraftResponse('what is '+word,{world:survival?.world})
   if(builtIn)return builtIn
+  const learned=survival?.knowledge?.recall?.(word)
+  if(learned?.senses?.length)return {accepted:true,queued:false,
+   message:'I remember '+word+': '+learned.senses[0].definition+
+    (learned.comprehension?.ambiguous?' It can mean different things; which context did you mean?':''),
+   learned:learned.comprehension||null}
   const remembered=survival?.commandVocabulary?.definitionFor?.(word)
   if(remembered)return {accepted:true,queued:false,message:`I remember “${word}”: ${remembered.definition} (${remembered.source}; ${remembered.sourceCount} source). This is a saved definition, not permission to execute an action. Tell me the Minecraft object or tool you mean.`}
   if(researching)return {accepted:false,queued:false,message:'A word lookup is already running.'}
@@ -83,13 +92,20 @@ export function createApi(config,connection,log=console.log){
   researching=true
   dictionaryResearch.study(word).then(async result=>{
    if(epoch!==researchEpoch||survival!==connection.survival||scope!==survival?.commandVocabulary?.scope)return
-   const tree=await exploreDefinition(word,result,{lookupOnline:w=>dictionaryResearch.study(w),maxTerms:12,maxDepth:2,maxOnline:2})
+   const tree=await exploreDefinition(word,result,{lookupOnline:w=>dictionaryResearch.study(w),
+    context:original||'',maxTerms:40,maxDepth:4,maxOnline:6,maxWallMs:16000})
    if(epoch!==researchEpoch||survival!==connection.survival||scope!==survival?.commandVocabulary?.scope)return
    let definitionSaved=false
-   try{definitionSaved=survival.commandVocabulary.rememberDefinition?.(word,{...result,relatedTerms:tree.terms})===true}catch{}
-   let info=`Online dictionary: ${word} means ${result.definition} (${result.source}). ${result.reason}`
-   if(definitionSaved)info+=' Definitions saved for this Realm; a definition alone is not an executable action.'
-   if(tree.terms.length)info+=' Explored '+tree.terms.length+' related definition words (maximum two layers), such as '+tree.terms.slice(0,5).map(x=>x.word).join(', ')+'.'
+   try{
+    const written=survival.knowledge?.learnExploration?.(word,result,tree,{context:original||''})
+    definitionSaved=written?.primary===true
+   }catch{}
+   // Keep compatibility with the old 50-entry glossary, but the new,
+   // separate knowledge store is expandable across on-phone disk space.
+   try{survival.commandVocabulary.rememberDefinition?.(word,{...result,relatedTerms:tree.terms})}catch{}
+   let info='I found that '+word+' usually means '+(tree.concept?.summary||result.definition)+'.'
+   if(definitionSaved)info+=' I will remember this and the related meanings.'
+   if(tree.terms.length)info+=' I checked the meaning of '+tree.terms.length+' connected words to understand it better.'
    const choices=tree.choices
    if(choices.length>1){
      pendingInterpretation={kind:'word-sense',word,choices,scope,createdAt:Date.now()}
@@ -106,11 +122,11 @@ export function createApi(config,connection,log=console.log){
     if(original){pendingInterpretation={kind:'action',word,input:original,scope,learn:true,target:result.action,createdAt:Date.now()};info+=` One source suggests ${result.action}. Did you mean that Minecraft action? Reply yes to remember it and prepare the request, or no. Nothing has started.`}
     else info+=' One external source is not enough to learn an executable action automatically.'
    }
-   survival.report(info)
-  }).catch(e=>{if(epoch===researchEpoch)survival?.report('Online dictionary lookup failed: '+String(e.message||e).slice(0,105))}).finally(()=>{researching=false})
-  return {accepted:true,queued:true,message:`I am looking up “${word}” myself using the internet dictionary. I will reuse the meaning only if it matches a supported command and required in-game details are known.`}
+   publish(info)
+  }).catch(e=>{if(epoch===researchEpoch)publish("I couldn't confirm that meaning online. Could you describe how you are using the word?")}).finally(()=>{researching=false})
+  return {accepted:true,queued:true,message:'Let me look into that word and its related meanings.'}
  }
- const message=raw=>{
+ const message=(raw,{replyToRealm=false}={})=>{
    if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
    const addressed=interpretNameUtterance(raw,
     connection.username||connection.config?.minecraft?.botPlayerName,{phone:true})
@@ -120,6 +136,8 @@ export function createApi(config,connection,log=console.log){
    }
    if(addressed.addressed&&(addressed.command||addressed.content))
     raw=addressed.command||addressed.content
+   const tone=connection.survival?.voice?.handle(raw)
+   if(tone)return tone
    const companion=connection.survival?.companion?.handle(raw)
    if(companion)return companion
    // Both the phone chat bar and the owner-only Realm chat use this same
@@ -155,7 +173,7 @@ export function createApi(config,connection,log=console.log){
      if(isForestryReturnCommand(text)){pendingInterpretation=null;output=connection.survival.handle(text.replace(/^command\s+/i,''))}
      else if(/^(?:offline knowledge|minecraft knowledge|knowledge status)$/i.test(text))output=offlineMinecraftResponse(text,{world:connection.survival?.world})
      else if((m=text.match(/^(?:research and (?:do|perform|execute)|ask google (?:how to|to)|do research on) (.{3,180})$/i)))output=researchTask(m[1])
-     else if((m=text.match(/^(?:research|look up|learn word) ([a-z][a-z-]{1,29})[?.!]?$/i)))output=studyTerm(m[1].trim().toLowerCase())
+     else if((m=text.match(/^(?:research|look up|learn word) ([a-z][a-z-]{1,29})[?.!]?$/i)))output=studyTerm(m[1].trim().toLowerCase(),text,{replyToRealm})
      else if((m=text.match(/^command\s+teach\s+(action|material)\s+(.+?)\s*=\s*(.+)$/i))){pendingInterpretation=null;const unquote=x=>x.trim().replace(/^["“](.*)["”]$/,'$1');output=vocabulary.teach(m[1].toLowerCase(),unquote(m[2]),unquote(m[3]))}
      else if((m=text.match(/^command\s+forget\s+(action|material)\s+(.+)$/i))){pendingInterpretation=null;output=vocabulary.forget(m[1].toLowerCase(),m[2].trim().replace(/^["“](.*)["”]$/,'$1'))}
      else if(/^(?:command\s+)?(?:learning status|what have you learned|what do you remember|how do you learn|do you have a language model)[?!.]*$/i.test(text)){
@@ -260,7 +278,7 @@ export function createApi(config,connection,log=console.log){
        if(direct&&!ungrounded)output={...direct,plans:plans.snapshot()}
        else if(offlineMinecraftResponse(text,{world:connection.survival?.world}))output=offlineMinecraftResponse(text,{world:connection.survival?.world})
        else if(route?.kind==='google')output=researchTask(route.task)
-       else if(route?.kind==='dictionary')output=studyTerm(route.word,route.original)
+       else if(route?.kind==='dictionary')output=studyTerm(route.word,route.original,{replyToRealm})
        else if(route?.kind==='needs-ai')output={accepted:false,queued:false,message:unsupportedResearchResponse(),plans:plans.snapshot()}
        else if(direct)output={...direct,plans:plans.snapshot()}
        else {const reply=respondToConversation(text,{vocabulary});let conversational=null;try{conversational=parseDescriptor(reply)}catch{}if(conversational&&['status','movement','inventory','about','recipe'].includes(conversational.id))output=connection.survival.handle(renderDescriptor(conversational));else output={accepted:true,queued:false,message:reply,plans:plans.snapshot()}}
