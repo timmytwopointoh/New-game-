@@ -57,7 +57,7 @@ export class Building{
    for(const d of directions){const q={x:p.x+d.x,y:p.y+d.y,z:p.z+d.z},b=w.block(q),fluid=w.block(q,1)
     if(!b||!fluid)return {accepted:false,queued:false,message:`Terrain beside ${key(p)} is unknown; look around before building.`}
     if(!air(fluid)||/water|lava|fire|powder_snow/.test(b.name))return {accepted:false,queued:false,message:'Fluid or hazardous terrain beside the footprint; placement refused.'}
-    if(!air(b)&&!w.ownedPlacements?.has(`${w.dimension}:${key(q)}`)&&placementEvidence(w,q,b).classification!=='natural-looking')return {accepted:false,queued:false,message:'Footprint is beside an existing build or protected block; choose a clear location.'}
+    if(!air(b)&&!w.ownedPlacements?.has(`${w.dimension}:${key(q)}`)&&placementEvidence(w,q,b).classification!=='natural-looking'&&!approved)return {accepted:false,queued:false,message:'Footprint is beside an existing build or protected block; choose a clear location.'}
    }
   }
   this.job={...design,constructionApprovalUsed:exposed.state!=='clear'&&approved,allowAirborne:descriptor.allowAirborne===true,remaining:design.positions.map(p=>({...p})),confirmed:new Set(),pending:null,started:now,lastProgress:now,approachAttempts:0};this.state='building';this.reason=creative?'Creative placement prepared; every block requires server confirmation.':'Build prepared; each block requires server and inventory confirmation.';this.placed=0;this.total=design.positions.length
@@ -68,7 +68,7 @@ export class Building{
   const w=this.world,j=this.job
   for(const d of directions){const p={x:target.x+d.x,y:target.y+d.y,z:target.z+d.z},b=w.block(p)
    if(!full(b)||!air(w.block(p,1)))continue
-   if(!j.confirmed.has(key(p))&&!w.ownedPlacements?.has(`${w.dimension}:${key(p)}`)&&placementEvidence(w,p,b).classification!=='natural-looking')continue
+   if(!j.confirmed.has(key(p))&&!w.ownedPlacements?.has(`${w.dimension}:${key(p)}`)&&placementEvidence(w,p,b).classification!=='natural-looking'&&!j.constructionApprovalUsed)continue
    const click={x:d.face===4?0:d.face===5?1:.5,y:d.face===0?0:d.face===1?1:.5,z:d.face===2?0:d.face===3?1:.5},hit={x:p.x+click.x,y:p.y+click.y,z:p.z+click.z}
    const outside=[eye.y<hit.y,eye.y>hit.y,eye.z<hit.z,eye.z>hit.z,eye.x<hit.x,eye.x>hit.x][d.face]
    if(!outside||Math.hypot(hit.x-eye.x,hit.y-eye.y,hit.z-eye.z)>4)continue
