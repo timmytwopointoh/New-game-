@@ -34,7 +34,10 @@ export class PermanentHome {
  hasHome(){return !!this.record}
  snapshot(){return this.record?copy(this.record):null}
  persist(record){
-  if(!this.file||this.readOnly)return false
+  if(this.readOnly)return false
+  // Unit-test/in-memory controller instances have no phone storage root.
+  if(!this.directory){this.record=copy(record);return true}
+  if(!this.file)return false
   try{
    fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700})
    const tmp=this.file+'.tmp'
@@ -50,7 +53,7 @@ export class PermanentHome {
  claim(plot,design){
   if(this.readOnly)return {ok:false,message:this.error}
   if(this.record)return {ok:false,locked:true,message:'I already have one permanent home, and it cannot be relocated.'}
-  if(!this.scope||!this.file)return {ok:false,message:'Wait for a verified Realm identity before assigning my permanent home.'}
+  if(!this.scope||(this.directory&&!this.file))return {ok:false,message:'Wait for a verified Realm identity before assigning my permanent home.'}
   if(!validPlot(plot)||!validatePlotBlueprint(plot,design))
    return {ok:false,message:'The proposed home has not passed owner plot and blueprint checks.'}
   const record={schema:1,plot:copy(plot),design:copy(design),completedStages:0,createdAt:Date.now(),updatedAt:Date.now()}
