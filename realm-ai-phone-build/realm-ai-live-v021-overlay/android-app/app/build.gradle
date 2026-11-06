@@ -6,8 +6,8 @@ android {
         applicationId 'com.veilforge.realmagent.live'
         minSdk 28
         targetSdk 35
-        versionCode 200074
-        versionName '0.44.3-follow-queue-diagnostics'
+        versionCode 200075
+        versionName '0.44.3-rovekin-menu-test'
         ndk { abiFilters 'arm64-v8a' }
     }
     sourceSets.main.assets.srcDir "$buildDir/generated/node-assets"
