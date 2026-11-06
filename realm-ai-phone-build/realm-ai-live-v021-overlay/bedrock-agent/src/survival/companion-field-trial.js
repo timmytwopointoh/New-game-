@@ -64,7 +64,7 @@ export class CompanionFieldTrial{
   if(!followed?.accepted)return {...followed,message:'I could not safely start following '+owner+': '+String(followed?.message||'not ready')}
   this.state='following';this.startedAt=now;this.lastTick=0;this.owner=owner
   this.dimension=c.world.dimension;this.scope=scope
-  this.reason='Finding '+owner+' by player identity. I will mark home only after both positions are freshly confirmed within 10 blocks.'
+  this.reason='Finding '+owner+' by player identity. I will mark home only after both positions are freshly confirmed within 4 blocks.'
   return {accepted:true,queued:true,message:'On my way! I will find you first, then set my new home beside your spot and start building.',fieldTrial:this.snapshot()}
  }
  tick(now=Date.now()){
@@ -76,9 +76,8 @@ export class CompanionFieldTrial{
     this.companion.editScope().realm!==this.scope){
    this.state='paused';this.reason='Realm or dimension changed; home assignment cancelled.';return
   }
-  if(now-this.startedAt>10*60*1000){
-   this.state='paused';this.reason='Ten-minute follow test timed out without a verified arrival.';return
-  }
+  // No arbitrary trial timeout. Keep waiting for the live named owner until
+  // Stop, an actual session/dimension change, or verified arrival.
   if(!n.job||n.job.kind!=='follow'||n.job.name?.toLowerCase()!==this.owner.toLowerCase()){
    // A follow request may be safely queued while the Realm verifies
    // movement. Pending is not arrival: do not claim land or build yet.
@@ -89,7 +88,7 @@ export class CompanionFieldTrial{
    }
    this.state='paused';this.reason='The follow task ended before arrival. No home was assigned.';return
   }
-  const at=verifiedArrival(c,this.owner,{now,started:this.startedAt,maxDistance:10})
+  const at=verifiedArrival(c,this.owner,{now,started:this.startedAt,maxDistance:4})
   this.reason=at.reason||'Owner reached at '+at.distance.toFixed(1)+' blocks using fresh server position packets.'
   if(!at.ok){this.state='awaiting-arrival';return}
   // Stop following before construction starts; the HOME command itself
