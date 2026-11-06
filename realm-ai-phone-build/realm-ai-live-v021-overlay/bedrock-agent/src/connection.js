@@ -271,6 +271,7 @@ this.authChallenge=null;this.lastPhase='bedrock-login-accepted';this.authState='
     client.on('text',p=>{
       this.chatDiagnostics.textPackets++;this.chatDiagnostics.lastPacketAt=Date.now()
       const message=String(p.message||'').slice(0,240),source=String(p.source_name||'').trim().slice(0,80)
+      if(!source&&['system','translation'].includes(String(p.type||'').toLowerCase()))this.survival?.companion?.onServerSystemText?.(p)
       if(!message)return
       this.recentMessages.push({source,message})
       if(this.recentMessages.length>24)this.recentMessages.shift()
