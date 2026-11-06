@@ -1,5 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import {NEW_HOME_SPOT,daylightDeadline,decideFirstHome} from '../src/survival/home-instinct.js'
 import {CompanionCommands} from '../src/survival/companion-commands.js'
 import {grantPlot,validatePlotBlueprint,insidePlot} from '../src/survival/companion-plot.js'
@@ -27,9 +30,10 @@ function fixture({owner=true,mode='follow',materials=true}={}){
  const controller={world:w,navigation,connection,commandPlans:{scope:'realm-1'},
   resources:{active:null},acquisition:{active:null},miningJobs:{active:null},operations:{pending:null},
   report(message){reports.push(message)}}
- const companion=new CompanionCommands(controller,'realm-1')
+ const homeDirectory=fs.mkdtempSync(path.join(os.tmpdir(),'rovekin-home-fixture-'))
+ const companion=new CompanionCommands(controller,'realm-1',{homeDirectory})
  controller.companion=companion
- return {w,controller,connection,companion,messages,reports,stops}
+ return {w,controller,connection,companion,messages,reports,stops,homeDirectory}
 }
 
 test('recognized new-home phrase and equivalent invitations are exact imperatives',()=>{
@@ -102,4 +106,39 @@ test('cannot interrupt active mining to start new plot; legacy claim remains pla
  assert.equal(claim.accepted,true)
  assert.equal(idle.companion.homeProject.state,'idle')
  assert.equal(idle.messages.length,0)
+})
+
+test('first verified home survives socket reset and rejects future different locations',()=>{
+ const f=fixture(),first=f.companion.handle('this is your new home spot')
+ assert.equal(first.accepted,true,first.message)
+ const center={...f.companion.plot.center}
+ assert.equal(f.companion.homeMemory.summary().permanent,true)
+ f.companion.reset()
+ assert.deepEqual(f.companion.plot.center,center)
+ assert.equal(f.companion.homeProject.state,'restoring')
+ // The owner can move elsewhere, but their gift does not move the bot home.
+ f.w.players.get('owner').position={x:130.5,y:72.62,z:-90.5}
+ const again=f.companion.handle('this is your new home spot')
+ assert.equal(again.accepted,true)
+ assert.match(again.message,/permanent home/i)
+ assert.deepEqual(f.companion.plot.center,center)
+ assert.equal(f.companion.handle('this is your land').accepted,true)
+ assert.deepEqual(f.companion.plot.center,center)
+ const rejoined=new CompanionCommands(f.controller,'realm-1',{homeDirectory:f.homeDirectory})
+ assert.deepEqual(rejoined.plot.center,center)
+ assert.equal(rejoined.homeProject.state,'restoring')
+ assert.equal(rejoined.homeMemory.summary().autoResume,true)
+})
+
+test('owner STOP pauses house without losing plot, while explicit resume restores intent',()=>{
+ const f=fixture();assert.equal(f.companion.handle('this is your new home spot').accepted,true)
+ f.companion.manualStop()
+ assert.equal(f.companion.homeProject.state,'paused')
+ assert.equal(f.companion.homeMemory.summary().autoResume,false)
+ f.companion.reset()
+ assert.deepEqual(f.companion.homeMemory.record.plot.center,f.companion.plot.center)
+ assert.equal(f.companion.homeProject.state,'restoring')
+ const r=f.companion.handle('resume home')
+ assert.equal(r.accepted,true)
+ assert.equal(f.companion.homeMemory.summary().autoResume,true)
 })
