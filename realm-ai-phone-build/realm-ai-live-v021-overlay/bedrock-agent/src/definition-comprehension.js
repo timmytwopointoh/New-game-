@@ -32,39 +32,82 @@ export function chooseMeaning(result,reference=''){
  if(ranked[0].match===0||ranked[0].match===ranked[1].match)return {chosen:null,choices,ambiguous:true,reason:'ambiguous-reference'}
  return {chosen:ranked[0].choice,choices,ambiguous:false,reason:'context-match'}
 }
+// Build a finite concept graph from definitions and definitions of their
+// terms. Each hop uses observed dictionary meanings, not invented semantics.
+// A context score helps prioritize relevant senses and stop early; a weak
+// score produces clarification instead of silently guessing an intent.
 export async function exploreDefinition(word,initial,{
  lookupOffline=lookupEnglishWord,
  lookupOnline=null,
- maxTerms=12,
- maxDepth=2,
- maxOnline=2
+ context='',
+ maxTerms=40,
+ maxDepth=4,
+ maxOnline=6,
+ maxWallMs=16000
 }={}){
- const root=key(word)
- const choices=meaningOptions(initial)
- const collected=[],seen=new Set([root]),queue=[]
- for(const c of choices.slice(0,3))for(const term of toWords(c.definition).slice(0,9))queue.push({term,depth:1})
- let onlineCalls=0
- while(queue.length&&collected.length<maxTerms){
-  const {term,depth}=queue.shift()
-  if(seen.has(term)||depth>maxDepth)continue
-  seen.add(term)
-  let result=lookupOffline(term)
-  let source='offline'
-  if(!result&&typeof lookupOnline==='function'&&onlineCalls<maxOnline){
-   onlineCalls++
-   try{result=await lookupOnline(term);source='dictionary'}catch{continue}
-  }
-  if(!result)continue
-  const options=meaningOptions(result)
-  if(!options.length&&Array.isArray(result.senses)){
-   result={...result,meanings:result.senses.map(s=>({partOfSpeech:s.partOfSpeech,definitions:[s.definition]}))}
-  }
-  const meanings=meaningOptions(result)
-  if(!meanings.length)continue
-  collected.push({word:term,source,senses:meanings.slice(0,2).map(m=>({partOfSpeech:m.partOfSpeech,definition:m.definition}))})
-  if(depth<maxDepth)for(const term2 of toWords(meanings[0].definition).slice(0,5))if(!seen.has(term2))queue.push({term:term2,depth:depth+1})
+ const root=key(word),choices=meaningOptions(initial)
+ const selected=chooseMeaning(initial,context),ambiguous=selected.ambiguous
+ const contextWords=new Set(toWords(context))
+ const starting=selected.chosen?[selected.chosen]:choices.slice(0,Math.min(3,choices.length))
+ const terms=[],seen=new Set([root]),queued=new Set(),queue=[],start=Date.now()
+ let onlineCalls=0,edgeCount=0,sharedCount=0
+ const seed=new Set([...starting.flatMap(s=>toWords(s.definition)),...toWords(root)])
+ function add(term,depth,parent,priority){
+  if(!/^[a-z][a-z-]{2,27}$/.test(term)||seen.has(term)||queued.has(term)||depth>maxDepth||queue.length>=256)return
+  queued.add(term);queue.push({term,depth,parent,priority})
  }
- return {word:root,choices,terms:collected,onlineCalls,depthLimit:maxDepth,termLimit:maxTerms,ambiguous:choices.length>1}
+ for(const s of starting)for(const term of toWords(s.definition).slice(0,12))
+  add(term,1,root,contextWords.has(term)?3:seed.has(term)?2:1)
+ while(queue.length&&terms.length<maxTerms&&Date.now()-start<maxWallMs){
+  // Prefer words that help explain the current sentence, not obscure
+  // digressions deep in the dictionary.
+  queue.sort((a,b)=>b.priority-a.priority||a.depth-b.depth)
+  const {term,depth,parent}=queue.shift()
+  queued.delete(term);if(seen.has(term))continue;seen.add(term)
+  let item=lookupOffline(term),source='offline'
+  if(!item&&typeof lookupOnline==='function'&&onlineCalls<maxOnline&&Date.now()-start<maxWallMs-1500){
+   onlineCalls++
+   try{item=await lookupOnline(term);source='dictionary'}catch{continue}
+  }
+  if(!item)continue
+  if(!meaningOptions(item).length&&Array.isArray(item.senses))
+   item={...item,meanings:item.senses.map(s=>({
+    partOfSpeech:s.partOfSpeech,definitions:[s.definition],synonyms:s.synonyms||[]}))}
+  const senses=meaningOptions(item)
+  if(!senses.length)continue
+  const picked=chooseMeaning(item,context+' '+starting.map(x=>x.definition).join(' '))
+  const selectedSenses=picked.chosen?[picked.chosen]:senses.slice(0,2)
+  const words=[...new Set(selectedSenses.flatMap(s=>toWords(s.definition)))].slice(0,24)
+  const overlap=words.filter(w=>seed.has(w)||contextWords.has(w)).length
+  if(overlap)sharedCount+=Math.min(3,overlap)
+  edgeCount+=words.length
+  terms.push({word:term,source,depth,parent,senses:selectedSenses.slice(0,2).map(s=>({
+   partOfSpeech:s.partOfSpeech,definition:s.definition})),
+   related:words.filter(w=>w!==root).slice(0,12)})
+  if(depth<maxDepth)for(const next of words.slice(0,9)){
+   const priority=(contextWords.has(next)?6:0)+(seed.has(next)?3:0)+
+    Math.max(0,4-depth)+(next.includes(root)?2:0)
+   add(next,depth+1,term,priority)
+  }
+  const evidence=terms.length,links=sharedCount/Math.max(1,evidence*3),
+   contextMatches=contextWords.size?Math.min(1,[...contextWords].filter(w=>
+    seed.has(w)||terms.some(t=>t.related.includes(w))).length/contextWords.size):0
+  const potential=.16+Math.min(.45,evidence/28)+Math.min(.22,links*.25)+contextMatches*.15
+  if(evidence>=8&&contextWords.size>=2&&!ambiguous&&potential>=.78)break
+ }
+ const evidence=terms.length,
+  contextMatches=contextWords.size?[...contextWords].filter(w=>
+    seed.has(w)||terms.some(t=>t.related.includes(w))).length/contextWords.size:0,
+  support=sharedCount/Math.max(1,evidence*3),
+  score=Number(Math.max(0,Math.min(ambiguous?.46:1,
+   .15+Math.min(.38,evidence/24)+Math.min(.2,support*.3)+Math.min(.22,contextMatches*.22))).toFixed(2))
+ const concept={score,evidence,ambiguous:!!ambiguous,
+  summary:selected.chosen?.definition||choices[0]?.definition||'Meaning not yet established.',
+  contextMatched:Number(contextMatches.toFixed(2)),
+  nextStep:ambiguous?'ask-context':score<.55?'seek-more-evidence':'use-conservative-meaning'}
+ return {word:root,choices,terms,concept,onlineCalls,depthLimit:maxDepth,termLimit:maxTerms,
+  ambiguous:!!ambiguous,exploredDepth:Math.max(0,...terms.map(t=>t.depth)),
+  stoppedForTime:Date.now()-start>=maxWallMs}
 }
 export function explainChoices(word,choices){
  const list=choices.slice(0,4).map((x,i)=>String(i+1)+') '+(x.partOfSpeech?x.partOfSpeech+': ':'')+x.definition).join(' | ')
