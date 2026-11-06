@@ -1,4 +1,5 @@
 import {InventoryProtocol} from './inventory-protocol.js'
+import {vanillaBlockBehavior,vanillaPathRisk} from './vanilla-block-behavior.js'
 import {abilityEvidence} from './verification.js'
 import registryFactory from 'prismarine-registry'
 import blockFactory from 'prismarine-block'
@@ -9,7 +10,7 @@ const airNames=new Set(['air','cave_air','void_air'])
 const isWater=name=>/^(?:flowing_)?water$/.test(name||'')
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.terrainRevision=0;this.visibilityCache=null;this.blockStates=new Map();this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
+ reset(){this.unknownAddonBlocks=new Map();this.terrainRevision=0;this.visibilityCache=null;this.blockStates=new Map();this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
  initialize(packet,version='1.26.60'){
   this.terrainRevision++;this.visibilityCache=null;this.blockStates.clear();this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
@@ -75,6 +76,13 @@ export class WorldView{
   let id=this.updates.get(k)
   if(id===undefined){if(!s)return null;if(!s.layers[layer])return layer?{name:'air',shapes:[]}:null;id=s.layers[layer][blockIndex(p.x,p.y,p.z)]}
   const state=this.runtime(id);if(!state)return null
+  // Remember only add-on block identifiers; never infer custom collisions
+  // or whether a modded block is safe from an ordinary vanilla block name.
+  const behavior=vanillaBlockBehavior(state.name)
+  if(behavior.source==='custom'){
+    if(!this.unknownAddonBlocks.has(state.name)&&this.unknownAddonBlocks.size<128)this.unknownAddonBlocks.set(state.name,true)
+    return null
+  }
   // Shapes and tool behavior depend on state, not world coordinates. Reuse them
   // across collision sweeps and A*; location/update lookup still happens above.
   let block=this.blockStates.get(state.stateId)
@@ -189,7 +197,10 @@ export class WorldView{
   if(!floor.shapes?.some(q=>q[0]===0&&q[2]===0&&q[3]===1&&q[5]===1&&q[4]>=1))return false
   return this.clearBody({x:p.x+.5,y:p.y+1.62,z:p.z+.5},{allowWater:true})
  }
+ terrainPenalty(p){return vanillaPathRisk(this,p)}
  walkable(p,{avoidHostiles=true,allowWater=false}={}){
+  // Do not step onto add-on, harmful, triggering or unobserved cells.
+  if(!Number.isFinite(this.terrainPenalty(p)))return false
   const height=this.supportHeight(p),shallow=allowWater&&this.shallowWater(p)
   if(!shallow&&(height===null||!this.clearBody({x:p.x+.5,y:height+1.62,z:p.z+.5})))return false
   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
@@ -271,5 +282,5 @@ export class WorldView{
  }
  detach(){for(const [c,e,f] of this.listeners)c.off(e,f);this.listeners=[]}
  biomeAt(position=this.serverPosition){if(!position)return null;const x=Math.floor(position.x),y=Math.floor(position.y-1.62),z=Math.floor(position.z),store=this.biomeStores.get(`${Math.floor(x/16)},${Math.floor(y/16)},${Math.floor(z/16)}`);if(!store)return null;const id=store[blockIndex(x,y,z)],name=this.biomeNames.get(id)||this.registry?.biomes?.[id]?.name;return {id,name:name||null,source:'server-biome-palette'}}
- snapshot(){return {biome:this.biomeAt(),biomeDecodeErrors:this.biomeDecodeErrors,inventoryAuthority:this.serverAuthoritativeInventory===null?'unknown':this.serverAuthoritativeInventory?'server-authoritative':'legacy',blockBreakingMode:this.serverAuthoritativeBreaking===null?'unknown':this.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',abilities:this.abilityState,editModeVerified:this.editModeVerified,creativeEditsVerified:this.creativeEditsVerified,gameMode:this.gameMode,gameModeSource:this.gameModeSource,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventoryEvidence:this.inventoryProtocol.snapshot(),inventory:this.items(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,groundDrops:this.drops.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
+ snapshot(){return {unverifiedAddonBlockTypes:[...this.unknownAddonBlocks.keys()].slice(0,16),unverifiedAddonBlockCount:this.unknownAddonBlocks.size,biome:this.biomeAt(),biomeDecodeErrors:this.biomeDecodeErrors,inventoryAuthority:this.serverAuthoritativeInventory===null?'unknown':this.serverAuthoritativeInventory?'server-authoritative':'legacy',blockBreakingMode:this.serverAuthoritativeBreaking===null?'unknown':this.serverAuthoritativeBreaking?'server-authoritative':'legacy-player-actions',abilities:this.abilityState,editModeVerified:this.editModeVerified,creativeEditsVerified:this.creativeEditsVerified,gameMode:this.gameMode,gameModeSource:this.gameModeSource,survivalVerified:this.survivalVerified,enabled:this.enabled,position:this.standPosition(),sections:this.sections.size,decodeErrors:this.decodeErrors,lastError:this.lastError,inventoryKnown:this.inventoryKnown,inventoryEvidence:this.inventoryProtocol.snapshot(),inventory:this.items(),health:this.attributes['minecraft:health']??null,hunger:this.attributes['minecraft:player.hunger']??null,entities:this.entities.size,groundDrops:this.drops.size,players:[...this.players.values()].map(p=>p.name),selectedSlot:this.selectedSlot}}
 }
