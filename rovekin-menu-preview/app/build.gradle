@@ -1,0 +1,18 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.veilforge.rovekin.preview'
+    compileSdk 35
+    defaultConfig {
+        // Deliberately distinct from com.veilforge.realmagent.live.
+        applicationId 'com.veilforge.rovekin.menupreview'
+        minSdk 28
+        targetSdk 35
+        versionCode 1
+        versionName '0.1-menu-preview'
+    }
+    buildTypes { release { minifyEnabled false } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
