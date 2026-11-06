@@ -113,6 +113,7 @@ public final class RovekinEntryOverlay {
         return bot.length()>=2&&owner.length()>=2&&!bot.equalsIgnoreCase(owner);
     }
     private void createVisuals(){
+        if(painting!=null)painting.setAnimated(false);
         frame.removeAllViews();
         painting=new RovekinVfxView(a);
         frame.addView(painting,new FrameLayout.LayoutParams(-1,-1));
