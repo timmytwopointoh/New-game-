@@ -27,16 +27,24 @@ const shuffle=(list,pick)=>list.map(x=>({x,k:pick()})).sort((a,b)=>a.k-b.k).map(
 const choose=(list,pick)=>list[Math.floor(pick()*list.length)]
 // Owner's observed position is authoritative; NEVER accept a player name or
 // claimed ownership purely because untrusted Realm chat text says "me".
-export function grantPlot(world,ownerNames,side=PLOT_SIDE){
+export function grantPlot(world,ownerNames,side=PLOT_SIDE,{centerOverride=null}={}){
  if(side!==PLOT_SIDE)throw Error('Companion home area must be exactly 50×50×50 for this test.')
  if(!world||!Array.isArray(ownerNames)||!ownerNames.length)throw Error('Configure the actual Realm owner account before granting land.')
  const names=new Set(ownerNames.map(n=>String(n).toLowerCase()))
  const visible=[...(world.players?.values?.()||[])].filter(p=>names.has(String(p.name).toLowerCase())&&p.position&&[p.position.x,p.position.y,p.position.z].every(Number.isFinite))
  if(visible.length!==1)throw Error('One configured owner must be visible in the same Realm. Stand on the plot center and try again.')
  if(!whole(world.dimension))throw Error('Server dimension is unknown.')
- const center={x:Math.floor(visible[0].position.x),y:Math.floor(visible[0].position.y-1.62),z:Math.floor(visible[0].position.z)}
+ const observed={x:Math.floor(visible[0].position.x),y:Math.floor(visible[0].position.y-1.62),z:Math.floor(visible[0].position.z)}
+ // A field-trial override still needs the REAL named owner standing nearby;
+ // it never authorizes a distant world-edit coordinate from text alone.
+ if(centerOverride){
+  if(!block(centerOverride)||Math.hypot(observed.x-centerOverride.x,
+   observed.y-centerOverride.y,observed.z-centerOverride.z)>5)
+   throw Error('Owner is not at the requested exact home position.')
+ }
+ const center=centerOverride?{...centerOverride}:observed
  const bounds=boundsFor(center)
- return {schema:1,source:'owner-observed-player-position',owner:visible[0].name,dimension:world.dimension,center,size:{x:50,y:50,z:50},bounds,permission:'plan-only',createdAt:Date.now()}
+ return {schema:1,source:centerOverride?'owner-verified-explicit-XYZ':'owner-observed-player-position',owner:visible[0].name,dimension:world.dimension,center,size:{x:50,y:50,z:50},bounds,permission:'plan-only',createdAt:Date.now()}
 }
 export function insidePlot(plot,position,dimension=plot?.dimension){
  return !!plot&&plot.dimension===dimension&&within(plot.bounds,position)
