@@ -81,7 +81,7 @@ export class CompanionCommands {
    try{
     plot=grantPlot(this.c.world,connection.config?.ownerPlayerNames||[])
     decision=decideFirstHome(this.c.world,plot,{
-     serverTime:this.homeRoutine.serverTime,serverTimeAt:this.homeRoutine.serverTimeAt
+     serverTime:this.homeRoutine.serverTime,serverTimeAt:this.homeRoutine.serverTimeAt,mind:this.c.mind||null
     })
     this.plot=plot;this.design=decision.design;this.social.mode='house';this.firstHomeDecision={
      choice:decision.choice,daylight:decision.daylight,site:decision.site,
