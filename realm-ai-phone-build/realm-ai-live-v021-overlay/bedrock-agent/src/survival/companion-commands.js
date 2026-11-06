@@ -6,21 +6,70 @@ import {HomeRoutine} from './home-routine.js'
 import {NEW_HOME_SPOT,decideFirstHome} from './home-instinct.js'
 import {HomeSocialLoop} from './home-social-loop.js'
 import {CompanionFieldTrial,isHomeFieldTestCommand} from './companion-field-trial.js'
+import {PermanentHome} from './permanent-home.js'
 
 // Read-only house design and one-job edit consent. Only the bearer-authenticated
 // local phone API or an owner-allowlisted in-game command can call this handler.
 export class CompanionCommands {
- constructor(controller,scope=null){
+ constructor(controller,scope=null,{homeDirectory=null}={}){
   this.c=controller;this.scope=scope||null
-  this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller);this.social=new HomeSocialLoop(this);this.fieldTrial=new CompanionFieldTrial(this)
+  this.plot=null;this.design=null;this.firstHomeDecision=null
+  this.edits=new EditConfirmations()
+  this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller)
+  this.social=new HomeSocialLoop(this);this.fieldTrial=new CompanionFieldTrial(this)
+  this.homeMemory=new PermanentHome({directory:homeDirectory,scope:this.scope})
+  this.restoreHome()
  }
- setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.social.reset();this.fieldTrial.clear();this.c.world.editApproval=null}
+ restoreHome(){
+  const record=this.homeMemory.record
+  if(!record)return
+  this.plot=record.plot;this.design=record.design
+  this.homeRoutine.setPlot(record.plot)
+  this.homeProject.restoreSaved(record,this.scope)
+  this.social.mode=record.autoResume?'house':'held'
+ }
+ setScope(scope){
+  const next=scope?String(scope):null
+  if(next===this.scope)return
+  this.scope=next;this.plot=null;this.design=null;this.firstHomeDecision=null
+  this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null)
+  this.social.reset();this.fieldTrial.clear();this.c.world.editApproval=null
+  this.homeMemory.setScope(next);this.restoreHome()
+ }
  editScope(){return {realm:this.scope||this.c.commandPlans.scope||null,dimension:this.c.world.dimension}}
- reset(){this.edits.reset();this.homeProject.stop('Realm session interrupted; owner must confirm before resuming.');this.homeRoutine.reset(true);this.social.manualHold();this.fieldTrial.clear();this.c.world.editApproval=null}
+ reset(){
+  // The socket disconnected. Never erase an existing permanent home, change
+  // its coordinates, or convert an interrupted task into a completed stage.
+  this.edits.reset();this.homeProject.stop('Realm interrupted; retaining permanent home.')
+  this.homeRoutine.reset(true);this.social.reset();this.fieldTrial.clear()
+  this.c.world.editApproval=null
+  if(this.homeMemory.record)this.restoreHome()
+ }
+ manualStop(){
+  this.edits.reset();this.homeProject.stop('Owner paused home work.')
+  this.fieldTrial.clear();this.social.manualHold()
+  this.c.world.editApproval=null
+  this.homeMemory.saveProgress({autoResume:false})
+ }
+ rememberProgress(stage){
+  if(!this.homeMemory.record)return false
+  const saved=this.homeMemory.saveProgress({verifiedStages:stage})
+  if(!saved)this.homeProject.reason='Stage verified in Realm, but local permanent-home progress could not be saved.'
+  return saved
+ }
+ resumeSavedHome(){
+  const record=this.homeMemory.record
+  if(!record)return null
+  if(!this.homeMemory.saveProgress({autoResume:true}))
+   return {accepted:false,queued:false,message:this.homeMemory.error||'Could not save the resume intent.'}
+  this.social.mode='house';this.homeProject.restoreSaved(this.homeMemory.record,this.scope)
+  return {accepted:true,queued:true,message:'Returning to my original permanent home at '+
+   Object.values(record.plot.center).join(', ')+'. Checking server blocks before resuming.'}
+ }
  tick(now=Date.now()){this.fieldTrial.tick(now);this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)}
  onServerTime(p,now=Date.now()){this.homeRoutine.onServerTime(p,now)}
  onServerSystemText(p,now=Date.now()){this.homeRoutine.onSystemText(p,now)}
- snapshot(){return {plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,fieldTrial:this.fieldTrial.snapshot(),social:this.social.snapshot(),homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
+ snapshot(){return {plot:this.plot,design:this.design,permanentHome:this.homeMemory.summary(),firstHomeDecision:this.firstHomeDecision,fieldTrial:this.fieldTrial.snapshot(),social:this.social.snapshot(),homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
  check(kind,descriptor,positions,execute){
   const c=this.c
   if(!c.connection.spawned)return {accepted:false,queued:false,message:'Join and spawn in the Realm before editing.'}
@@ -51,12 +100,15 @@ export class CompanionCommands {
      (trial.state==='building'?' My home project has started.':''),
     fieldTrial:trial}
   }
-  if(isHomeFieldTestCommand(s))return this.fieldTrial.start()
+  if(isHomeFieldTestCommand(s))return this.homeMemory.hasHome?
+   {accepted:true,queued:false,message:'My home is already permanently assigned at '+Object.values(this.plot.center).join(', ')+'. I will not move it.'}:
+   this.fieldTrial.start()
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
   if(/^confirm home proximity \\d{6}$/.test(s)||s==='cancel home proximity')
    return this.homeProject.confirmProximity(s,this.editScope().realm)
   if(s==='resume working on your house'||s==='go back to your house'||s==='resume house work'){
+   const restored=this.resumeSavedHome();if(restored)return restored
    this.social.mode='house'
    const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm)
    if(result.accepted)return result
@@ -66,9 +118,10 @@ export class CompanionCommands {
   if(/^confirm clearance \d{6}$/.test(s)||s==='cancel clearance')return this.homeProject.confirmClearance(s,String(this.editScope().realm??''))
   if(/^confirm home \d{6}$/.test(s))return this.homeProject.confirm(s,this.editScope().realm)
   if(s==='cancel home')return this.homeProject.confirm(s,this.editScope().realm)
-  if(s==='pause home'||s==='stop home building'){this.social.manualHold();return this.homeProject.stop()}
-  if(s==='resume home'||s==='resume building home'){this.social.mode='house';const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm);return result.accepted?result:this.homeProject.requestAuthorization(this.editScope().realm)}
-  if(s==='home status'||s==='check home')return {accepted:true,queued:false,message:this.homeRoutine.inspect().message+' '+this.homeProject.snapshot().reason,home:this.homeRoutine.snapshot(),project:this.homeProject.snapshot()}
+  if(s==='pause home'||s==='stop home building'){this.homeMemory.saveProgress({autoResume:false});this.social.manualHold();return this.homeProject.stop()}
+  if(s==='resume home'||s==='resume building home'){
+   const restored=this.resumeSavedHome();if(restored)return restoredthis.social.mode='house';const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm);return result.accepted?result:this.homeProject.requestAuthorization(this.editScope().realm)}
+  if(s==='home status'||s==='check home')return {accepted:true,queued:false,message:this.homeRoutine.inspect().message+' '+this.homeProject.snapshot().reason+(this.homeMemory.record?' Permanent home: '+Object.values(this.homeMemory.record.plot.center).join(', ')+'.':''),home:this.homeRoutine.snapshot(),permanentHome:this.homeMemory.summary(),project:this.homeProject.snapshot()}
   if(s==='bed supplies'||s==='how to get a bed'||s==='how do you get a bed'||s==='find home bed')return this.homeRoutine.inspect()
   if(s==='craft home bed'||s==='make a home bed'||s==='craft a bed')return this.homeRoutine.craftBed()
   if(s==='place home bed'||s==='put down home bed')return this.homeRoutine.placeBed()
@@ -79,6 +132,8 @@ export class CompanionCommands {
   if(s==='plan home construction'||s==='preview home build')return this.plot&&this.design?this.homeProject.preview(this.plot,this.design):{accepted:false,queued:false,message:'Design a home on your assigned land first.'}
   if(s==='build your home'||s==='start building your home'||s==='execute home design'||s==='begin home construction')return this.homeProject.requestAuthorization(this.editScope().realm)
   if(NEW_HOME_SPOT.test(s)){
+   if(this.homeMemory.hasHome)return {accepted:true,queued:false,message:'I already have my one permanent home at '+Object.values(this.plot.center).join(', ')+'. It cannot be moved; I will continue working there.',permanentHome:this.homeMemory.summary()}
+   if(this.homeMemory.isBlocked)return {accepted:false,queued:false,message:this.homeMemory.error}
    const connection=this.c.connection,n=this.c.navigation
    if(!connection.spawned)return {accepted:false,queued:false,message:'Please let me join the Realm before assigning a home.'}
    if(this.homeProject.state==='running'||this.homeProject.state==='furnishing')
@@ -100,6 +155,8 @@ export class CompanionCommands {
     this.homeProject.preview(plot,this.design)
     const begin=this.homeProject.beginFromLandGift(this.editScope().realm)
     if(!begin.accepted)return begin
+    const locked=this.homeMemory.saveFirst(plot,this.design,{autoResume:true})
+    if(!locked.ok){this.homeProject.clear();this.plot=null;this.design=null;this.homeRoutine.setPlot(null);return {accepted:false,queued:false,message:locked.reason}}
     // Following the owner is a safe task to yield; never interrupt an
     // in-progress resource/mining/build transaction to acquire a plot.
     if(n.job?.kind==='follow'||n.survey)n.stop('Owner assigned a home; switching to building.',false)
@@ -120,6 +177,7 @@ export class CompanionCommands {
    }catch(e){return {accepted:false,queued:false,message:'I could not safely set that home spot: '+String(e.message||e).slice(0,150)}}
   }
   if(/^(?:this is your land|claim (?:your |my |a )?(?:companion )?(?:plot|land)(?: here)?|give you (?:a |my )?(?:50(?:x|\/| by )50(?:x|\/| by )50 )?(?:plot|land)(?: here)?)(?: 50(?:x|\/| by )50(?:x|\/| by )50)?$/.test(s)){
+   if(this.homeMemory.hasHome)return {accepted:true,queued:false,message:'I already own my permanent home plot; land assignments cannot replace it.',permanentHome:this.homeMemory.summary()}
    if(!this.c.connection.spawned)return {accepted:false,queued:false,message:'Bot is not spawned. No land assigned.'}
    try{this.plot=grantPlot(this.c.world,this.c.connection.config?.ownerPlayerNames||[]);this.design=null;this.homeRoutine.setPlot(this.plot);this.homeProject.clear()
     return {accepted:true,queued:false,message:'Recorded a 50×50×50 planning area centered on your visible player position. No blocks changed. Say "design your home".',plot:this.plot}}
