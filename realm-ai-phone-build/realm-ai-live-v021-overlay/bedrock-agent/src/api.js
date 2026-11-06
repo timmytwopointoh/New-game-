@@ -11,6 +11,7 @@ import {parseCommand} from '../pack-template/scripts/commands.js'
 import {interpretMessage} from './chat.js'
 import {Planner} from './planner.js'
 import {runAutonomous} from './autonomous-intent.js'
+import {executeOwnerChatAction} from './owner-chat-actions.js'
 import {makeSupportSnapshot} from './support-snapshot.js'
 import {researchRouting,unsupportedResearchResponse} from './agent-lookup-router.js'
 import {offlineMinecraftResponse,offlineKnowledgeStats} from './offline-minecraft-brain.js'
@@ -173,6 +174,14 @@ export function createApi(config,connection,log=console.log){
    // Recognized owner action, not a conversational ping, temporarily yields
    // the home task. Both phone API and owner-only Realm chat use this path.
    connection.survival?.companion?.beforeOwnerAction(raw)
+   // Verified owner controls the phone-local API; Realm chat has already
+   // passed the configured owner-name allowlist. Direct requests must reach
+   // the action executor, not fall through dictionary/plan-only handlers.
+   const ownerAction=executeOwnerChatAction(raw,connection.survival)
+   if(ownerAction){
+    connection.survival?.companion?.afterOwnerAction(raw,ownerAction)
+    return ownerAction
+   }
    if(/^(?:try again|retry blocked|retry task)$/i.test(String(raw).trim())){
      const nav=connection.survival?.navigation
      if(nav?.job?.kind==='follow')return nav.retryBlockedFollow()
