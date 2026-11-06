@@ -1,38 +1,16 @@
 # Sector Uprising II: Afterlight
+**v0.1 playable prototype · source checked, GPU/device QA pending.**
 
-**Status: v0.1 playable foundation, not yet device-verified.** Standalone sequel to Sector Uprising 1.6.53. Twenty years after the original Sector Uprising, a collapsed industrial metropolis has been taken by an autonomous defense grid. Bring back the lights.
+Standalone sequel to Sector Uprising 1.6.53 (the original HTML raycast FPS). Set twenty years later in a futuristic industrial metropolis. A new original WebGL2 renderer replaces the old raycaster. Four guns, robot sentinels/crushers/drones, Warden bosses, wave upgrades, radar, shield, overdrive, scoring, mobile dual-touch controls, offline local saves, and fullscreen PC controls.
 
-## Play
+## Run the game
+- Play the **self-contained** [Afterlight-PLAY.html](Afterlight-PLAY.html) in a WebGL2-enabled browser. This has embedded HTML, CSS and JavaScript, and works offline.
+- For Windows PC Android Gradle build, use [android/](android/) subproject, which bundles the exact same one-file game in `app/src/main/assets/index.html`. With Android SDK 35, Java 17 and Gradle 8.9 installed, run `gradle --no-daemon :app:assembleDebug` **from the android folder**. The output will be `android/app/build/outputs/apk/debug/app-debug.apk`; this is not a finished release-signed APK.
 
-Open `index.html` in a WebGL2-capable browser with `engine.js` and `style.css` beside it, or serve the folder over a local web server. Android: the `android/` subfolder is a minimal no-network Java WebView/Gradle wrapper with the identical offline assets copied to `android/app/src/main/assets/`. This is NOT an APK until assembled and signed on a machine with Android SDK/JDK/Gradle.
+Android package `com.sectoruprising.afterlight` is independent of the original app, versionCode 1, minSdk 26, targetSdk 35, landscape hardware-accelerated offline WebView. Do **not** copy personal signing keys, password files, Microsoft auth, game repositories, or emulator state into this branch. Never overwrite the existing sector release keystore; establish a separate stable release keystore for Part II on the owner-authorized PC.
 
-**Desktop:** WASD movement, mouse look (click to lock), left mouse or Space to fire, Shift dash, E overdrive, 1–4 select weapons, P/Escape pause. **Mobile:** left analog for movement, drag the right side to look, hold FIRE, DASH and OVERDRIVE buttons, tap weapon slots. Game is designed primarily for landscape Android phones.
+## Controls
+Desktop: WASD, mouse look after clicking play field, click/Space fire, Shift dash, E overdrive, 1–4 weapons, P/Escape pause. Android: left movement joystick, right swipe look, hold FIRE, DASH, OVERDRIVE, tap weapon slots.
 
-## Features built in first playable foundation
-
-- New WebGL2 renderer: actual 3D mesh geometry, per-fragment lighting, animated reactor, color-lit architecture, distance fog, atmospheric megacity silhouettes, modular bots, particle impacts, diegetic gun rig, multiple graphics levels. Distinct from original HTML canvas raycaster.
-- Offline original content: four enemy archetypes (sentinel, charger/crusher, flying drone, Warden boss), AI chasing, wall collision and ranged attacks, four guns (VOLT, SHARD, LANCER, NOVA), hit reactions, damage, shields, recoveries, score and pickups.
-- Survival waves and enemy scaling, four named sector regions, randomly offered upgrades, automated weapon unlocking, sector checkpoints, local saved settings/high score, radar and audio synthesizer.
-- UI and platform: redesigned main menu, HUD, native full-screen WebView wrapper, Android touch controls, mouse and keyboard, adaptive render quality; no network permission or external content.
-
-## What is not yet verified or complete
-
-- No real Android APK is built or signed. PC build and emulator QA are **pending**. Keep other VEILFORGE/Rovekin tasks isolated.
-- Mesh renderer requires WebGL2 and hardware acceleration. No 2D fallback currently; validate Android GPU compatibility, frame time and thermal load before release.
-- Graphics are a stylized sci-fi procedural prototype, not AAA/photoreal production graphics. Mature sequel target: PBR assets, shadow maps, screen-space postprocessing, animations, ambient audio, authored missions and smarter tactical AI. Visual quality requires **real screenshots from device** for approval.
-- Wave balance, ranged collision, pause/onResume, Android 15+ system UI behavior, memory, audio routing and signing still need physical testing.
-- Current game content is local deterministic demo geometry; no VQ-generated GLB model has been incorporated, so do not claim VEILFORGE/VQ art output is live in this build.
-
-## Build an Android APK on an authorized Windows PC
-
-Copy whole `android` folder including `app/src/main/assets`. From `android/`, run `gradle --no-daemon assembleDebug` with Android SDK 35, AGP 8.7.3, Gradle 8.9, JDK 17 installed (or use a pre-installed compatible wrapper). Output: `android/app/build/outputs/apk/debug/app-debug.apk`. This is a DEBUG signing build, NOT permanent update-signed release. For a production APK create an independent private release keystore for `com.sectoruprising.afterlight`, sign on the PC and keep the keystore/password outside GitHub. Never reuse the original Sector Uprising's private signing credentials without a clear package/update decision.
-
-**Distinct package:** `com.sectoruprising.afterlight` so this sequel installs beside the original instead of overwriting its data.
-
-## QA contract
-
-1. Check `node --check engine.js`; verify bundled assets match source by SHA256.
-2. WebGL2-supported browser smoke test: launch, move, fire, kill, advance waves, choose upgrade, pause/resume, save/reload; capture actual render + console errors.
-3. Compile and sign native APK on authorized PC; check applicationId, versionCode, certificate fingerprint, manifest permissions, and install/launch on real/emulated Android.
-4. Performance measure: target smooth balanced mode on 2025 midrange phone. Fix and profile rather than claiming 60 fps based on source inspection.
-5. Keep original Sector Uprising 1.6.53 and original signing artifacts intact. Never overwrite other game checkouts or queued PC jobs.
+## QA gate
+Source parser and mocked browser gameplay checks passed locally: scene generation 143,892 static vertices, game start, wave spawn, pause/resume, interwave upgrade. This **does not** verify actual GPU rendering or Android runtime; WebGL was disabled in the isolated test browser. Before approval, run the true PC WebGL visual smoke, Android Gradle build, emulator/device first-run, performance, impact, AI, save/resume, system back, rotation and signing checks. No GitHub Actions were started. Keep all other local jobs untouched.
