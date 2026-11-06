@@ -5,7 +5,7 @@ import {HomeProject} from './home-project.js'
 import {HomeRoutine} from './home-routine.js'
 import {NEW_HOME_SPOT,decideFirstHome} from './home-instinct.js'
 import {HomeSocialLoop} from './home-social-loop.js'
-import {CompanionFieldTrial,FIELD_TEST_COMMAND} from './companion-field-trial.js'
+import {CompanionFieldTrial,isHomeFieldTestCommand} from './companion-field-trial.js'
 
 // Read-only house design and one-job edit consent. Only the bearer-authenticated
 // local phone API or an owner-allowlisted in-game command can call this handler.
@@ -44,7 +44,7 @@ export class CompanionCommands {
  afterOwnerAction(raw,result,now=Date.now()){return this.social.afterOwnerAction(raw,result,now)}
  handle(raw){
   const s=String(raw||'').trim().toLowerCase().replace(/[.!?]+$/,'').replace(/^(?:please |can you |could you )/,'')
-  if(FIELD_TEST_COMMAND.test(s))return this.fieldTrial.start()
+  if(isHomeFieldTestCommand(s))return this.fieldTrial.start()
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
   if(/^confirm home proximity \\d{6}$/.test(s)||s==='cancel home proximity')
