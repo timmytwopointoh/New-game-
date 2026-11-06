@@ -30,6 +30,6 @@ Original project recovered from the owner's Chibi_Island_v9_7_preview.html (977,
 - No runtime network dependencies; multiplayer is a future separate module.
 
 ## v0.1 scope implemented vs backlog
-Implemented in source: 3D island generated geometry, simulated NPC scheduling, animated Grims, touch/camera navigation, selectable residents, chat, gifts, resource gathering, bench construction, JSON saves and 3 slots.
-Not implemented/verified: full Character Studio UI and extensive mesh library, advanced per-object occupancy/collision, swimming/rescue, catch-the-stars mini-game, complete crafting catalog, port/boat gameplay, 3D asset imports from VQ, fully authored character animation, sound/music, offline native runtime verification, APK/EXE compilation, online multiplayer.
+Implemented in source: 3D island generated geometry, shader-animated water, pier/lighthouse, simulated NPC scheduling, animated Grims, touch/camera navigation, selectable residents, chat, gifts, native Character Studio profile editing, Catch the Stars minigame, graphics profiles, resource gathering, bench construction, JSON saves and 3 slots.
+Not implemented/verified: extended body/face slider editing and extensive mesh library, advanced per-object occupancy/collision, swimming/rescue, complete crafting catalog, port/boat gameplay, 3D asset imports from VQ, fully authored character animation, sound/music, offline native runtime verification, APK/EXE compilation, online multiplayer.
 Never call those finished until a PC test with evidence demonstrates it.
