@@ -68,7 +68,7 @@ export class RealmChat {
       return
     }
     // The planner object is the SAME one used by the phone API.  Never spawn a second plan queue.
-    const result=this.controller.message(command)
+    const result=this.controller.message(command,{replyToRealm:true})
     if(Array.isArray(this.connection.events) && typeof this.connection.nextEventId==='number'){
       this.connection.events.push({id:++this.connection.nextEventId,source:'RealmChat',message:`${source} requested: ${command.slice(0,145)}`})
       if(this.connection.events.length>64)this.connection.events.shift()
