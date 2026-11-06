@@ -15,7 +15,7 @@ import android.widget.TextView;
 
 /** One short-lived, particle-wrapped AI message. Never used for the owner's messages. */
 public final class RovekinNetherBubble extends FrameLayout {
-    private static final int PARTICLES=30;
+    private static final int PARTICLES=48;
     public static boolean isAiSpeaker(String speaker,boolean mine){
         if(mine)return false;
         if(speaker==null)return false;
@@ -82,26 +82,32 @@ public final class RovekinNetherBubble extends FrameLayout {
         @Override protected void onDraw(Canvas canvas){
             super.onDraw(canvas);
             long elapsed=SystemClock.uptimeMillis()-start;
-            final float life=Math.max(0f,1f-elapsed/950f);
+            // This effect happens ONCE for each fresh AI response; there is
+            // intentionally no ambient particle view on the chat background.
+            final float progress=Math.min(1f,elapsed/1350f);
+            final float life=(float)Math.pow(1f-progress,1.15);
             if(life<=0)return;
-            float w=Math.max(1,getWidth()),h=Math.max(1,getHeight());
-            // 30 tiny hand-drawn Nether sparks circulate around the message.
-            // All particles stay on its rim so none obscure the actual words.
+            final float w=Math.max(1,getWidth()),h=Math.max(1,getHeight());
+            final float density=getResources().getDisplayMetrics().density;
             for(int i=0;i<PARTICLES;i++){
-                float t=((elapsed/850f)*(0.35f+(i%5)*.07f)+i*.618034f)%1f;
-                float phase=t*6.2831853f;
-                float cx=w*.5f+(float)Math.cos(phase)*(w*.5f-dp(getContext(),5));
-                float cy=h*.5f+(float)Math.sin(phase)*(h*.5f-dp(getContext(),5));
-                float drift=(float)Math.sin(i*2.17f+elapsed/225f)*dp(getContext(),5);
-                cx+=drift;cy-=drift*.5f;
-                int a=Math.min(255,Math.round((0.48f+(i%4)*.1f)*255f*life));
-                int rgb=i%6==0?0x00e9d1ff:i%3==0?0x00d38afc:0x00944ff4;
-                p.setColor((a<<24)|rgb);
-                float radius=dp(getContext(),i%5==0?2.8f:1.7f)*(.4f+.6f*life);
-                if(i%3==0)canvas.drawRoundRect(new RectF(cx-radius,cy-radius,cx+radius,cy+radius),1,1,p);
-                else canvas.drawCircle(cx,cy,radius,p);
+                // Deterministic sparks burst UP from the newly appearing reply:
+                // the first half rise off left/right edges; the rest ignite
+                // across the lower rim. No spark touches the text centre.
+                float seed=((i*73)%101)/100f;
+                float originX=i%2==0?dp(getContext(),7):w-dp(getContext(),7);
+                float originY=h*(.28f+seed*.63f);
+                if(i%4==0){originX=w*(.1f+seed*.8f);originY=h-dp(getContext(),6);}
+                float driftX=(float)Math.sin(i*1.975f)*density*(24f+seed*35f)*progress;
+                float rise=density*(55f+seed*90f)*(1f-(1f-progress)*(1f-progress));
+                float x=originX+driftX,y=originY-rise;
+                int alpha=Math.min(255,Math.round((.68f+(i%5)*.07f)*255f*life));
+                int rgb=i%6==0?0x00efd7ff:i%3==0?0x00db84ff:0x009e45ee;
+                p.setColor((alpha<<24)|rgb);
+                float radius=dp(getContext(),i%6==0?2.9f:1.8f)*(.5f+.5f*life);
+                if(i%3==0)canvas.drawRoundRect(new RectF(x-radius,y-radius,x+radius,y+radius),1,1,p);
+                else canvas.drawCircle(x,y,radius,p);
             }
-            if(running&&elapsed<950&&getWindowVisibility()==VISIBLE)
+            if(running&&elapsed<1350&&getWindowVisibility()==VISIBLE)
                 postInvalidateDelayed(33);
         }
     }
