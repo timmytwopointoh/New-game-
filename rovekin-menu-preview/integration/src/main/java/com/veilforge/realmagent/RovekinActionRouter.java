@@ -21,7 +21,8 @@ public final class RovekinActionRouter {
         void openSignIn();                     // MainActivity.showAuth()
         void openAppUpdates();                 // AppUpdater.show(activity)
         void openLearning();                   // MainActivity.showLearning()
-        void openSettings();                   // MainActivity.showSettings()
+        void openSafeOwnerSettings();          // New limited account/Realm dialog, NO developer tools
+        void openDeveloperConsole();           // Existing MainActivity.showSettings(), ONLY dev role
         void stopBotService();                 // MainActivity.stopServiceNow()
         void exportDiagnostics();              // MainActivity.exportBugReport()
         void showStatus();                     // Real MainActivity.connection text
@@ -83,8 +84,9 @@ public final class RovekinActionRouter {
             case ACCOUNT_SETTINGS:
             case REALM_SELECTION:
             case GAMEMODE:
+                host.openSafeOwnerSettings(); return Result.HANDLED;
             case DEV_CONSOLE:
-                host.openSettings(); return Result.HANDLED;
+                host.openDeveloperConsole(); return Result.HANDLED;
             case STOP_SERVICE: host.stopBotService(); return Result.HANDLED;
             case DIAGNOSTIC_EXPORT: host.exportDiagnostics(); return Result.HANDLED;
             // Deferred features are deliberately NOT routed to placebo actions.
