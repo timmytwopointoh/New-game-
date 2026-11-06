@@ -35,17 +35,17 @@ export class CompanionCommands {
  }
 
  editScope(){return {realm:this.scope||this.c.commandPlans.scope||null,dimension:this.c.world.dimension}}
- reset(){
+ reset({sessionTransition=false}={}){
   this.edits.reset()
   this.homeProject.stop('Realm session interrupted; saved home stays locked.')
   this.homeRoutine.reset(true)
-  if(this.homeMemory.hasHome())this.social.reset()
+  if(sessionTransition&&this.homeMemory.hasHome())this.social.reset()
   else this.social.manualHold()
   this.fieldTrial.clear();this.c.world.editApproval=null
  }
  tick(now=Date.now()){
   this.fieldTrial.tick(now)
-  if(this.homeMemory.hasHome()&&this.c.connection?.spawned)
+  if(this.homeMemory.hasHome()&&this.social.mode!=='held'&&this.c.connection?.spawned)
    this.homeProject.resumeLockedHomeOnSpawn(this.editScope().realm)
   this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)
   if(this.homeMemory.hasHome())this.homeMemory.updateVerifiedProgress(this.homeProject)
