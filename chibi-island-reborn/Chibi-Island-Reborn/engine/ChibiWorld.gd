@@ -3,7 +3,7 @@ extends RefCounted
 var sites: Dictionary = {}
 var root: Node3D
 var rng := RandomNumberGenerator.new()
-const COLORS := {
+const COLORS = {
 	"grass": "#7bd4a0", "sand": "#ffe4a5", "sea": "#5bc6e8",
 	"roof": "#ed788a", "wood": "#b98562", "wall": "#fff7e9"
 }
@@ -119,8 +119,13 @@ func flower(at: Vector3, color_hex: String) -> void:
 		ball(root, Vector3(0.18, 0.17, 0.18), at + Vector3(cos(t) * 0.13, 0.33, sin(t) * 0.13), color_hex)
 	ball(root, Vector3(0.15, 0.15, 0.15), at + Vector3(0, 0.34, 0), "#ffe08b")
 
-func bench(at: Vector3) -> void:
-	box(root, Vector3(1.6, 0.18, 0.55), at + Vector3(0, 0.65, 0), "#ba825b")
-	box(root, Vector3(1.6, 0.75, 0.13), at + Vector3(0, 1.10, 0.25), "#d49b70")
+func bench(at: Vector3) -> Node3D:
+	var group := Node3D.new()
+	group.name = "IslandBench"
+	group.position = at
+	root.add_child(group)
+	box(group, Vector3(1.6, 0.18, 0.55), Vector3(0, 0.65, 0), "#ba825b")
+	box(group, Vector3(1.6, 0.75, 0.13), Vector3(0, 1.10, 0.25), "#d49b70")
 	for x in [-0.55, 0.55]:
-		box(root, Vector3(0.12, 0.60, 0.12), at + Vector3(x, 0.32, 0), "#8c6a55")
+		box(group, Vector3(0.12, 0.60, 0.12), Vector3(x, 0.32, 0), "#8c6a55")
+	return group
