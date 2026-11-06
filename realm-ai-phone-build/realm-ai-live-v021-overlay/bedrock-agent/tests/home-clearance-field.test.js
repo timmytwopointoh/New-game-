@@ -54,6 +54,10 @@ test('ground leaf litter is not permission to strip canopy, signs, player builds
   const w=world({[key(point)]:block})
   assert.notEqual(classifyHomeObstruction(w,plot,point).action,'auto-mine',block)
  }
- const nearbySign=world({[key(point)]:'leaf_litter',[key({x:8,y:65,z:0})]:'cherry_wall_sign'})
- assert.equal(classifyHomeObstruction(nearbySign,plot,point).action,'ask')
+ const distantSign=world({[key(point)]:'leaf_litter',[key({x:8,y:65,z:0})]:'cherry_wall_sign'})
+ assert.equal(classifyHomeObstruction(distantSign,plot,point).action,'auto-mine',
+  'tiny ground cover can be removed inside owner land eight blocks from a sign')
+ const nearbySign=world({[key(point)]:'leaf_litter',[key({x:2,y:65,z:0})]:'cherry_wall_sign'})
+ assert.equal(classifyHomeObstruction(nearbySign,plot,point).action,'ask',
+  'do not clear decorations next to a protected sign')
 })
