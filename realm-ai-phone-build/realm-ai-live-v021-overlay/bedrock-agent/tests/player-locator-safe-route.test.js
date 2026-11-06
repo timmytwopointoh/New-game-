@@ -24,7 +24,10 @@ test('short search segments obey verified collision and never guess a missing pa
  const start={x:0,y:64,z:0},target={x:100,y:64,z:10}
  const safe={walkable:p=>p.y===64&&p.x<=8&&p.x>=0&&p.z===0}
  const a=routeSearchWaypoint(safe,start,target)
- assert.equal(a?.goal,null)
+ assert.ok(a?.goal)
+ assert.ok(a.goal.x<=8)
+ assert.equal(a.goal.y,64)
+ assert.equal(routeSearchWaypoint({walkable:()=>false},start,target),null)
  const safer={walkable:p=>p.y===64&&p.x>=0&&p.x<=12&&p.z>=0&&p.z<=2}
  const b=routeSearchWaypoint(safer,start,target)
  assert.ok(b?.goal)
