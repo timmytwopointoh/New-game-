@@ -1,7 +1,10 @@
 // One explicitly owner-started test: safely follow the REAL named player,
-// approach within ten blocks, then grant their freshly observed feet position
+// approach within four server-verified blocks, then grant the explicit home position
 // as home. No guess from the locator marker, no teleport, no fake arrival.
 // This runs entirely in the phone bot; a PC emulator can drive the same chat.
+// User-provided Minecraft XYZ for THIS field test, never guessed from the locator.
+// Only a route hint; no home is granted without fresh named-player confirmation.
+export const OWNER_TEST_HOME_ANCHOR=Object.freeze({x:162,y:96,z:53})
 export const FIELD_TEST_COMMAND=/^(?:(?:start|run|try) (?:the |a )?(?:home )?field (?:test|trial)|(?:find|follow|come to|come find|come over to) me (?:and |then )(?:make|set|claim|build|start|use)(?: this| my| your| a| the)?(?: new)? home(?: spot| here)?(?: when (?:you are|you're|you get) (?:within|about|close enough|near) (?:10|ten) blocks)?|find me then (?:make|start|build) (?:your|a) home(?: here)?|find me and (?:start building|build your home|make this your home spot))$/i
 // A natural alternative to the explicit test phrase, with the same
 // owner-approval and fresh-position gate.
@@ -45,8 +48,8 @@ export function verifiedArrival(c,owner,{maxDistance=10,maxAgeMs=8000,now=Date.n
 
 export class CompanionFieldTrial{
  constructor(companion){this.companion=companion;this.clear()}
- clear(){this.state='idle';this.startedAt=0;this.owner=null;this.dimension=null;this.scope=null;this.reason='';this.result=null;this.lastTick=0}
- snapshot(){return {state:this.state,owner:this.owner,startedAt:this.startedAt,dimension:this.dimension,
+ clear(){this.state='idle';this.startedAt=0;this.owner=null;this.dimension=null;this.scope=null;this.reason='';this.result=null;this.lastTick=0;this.homeAnchor={...OWNER_TEST_HOME_ANCHOR}}
+ snapshot(){return {state:this.state,owner:this.owner,targetXYZ:{...this.homeAnchor},startedAt:this.startedAt,dimension:this.dimension,
   reason:this.reason,result:this.result?.accepted===true?{accepted:true,projectState:this.result?.project?.state}:null}}
  start(now=Date.now()){
   const c=this.companion.c,owner=ownerName(c),scope=this.companion.editScope().realm
@@ -62,9 +65,12 @@ export class CompanionFieldTrial{
   if(!Number.isSafeInteger(c.world.dimension))return {accepted:false,queued:false,message:'The current Realm dimension is not confirmed.'}
   const followed=c.navigation.follow(owner)
   if(!followed?.accepted)return {...followed,message:'I could not safely start following '+owner+': '+String(followed?.message||'not ready')}
+  // Set after navigation.follow() (which resets old jobs). Use XYZ only when
+  // player locator data is absent; terrain collision still gates each step.
+  c.navigation.followTargetHint={...this.homeAnchor}
   this.state='following';this.startedAt=now;this.lastTick=0;this.owner=owner
   this.dimension=c.world.dimension;this.scope=scope
-  this.reason='Finding '+owner+' by player identity. I will mark home only after both positions are freshly confirmed within 4 blocks.'
+  this.reason='Finding '+owner+' near X=162 Y=96 Z=53. Home is assigned only after fresh server positions confirm approach within four blocks.'
   return {accepted:true,queued:true,message:'On my way! I will find you first, then set my new home beside your spot and start building.',fieldTrial:this.snapshot()}
  }
  tick(now=Date.now()){
@@ -88,9 +94,20 @@ export class CompanionFieldTrial{
    }
    this.state='paused';this.reason='The follow task ended before arrival. No home was assigned.';return
   }
-  const at=verifiedArrival(c,this.owner,{now,started:this.startedAt,maxDistance:4})
+  const approachLimit=n.liveFollowPolicy?.maxApproachBlocks||4
+  const at=verifiedArrival(c,this.owner,{now,started:this.startedAt,maxDistance:approachLimit})
   this.reason=at.reason||'Owner reached at '+at.distance.toFixed(1)+' blocks using fresh server position packets.'
   if(!at.ok){this.state='awaiting-arrival';return}
+  // Minecraft displays block XYZ; Bedrock entity position is height-offset.
+  // Require the actual owner to be standing at/near the supplied home location.
+  const ownerFeet={x:at.position.x,y:at.position.y-1.62,z:at.position.z}
+  const anchorDistance=distance(ownerFeet,this.homeAnchor)
+  if(anchorDistance>4){
+   this.state='awaiting-arrival'
+   this.reason='The named owner is in reach, but moved '+anchorDistance.toFixed(1)+
+    ' blocks from the supplied home XYZ (162 96 53). Waiting for the owner at that spot.'
+   return
+  }
   // Stop following before construction starts; the HOME command itself
   // rechecks that the owner is present and inside this same dimension.
   n.stop('Reached the owner safely. Starting home field test.',false)
