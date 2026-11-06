@@ -112,7 +112,7 @@ jobs:
           BASE=realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk
           test -s "$BASE"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$BASE" | tee apk-package.txt
-          grep -q "package: name='com.rovekin.companion' versionCode='200079' versionName='1.0.2-rovekin-session-burst'" apk-package.txt
+          grep -q "package: name='com.rovekin.companion' versionCode='200080' versionName='1.0.2-rovekin-session-burst'" apk-package.txt
           python3 - <<'PY'
           import zipfile
           p='realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/build/outputs/apk/release/app-release-unsigned.apk'
