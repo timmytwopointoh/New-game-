@@ -135,7 +135,7 @@ func _setup_hud() -> void:
 	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	panel.offset_left = 12
 	panel.offset_right = 224
-	panel.offset_top = -347
+	panel.offset_top = -399
 	panel.offset_bottom = -12
 	layer.add_child(panel)
 	var actions := VBoxContainer.new()
@@ -153,6 +153,7 @@ func _setup_hud() -> void:
 	_make_button(actions, "🌷 Gather materials", func(): _gather())
 	_make_button(actions, "🪑 Build bench", func(): _build())
 	_make_button(actions, "✨ New Grim", func(): _add_grim())
+	_make_button(actions, "🎨 Character Studio", func(): _open_creator())
 	_make_button(actions, "💾 Save island", func(): _save())
 	_make_button(actions, "☰ Menu", func(): _show_menu())
 	var right := VBoxContainer.new()
@@ -160,12 +161,13 @@ func _setup_hud() -> void:
 	right.offset_left = -210
 	right.offset_right = -8
 	right.offset_top = 64
-	right.offset_bottom = 250
+	right.offset_bottom = 320
 	layer.add_child(right)
 	_make_button(right, "📍 Center on Grim", func(): _center_grim())
 	_make_button(right, "⏩ Simulation ×", func(): _change_speed())
 	_make_button(right, "🎨 Graphics quality", func(): _cycle_quality())
 	_make_button(right, "📖 Island stories", func(): _stories())
+	_make_button(right, "⭐ Catch the Stars", func(): _start_stars())
 	toast_label = Label.new()
 	toast_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	toast_label.offset_top = -56
@@ -383,6 +385,116 @@ func _add_grim() -> void:
 	selected = r
 	mind.note("%s moved to the island!" % r.display_name)
 	_toast("✨ Welcome, %s!" % r.display_name)
+
+func _open_creator() -> void:
+	if not is_instance_valid(selected):
+		_toast("Select a Grim to edit.")
+		return
+	var old_data: Dictionary = selected.to_data()
+	var popup := PopupPanel.new()
+	popup.title = "Chibi Character Studio"
+	add_child(popup)
+	var contents := VBoxContainer.new()
+	contents.add_theme_constant_override("separation", 7)
+	contents.custom_minimum_size = Vector2(390, 425)
+	popup.add_child(contents)
+	var heading := Label.new()
+	heading.text = "🌸 Design Your Grim"
+	heading.add_theme_font_size_override("font_size", 25)
+	contents.add_child(heading)
+	var name_edit := LineEdit.new()
+	name_edit.text = selected.display_name
+	name_edit.max_length = 18
+	contents.add_child(name_edit)
+	var skin := _creator_option(contents, "Skin tone", ["Peach", "Brown", "Honey", "Deep", "Fair", "Warm"], SKINS.find(old_data["skin"]))
+	var hair := _creator_option(contents, "Hair color", ["Chestnut", "Caramel", "Midnight", "Rose", "Lavender", "Blonde", "Charcoal"], HAIRS.find(old_data["hair"]))
+	var outfit := _creator_option(contents, "Outfit color", ["Blossom", "Sea blue", "Lilac", "Sunshine", "Mint", "Berry"], OUTFITS.find(old_data["outfit"]))
+	var hair_style := _creator_option(contents, "Hair shape", ["Soft fringe", "Curled bangs", "Layered fringe"], int(old_data.get("hair_shape", 0)))
+	var accessories := _creator_option(contents, "Accessory", ["None", "Cream bow", "Aqua clip"], int(old_data.get("accessory", 0)))
+	var personality := _creator_option(contents, "Personality", PERSONALITIES, PERSONALITIES.find(str(old_data["personality"])))
+	var apply := _make_button(contents, "✨ Save Appearance", func():
+		var data := old_data.duplicate(true)
+		var entered_name := name_edit.text.strip_edges()
+		data["name"] = entered_name if entered_name != "" else "Grim"
+		data["skin"] = SKINS[skin.selected]
+		data["hair"] = HAIRS[hair.selected]
+		data["outfit"] = OUTFITS[outfit.selected]
+		data["hair_shape"] = hair_style.selected
+		data["accessory"] = accessories.selected
+		data["personality"] = PERSONALITIES[personality.selected]
+		var position_in_list := grims.find(selected)
+		if position_in_list >= 0:
+			var previous = selected
+			grims.remove_at(position_in_list)
+			previous.queue_free()
+			var replacement = _spawn(data)
+			grims.erase(replacement)
+			grims.insert(position_in_list, replacement)
+			selected = replacement
+			mind.note("%s updated their signature look." % replacement.display_name)
+			_toast("✨ %s looks wonderful!" % replacement.display_name)
+			_save_silent()
+		popup.hide()
+	)
+	apply.custom_minimum_size.y = 48
+	popup.popup_hide.connect(func(): popup.queue_free())
+	popup.popup_centered(Vector2i(440, 590))
+
+func _creator_option(parent: VBoxContainer, title: String, options: Array, initial: int) -> OptionButton:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var caption := Label.new()
+	caption.text = title
+	caption.custom_minimum_size = Vector2(118, 32)
+	row.add_child(caption)
+	var pick := OptionButton.new()
+	pick.custom_minimum_size = Vector2(225, 32)
+	for opt in options:
+		pick.add_item(str(opt))
+	pick.select(clampi(initial, 0, options.size() - 1))
+	row.add_child(pick)
+	return pick
+
+func _start_stars() -> void:
+	var popup := PopupPanel.new()
+	popup.title = "Catch the Stars"
+	add_child(popup)
+	var board := VBoxContainer.new()
+	board.custom_minimum_size = Vector2(340, 230)
+	board.add_theme_constant_override("separation", 17)
+	popup.add_child(board)
+	var heading := Label.new()
+	heading.text = "⭐ Catch the Stars · 12 seconds!"
+	heading.add_theme_font_size_override("font_size", 23)
+	board.add_child(heading)
+	var score := Label.new()
+	score.text = "Score: 0"
+	score.add_theme_font_size_override("font_size", 22)
+	board.add_child(score)
+	var star := Button.new()
+	star.text = "🌟 TAP THE STAR!"
+	star.custom_minimum_size.y = 74
+	board.add_child(star)
+	var data := {"score": 0}
+	star.pressed.connect(func():
+		data["score"] = int(data["score"]) + 1
+		score.text = "Score: %d" % int(data["score"])
+		star.text = ["🌟 TAP!", "✨ GOT ONE!", "⭐ QUICK!", "💖 GREAT!"][int(data["score"]) % 4]
+	)
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = 12.0
+	popup.add_child(timer)
+	timer.timeout.connect(func():
+		var award := maxi(1, int(data["score"]))
+		mind.coins += award
+		mind.note("Catch the Stars earned %d coins." % award)
+		_toast("⭐ You earned %d coins!" % award)
+		popup.hide()
+	)
+	popup.popup_hide.connect(func(): popup.queue_free())
+	popup.popup_centered(Vector2i(420, 290))
+	timer.start()
 
 func _center_grim() -> void:
 	if is_instance_valid(selected):
