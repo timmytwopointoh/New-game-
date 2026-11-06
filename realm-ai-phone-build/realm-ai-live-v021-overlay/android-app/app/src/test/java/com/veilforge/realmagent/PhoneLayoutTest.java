@@ -49,7 +49,9 @@ public class PhoneLayoutTest {
    assertTrue("Entering past the welcome prompt is a real native tap",stage.performClick());
    activity.apiConnected=true;
    activity.rovekin.onStatus(new JSONObject().put("spawned",true).put("authenticated",true).put("survival",new JSONObject().put("navigation",new JSONObject().put("mode","idle").put("state","idle"))),"In Realm");
-   View chat=stage.getChildAt(1);
+   // The chat replaces splash and connecting children: there is ONE new chat root.
+   assertEquals(1,stage.getChildCount());
+   View chat=stage.getChildAt(0);
    assertNotNull(find(chat,"CUTOFF"));
    assertNotNull(find(chat,"START"));
    assertNotNull(find(chat,"SEND"));
