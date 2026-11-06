@@ -111,7 +111,10 @@ func _ready() -> void:
 	add_child(shadow)
 
 func set_goal(point: Vector3, new_activity: String) -> void:
-	destination = Vector3(point.x, 0.4, point.z)
+	var desired := Vector2(point.x, point.z)
+	if desired.length() > 17.0:
+		desired = desired.normalized() * 17.0
+	destination = Vector3(desired.x, 0.4, desired.y)
 	activity = new_activity
 	walking = true
 
@@ -143,6 +146,6 @@ func _process(delta: float) -> void:
 
 func to_data() -> Dictionary:
 	return {"id": resident_id, "name": display_name, "personality": personality,
-	"skin": skin_color.to_html(), "hair": hair_color.to_html(), "outfit": outfit_color.to_html(),
+	"skin": "#" + skin_color.to_html(), "hair": "#" + hair_color.to_html(), "outfit": "#" + outfit_color.to_html(),
 	"hair_shape": hair_shape, "accessory": accessory, "x": position.x, "z": position.z,
 	"energy": energy, "hunger": hunger, "social": social, "mood": mood}
