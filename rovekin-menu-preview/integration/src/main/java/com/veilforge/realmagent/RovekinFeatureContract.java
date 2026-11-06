@@ -26,6 +26,7 @@ public final class RovekinFeatureContract {
         SAVED_PLANS("Saved plans", Access.PUBLIC),
         ACTIVATE_QUEUE("Run queued plans", Access.PUBLIC),
         EMERGENCY_STOP("STOP", Access.PUBLIC),
+        START_SERVICE("Connect bot", Access.PUBLIC),
         RETRY_BLOCKED("Retry blocked task", Access.PUBLIC),
         CONNECTION_STATUS("Connection", Access.PUBLIC),
         MICROSOFT_SIGN_IN("Microsoft sign-in", Access.PUBLIC),
@@ -160,7 +161,8 @@ public final class RovekinFeatureContract {
             return new FeatureStatus(feature, required, "Restricted to an authorized "
                 + (required == State.REQUIRES_DEVELOPER ? "developer." : "owner."));
         }
-        if (feature == Feature.EMERGENCY_STOP || feature == Feature.CONNECTION_STATUS
+        if (feature == Feature.EMERGENCY_STOP || feature == Feature.START_SERVICE
+            || feature == Feature.CONNECTION_STATUS
             || feature == Feature.APP_UPDATES || feature == Feature.COMMAND_CATALOG
             || feature == Feature.MICROSOFT_SIGN_IN) {
             return new FeatureStatus(feature, State.READY, "");
