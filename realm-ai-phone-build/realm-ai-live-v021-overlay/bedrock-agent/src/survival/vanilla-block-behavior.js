@@ -8,7 +8,11 @@ const lava = /^(?:flowing_)?lava$/
 const damage = /^(?:fire|soul_fire|campfire|soul_campfire|cactus|magma_block|sweet_berry_bush|wither_rose|pointed_dripstone|lava_cauldron)$/
 const trapping = /^(?:cobweb|web|powder_snow|bubble_column)$/
 const portal = /^(?:portal|nether_portal|end_portal|end_gateway)$/
-const protect = /(?:^|_)(?:farmland|turtle_egg|sniffer_egg|dragon_egg|sculk_sensor|sculk_shrieker|tripwire|tripwire_hook|pressure_plate)$/
+// Construction protection is an EDIT permission, not a movement ban.
+ // Avoid trampling fragile crops/eggs or alarming a shrieker; other ordinary
+ // redstone surfaces remain traversable at a higher path cost when necessary.
+const fragile = /(?:^|_)(?:farmland|turtle_egg|sniffer_egg|dragon_egg|sculk_shrieker)$/
+const trigger = /(?:^|_)(?:sculk_sensor|tripwire|tripwire_hook|pressure_plate)$/
 const gravity = /^(?:sand|red_sand|gravel|anvil|chipped_anvil|damaged_anvil|.*_concrete_powder)$/
 const slippery = /^(?:ice|packed_ice|blue_ice|frosted_ice)$/
 const slow = /^(?:soul_sand|honey_block|mud)$/
@@ -32,8 +36,9 @@ export function vanillaBlockBehavior(input) {
   if(damage.test(name))return result('damaging',true,Infinity,'Damaging block; avoid contact.')
   if(trapping.test(name))return result('trapping',true,Infinity,'Traps, suffocation or upward/downward fluid movement possible.')
   if(portal.test(name))return result('portal',true,Infinity,'Dimension transition must be an explicit owner-approved action.')
-  if(protect.test(name))return result('protected-trigger',true,Infinity,'Avoid crop/egg damage and triggering dangerous redstone or sculk.')
-  if(protectedInteraction.test(name))return result('protected-interaction',false,6,'Do not mine or activate this block automatically.')
+  if(fragile.test(name))return result('fragile',true,Infinity,'Avoid crop and egg damage or sculk shrieker activation.')
+  if(trigger.test(name))return result('interactive-route',false,8,'A redstone or sculk trigger may be activated when walked over; prefer an ordinary path, but do not treat nearby construction as forbidden territory.')
+  if(protectedInteraction.test(name))return result('protected-interaction',false,4,'Movement is allowed beside built structures. Never mine or activate this block without explicit authorization.')
   if(gravity.test(name))return result('gravity-affected',false,2,'Can fall when supporting blocks change; do not mine from underneath.')
   if(slippery.test(name))return result('slippery',false,4,'Slippery surface; prefer ordinary stone or soil when possible.')
   if(slow.test(name))return result('slow',false,3,'Movement may slow; account for delayed server position feedback.')
@@ -45,6 +50,8 @@ export function vanillaBlockBehavior(input) {
 export function vanillaPathRisk(world,position) {
   // Only SERVER-RECEIVED cells. No optimistic assumptions about unobserved
   // modded or vanilla chunks, fluid overlays, or standing surfaces.
+  // IMPORTANT: Being within 15 blocks of a player build is never a reason
+  // to reject a walking/jumping route. That rule applies ONLY to edits.
   if(!world?.block||!position||![position.x,position.y,position.z].every(Number.isSafeInteger))return Infinity
   const near=[
     world.block(position),world.block(position,1),
