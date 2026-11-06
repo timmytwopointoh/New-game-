@@ -5,6 +5,7 @@ import {Connection} from './connection.js'
 import {createApi} from './api.js'
 import {RealmChat} from './realm-chat.js'
 import {RuntimeTrace} from './runtime-trace.js'
+import {LiveFollowPatchStream} from './live-follow-patches.js'
 import {createDiagnosticRecorder} from './diagnostic-store.js'
 import {classifyConnectionFailure} from './connection-diagnostics.js'
 import fs from 'node:fs'
@@ -15,6 +16,14 @@ let config
 try{config=validate(readConfig())}catch(e){console.error('Setup required: '+e.message);process.exitCode=1;throw e}
 if(config.minecraft.mode!=='realm'||config.minecraft.offline)throw new Error('Mobile Realm AI requires authenticated Bedrock Realms')
 const bot=new Connection(config,log)
+// Signed policy updates tune only the already-running navigation code.
+// They never call reconnect, replace source modules, install APKs or upload logs.
+const followPatchStream=new LiveFollowPatchStream(bot.survival.navigation,{
+ file:path.join(root,'private','live-follow','signed-policy.json'),
+ report:message=>bot.survival.report(message)
+})
+bot.liveFollowPatches=followPatchStream
+followPatchStream.start()
 bot.trace=new RuntimeTrace(path.join(root,'private','diagnostics','runtime.json'))
 const saveDiagnostic=createDiagnosticRecorder(path.join(root,'private','diagnostics','connection.json'))
 const save=()=>{saveDiagnostic({...bot.diagnostics(),processState:'running'});bot.trace.capture(bot)}
@@ -30,6 +39,6 @@ app.listen(config.localAPI.port,'127.0.0.1',()=>{
   log('Device-only controller started. The Microsoft sign-in code is shown inside the app if needed.')
   try{bot.start();save()}catch(e){bot.lastError=String(e.message||e);bot.lastFailure=classifyConnectionFailure(e,bot.lastPhase);save();log('Realm client start failed: '+bot.lastError)}
 })
-function shutdown(){clearInterval(diagnosticTimer);save();controller.stop();bot.close();app.close()}
+function shutdown(){followPatchStream.stop();clearInterval(diagnosticTimer);save();controller.stop();bot.close();app.close()}
 process.on('SIGTERM',shutdown)
 process.on('SIGINT',shutdown)
