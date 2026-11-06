@@ -13,8 +13,15 @@ import static org.junit.Assert.*;
 @Config(sdk=28,qualifiers="w360dp-h640dp-mdpi")
 public class PhoneLayoutTest {
  MainActivity activity;
- @Before public void create(){activity=Robolectric.buildActivity(MainActivity.class).setup().get();}
- @After public void destroy(){activity.onDestroy();}
+ org.robolectric.android.controller.ActivityController<MainActivity> controller;
+ @Before public void create(){controller=Robolectric.buildActivity(MainActivity.class).setup();activity=controller.get();}
+ @After public void destroy(){
+   // Exercise the actual Android lifecycle: pause cancels the refresh loop
+   // before the async executors are shutdown at onDestroy. Calling
+   // onDestroy() directly leaves pending refresh posts from a dead activity.
+   if(controller!=null)controller.pause().stop().destroy();
+   Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+ }
  View find(View v,String text){if(v instanceof TextView&&((TextView)v).getText().toString().equals(text))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View found=find(g.getChildAt(i),text);if(found!=null)return found;}}return null;}
  @Test public void compactMainControlsFitPhoneAndLiveStatusIsVisible(){
    ViewGroup content=activity.findViewById(android.R.id.content);
