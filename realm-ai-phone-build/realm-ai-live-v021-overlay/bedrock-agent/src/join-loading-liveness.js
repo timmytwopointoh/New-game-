@@ -62,6 +62,10 @@ export class JoinLoadingLiveness {
 export function recoveryDecision({stage='',reason='',attempts=0,spawned=false,authPending=false,manualStop=false}={}){
  if(spawned||authPending||manualStop||attempts>=MAX_AUTO_RECOVERIES)return {retry:false,reason:'guarded'}
  const recoverable=['server-no-pack-data','server-pack-stalled','early-transport-close'].includes(reason)||
+   // After a successful spawn, a silent transport loss can occur without a
+   // kick, protocol error or app shutdown. Retry it twice at most, using the
+   // same saved Microsoft session. Never interpret finishing a task as a loss.
+   (stage==='spawned'&&reason==='unexpected-session-close')||
    ['pack-request','downloading-packs','packs-ready','world-started','world-data'].includes(stage)&&reason==='loading-stalled'
  if(!recoverable)return {retry:false,reason:'not-transient'}
  return {retry:true,delayMs:attempts===0?15000:45000,reason:'bounded-rejoin'}
