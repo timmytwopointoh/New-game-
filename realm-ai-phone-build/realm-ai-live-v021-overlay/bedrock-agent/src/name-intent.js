@@ -27,14 +27,14 @@ export function interpretNameUtterance(raw,botName,{phone=false}={}){
  if(!isStart&&!isEnd)return {kind:'reference',addressed:false,command:null,reason:'name appears inside a conversation'}
  let statement=isStart?input.replace(start,'').replace(/^[,:!\s]+/,'').trim():input.replace(end,'').trim()
  statement=statement.replace(/^[,:!\s]+/,'').trim()
- if(!statement)return {kind:'attention',addressed:true,command:null,reason:'direct name call'}
+ if(!statement)return {kind:'attention',addressed:true,command:null,content:'',reason:'direct name call'}
  // A trailing name by itself in casual/retrospective talk is a reference.
  // A leading name may also introduce feedback rather than a new task.
  const vocative=new RegExp('^(?:(?:hey|hi|hello|yo|oi|okay|ok|excuse me|listen|please)[,!:\\s]+)?@?'+escaped+'\\\\s*[,!:?]','i').test(input)
  if(NON_ADDRESS.test(statement)&&isStart&&!vocative)
-  return {kind:'reference',addressed:false,command:null,reason:'third-person description of the bot'}
+  return {kind:'reference',addressed:false,command:null,content:statement,reason:'third-person description of the bot'}
  if(REPORT.test(statement))
-  return {kind:isStart?'statement':'reference',addressed:isStart,command:null,reason:'descriptive or retrospective speech'}
+  return {kind:isStart?'statement':'reference',addressed:isStart,command:null,content:statement,reason:'descriptive or retrospective speech'}
  if(isEnd&&REFERENCE_START.test(statement)&&!LEADING_MODAL.test(statement))
   return {kind:'reference',addressed:false,command:null,reason:'trailing name in ordinary speech'}
  let candidate=statement
@@ -48,9 +48,9 @@ export function interpretNameUtterance(raw,botName,{phone=false}={}){
    .replace(/^come (?:over )?here\b/i,'follow me')
   // A question can be an instruction or a genuine inquiry; both go through
   // the same downstream language handler, with no automatic mining permission.
-  return {kind:'request',addressed:true,command:candidate||statement,reason:'directed action or request'}
+  return {kind:'request',addressed:true,command:candidate||statement,content:statement,reason:'directed action or request'}
  }
  if(QUESTION.test(statement)||/[?]\s*$/.test(statement))
-  return {kind:'question',addressed:true,command:statement,reason:'direct conversational question'}
- return {kind:'statement',addressed:isStart,command:null,reason:'no actionable intent established'}
+  return {kind:'question',addressed:true,command:statement,content:statement,reason:'direct conversational question'}
+ return {kind:'statement',addressed:isStart,command:null,content:statement,reason:'no actionable intent established'}
 }
