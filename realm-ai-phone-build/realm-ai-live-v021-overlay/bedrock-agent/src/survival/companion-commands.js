@@ -129,7 +129,9 @@ export class CompanionCommands {
   if(s==='home improvement'||s==='home improvements'||s==='expand home'){
    return {accepted:true,queued:false,message:'I can evaluate an upward or downward expansion using observed storage and room capacity. I will not build from an unverified estimate or expand outside your land.',proposal:this.homeProject.proposeUpgrade({idleMs:120000})}
   }
-  if(s==='plan home construction'||s==='preview home build')return this.plot&&this.design?this.homeProject.preview(this.plot,this.design):{accepted:false,queued:false,message:'Design a home on your assigned land first.'}
+  if(s==='plan home construction'||s==='preview home build')return this.homeMemory.hasHome?
+   {accepted:true,queued:false,message:'My original permanent blueprint and confirmed progress are saved. A preview will not reset the existing house.',project:this.homeProject.snapshot(),permanentHome:this.homeMemory.summary()}:
+   this.plot&&this.design?this.homeProject.preview(this.plot,this.design):{accepted:false,queued:false,message:'Design a home on your assigned land first.'}
   if(s==='build your home'||s==='start building your home'||s==='execute home design'||s==='begin home construction')return this.homeProject.requestAuthorization(this.editScope().realm)
   if(NEW_HOME_SPOT.test(s)){
    if(this.homeMemory.hasHome)return {accepted:true,queued:false,message:'I already have my one permanent home at '+Object.values(this.plot.center).join(', ')+'. It cannot be moved; I will continue working there.',permanentHome:this.homeMemory.summary()}
@@ -184,6 +186,7 @@ export class CompanionCommands {
    catch(e){return {accepted:false,queued:false,message:String(e.message||e)}}
   }
   if(/^(?:design (?:your |a |another )?(?:house|home)|plan (?:your |a |another )?(?:house|home)|redesign (?:your )?(?:house|home)|think of (?:a |another )?(?:house|home) design|go free and think for yourself)$/.test(s)){
+   if(this.homeMemory.hasHome)return {accepted:true,queued:false,message:'I already designed my permanent home. I can plan future improvements without replacing the original location or resetting its verified stages.',permanentHome:this.homeMemory.summary(),project:this.homeProject.snapshot()}
    if(!this.plot)return {accepted:false,queued:false,message:'Stand at the plot center and say "this is your land" first. Nothing built.'}
    if(this.plot.dimension!==this.c.world.dimension)return {accepted:false,queued:false,message:'Plot belongs to another dimension. Nothing planned.'}
    try{const d=planUniqueHome(this.plot,{previousStyle:this.design?.style})
