@@ -124,10 +124,10 @@ public final class RovekinChatPanel {
         // not an extra main action button.
         TextView reconnect=label("↻",25,VIOLET,true);
         reconnect.setGravity(Gravity.CENTER);
-        reconnect.setContentDescription("Reconnect to Realm with saved login");
+        reconnect.setContentDescription("Save a diagnostic ZIP to Downloads, then reconnect to Realm");
         reconnect.setBackground(new RippleDrawable(ColorStateList.valueOf(0x66f6dbff),
             grad(new int[]{0xff1f453c,0xff162a38,0xff1c1635},0xffb17ef5,13),null));
-        reconnect.setOnClickListener(v->dispatch(RovekinFeatureContract.Feature.START_SERVICE));
+        reconnect.setOnClickListener(v->dispatch(RovekinFeatureContract.Feature.RECONNECT_WITH_DIAGNOSTICS));
         // Minimum 48dp touch target, inset into the header border rather than
         // floating in the Android clock / status-bar area.
         LinearLayout.LayoutParams reconnectLP=new LinearLayout.LayoutParams(dp(50),dp(48));
