@@ -146,6 +146,6 @@ func _process(delta: float) -> void:
 
 func to_data() -> Dictionary:
 	return {"id": resident_id, "name": display_name, "personality": personality,
-	"skin": "#" + skin_color.to_html(), "hair": "#" + hair_color.to_html(), "outfit": "#" + outfit_color.to_html(),
+	"skin": "#" + skin_color.to_html(false), "hair": "#" + hair_color.to_html(false), "outfit": "#" + outfit_color.to_html(false),
 	"hair_shape": hair_shape, "accessory": accessory, "x": position.x, "z": position.z,
 	"energy": energy, "hunger": hunger, "social": social, "mood": mood}
