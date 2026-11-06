@@ -22,6 +22,7 @@ public final class RovekinActionRouter {
         void openSignIn();                     // MainActivity.showAuth()
         void openAppUpdates();                 // AppUpdater.show(activity)
         void openLearning();                   // MainActivity.showLearning()
+        void openResearchPrompt();             // Prompts then sends via MainActivity.send()
         void openSafeOwnerSettings();          // New limited account/Realm dialog, NO developer tools
         void openDeveloperConsole();           // Existing MainActivity.showSettings(), ONLY dev role
         void stopBotService();                 // MainActivity.stopServiceNow()
@@ -69,7 +70,6 @@ public final class RovekinActionRouter {
             case FARM:
             case CRAFT:
             case INVENTORY:
-            case RESEARCH:
                 // The real command catalog contains current/future descriptors.
                 // The UI can filter them, but cannot independently execute them.
                 host.openCommandCatalog();
@@ -83,6 +83,7 @@ public final class RovekinActionRouter {
             case MICROSOFT_SIGN_IN: host.openSignIn(); return Result.HANDLED;
             case APP_UPDATES: host.openAppUpdates(); return Result.HANDLED;
             case LEARNING: host.openLearning(); return Result.HANDLED;
+            case RESEARCH: host.openResearchPrompt(); return Result.HANDLED;
             case ACCOUNT_SETTINGS:
             case REALM_SELECTION:
             case GAMEMODE:
