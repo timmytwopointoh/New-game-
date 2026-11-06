@@ -1,5 +1,5 @@
 import {findPath} from './pathfinder.js'
-import {routeSearchWaypoint} from './player-locator.js'
+import {routeSearchWaypoint,routeSearchCandidates} from './player-locator.js'
 import {mediumAt} from './situation.js'
 import {ProgressTracker,miningAssessment,recoveryDecision} from './obstacles.js'
 import {Mining} from './mining.js'
@@ -156,20 +156,28 @@ export class Navigation{
   // beyond chunk simulation distance. Travel only through OBSERVED terrain,
   // in short segments, never directly into unknown far-away coordinates.
   if(flatDistance(start,target)>21){
-   const segment=routeSearchWaypoint(this.world,start,target,{maxSegment:14})
-   if(!segment?.goal){
-    this.route=null;this.state='waiting-for-terrain'
-    this.reason='Player bearing received from server, but no grounded dry waypoint is observed in that direction. Scanning nearby chunks.'
-    try{this.world.requestNearby(this.client)}catch{}
-    return
-   }
-   const plan=this.routeTo(segment.goal,start,{allowSteps:true,maxNodes:768,allowDirt:true,allowWater:false})
-   if(plan.ok){
+   const segments=routeSearchCandidates(this.world,start,target,{maxSegment:14,limit:24})
+   let lastReason='no grounded path observed'
+   // A compass/locator bearing tells us where the named person is, not
+   // that a straight line through trees, holes, hills or water is walkable.
+   // Try a few short lateral detours, checking each full route with the
+   // current collision, no-water and supported-ground pathfinder.
+   for(const segment of segments.slice(0,12)){
+    const plan=this.routeTo(segment.goal,start,{
+     allowSteps:true,maxNodes:768,allowDirt:true,allowWater:false
+    })
+    if(!plan.ok){lastReason=String(plan.reason||lastReason);continue}
     this.job.goal=segment.goal;this.assignRoute(plan)
-    this.reason='Following '+this.job.name+' using '+player.source+' data. Planning a safe local segment; '+Math.round(segment.remaining)+' blocks remain toward last reported player position.'
+    this.reason='Following '+this.job.name+' using fresh '+player.source+
+     ' bearing. '+(segment.lateralOffset?'Detouring around an obstacle. ':'')+
+     'Moving through confirmed terrain; about '+Math.round(segment.remaining)+
+     ' blocks remain toward the last reported player position.'
     return
    }
-   this.route=null;this.state='waiting-for-terrain';this.reason='Locator heading known, but the next segment is unsafe or lacks verified terrain: '+String(plan.reason||'no safe route')
+   this.route=null;this.state='waiting-for-terrain'
+   this.reason=segments.length?
+    'The named player bearing is known, but no safe observed route around nearby obstacles is available yet: '+lastReason:
+    'Named player bearing known, but no grounded dry waypoint is observed. Scanning nearby chunks.'
    try{this.world.requestNearby(this.client)}catch{}
    return
   }
