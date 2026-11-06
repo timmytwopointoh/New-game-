@@ -23,6 +23,7 @@ jobs:
           node --check src/survival/command-vocabulary.js
           node --check src/survival/controller.js
           node --check src/api.js
+          node --check src/word-study-queue.js
       - name: Install reproducible production dependency set
         working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -32,6 +33,7 @@ jobs:
           set -euo pipefail
           node --test \
             tests/trainable-intent-model.test.js \
+            tests/word-study-queue.test.js \
             tests/language-learning.test.js \
             tests/adaptive-companion-language-memory.test.js \
             tests/tool-language-memory.test.js \
