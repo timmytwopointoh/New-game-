@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {ResourceJobs} from '../src/survival/resource-jobs.js'
+import {parseResourceGoal} from '../src/survival/internal-skills.js'
 
 function rig(){
  const logs=[]
@@ -47,4 +48,18 @@ test('stopped or unconfirmed resource approaches cannot hang indefinitely or res
 })
 test('discovered trunks are not reported as fully felled trees or physically placed chests',()=>{
  const x=rig();x.agent.start('get wood');x.agent.noteTree({x:1,y:64,z:0},Date.now());assert.equal(x.agent.snapshot().trees,0);assert.equal(x.agent.snapshot().registeredTrunks,1);assert.equal(x.agent.snapshot().checkpointAt.length,0)
+})
+
+test('quantity-first and quantity-last phrases start the same observed resource goal',()=>{
+ const front=parseResourceGoal('mine 200 oak logs')
+ const back=parseResourceGoal('mine oak logs 200')
+ assert.equal(front?.kind,'mine-material')
+ assert.equal(back?.kind,'mine-material')
+ assert.equal(front.target,'oak_log')
+ assert.equal(back.target,'oak_log')
+ assert.equal(front.quantity,200)
+ assert.equal(back.quantity,200)
+ assert.equal(parseResourceGoal('collect dirt 30').quantity,30)
+ assert.equal(parseResourceGoal('mine oak logs 99999'),null,'a five-digit unknown command is not dispatched as a job')
+ assert.match(parseResourceGoal('mine oak logs 3000').error,/1–2304/)
 })
