@@ -53,8 +53,36 @@ public class MainActivity extends Activity {
     EditText edit(String hint){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);e.setHintTextColor(MUTED);e.setTextColor(WHITE);e.setTextSize(15);e.setPadding(d(12),d(12),d(12),d(12));e.setBackground(shape(PANEL));return e;}
     Button button(String s,Runnable action){Button b=new Button(this);b.setAllCaps(false);b.setText(s);b.setTextColor(WHITE);b.setMinHeight(d(48));b.setMinimumWidth(0);b.setPadding(d(12),d(8),d(12),d(8));b.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));b.setBackground(new RippleDrawable(android.content.res.ColorStateList.valueOf(0x335de5b1),shape(PANEL),null));b.setOnClickListener(v->action.run());return b;}
     JSONArray catalog=new JSONArray(),cards=new JSONArray();JSONObject options=new JSONObject();CommandDeck commandDeck;ListView savedPlanList;
+    // Android may kill the isolated :agent service while the Activity's saved
+    // requested-running flag remains true. This must not masquerade as a live bot.
+    // Only examine this app's own process names; no other package is inspected.
+    boolean embeddedAgentProcessAlive(){
+        try {
+            android.app.ActivityManager am=(android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE);
+            if(am==null)return true; // unknown, do not risk a duplicate launch
+            java.util.List<android.app.ActivityManager.RunningAppProcessInfo> found=am.getRunningAppProcesses();
+            if(found==null)return true;
+            String expected=getPackageName()+":agent";
+            for(android.app.ActivityManager.RunningAppProcessInfo p:found)
+                if(p!=null&&expected.equals(p.processName))return true;
+            return false;
+        }catch(RuntimeException ignored){return true;}
+    }
+    static boolean shouldRecoverRequestedBot(boolean requested,boolean processAlive,long lastStartMs,long now){
+        return requested&&!processAlive&&(lastStartMs<=0||now>=lastStartMs+15000L);
+    }
     @Override public void onCreate(Bundle state){super.onCreate(state);SupportLog.install(this);SupportLog.record(this,"app_open");getWindow().setStatusBarColor(BASE);getWindow().setNavigationBarColor(BASE);
         token=getPreferences(MODE_PRIVATE).getString("token","");serviceStarted=getPreferences(MODE_PRIVATE).getBoolean("serviceStarted",false);serviceStateSince=serviceStarted?System.currentTimeMillis():0;
+        long now=System.currentTimeMillis();
+        long lastStart=getPreferences(MODE_PRIVATE).getLong("serviceStartRequestedAt",0L);
+        final boolean recoverMissingBot=shouldRecoverRequestedBot(serviceStarted,embeddedAgentProcessAlive(),lastStart,now);
+        if(recoverMissingBot){
+            // The previous account opted in to the bot running. Mark stale
+            // service state non-running so the normal startBot() can be used.
+            serviceStarted=false;serviceStateSince=0;apiConnected=false;
+            getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();
+            SupportLog.record(this,"service_recovery_requested");
+        }
         botField=edit("AI Xbox gamertag");ownerField=edit("Your Xbox gamertag");realmField=edit("Realm name");
         botField.setText(getPreferences(MODE_PRIVATE).getString("botTag",""));ownerField.setText(getPreferences(MODE_PRIVATE).getString("ownerTag",""));realmField.setText(getPreferences(MODE_PRIVATE).getString("realmName",""));
         LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{BASE,0xff10262b}));setContentView(root);
@@ -88,6 +116,19 @@ public class MainActivity extends Activity {
         activateButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
         LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask or tell me a task…");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
         input.setOnEditorActionListener((v,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_SEND){send(input.getText().toString());return true;}return false;});
+        if(recoverMissingBot){
+            // Only on a foreground Activity launch; do not run an unseen
+            // background poller or retry indefinitely. Existing private
+            // auth/config directories remain untouched.
+            ui.postDelayed(()->{
+                if(!isFinishing()&&!isDestroyed()&&!serviceStarted&&!apiConnected&&
+                    botField.getText().toString().trim().length()>=2&&
+                    ownerField.getText().toString().trim().length()>=2){
+                    SupportLog.record(this,"service_recovery_start");
+                    startBot();
+                }
+            },1200);
+        }
     }
     void saveAccountSettings(){getPreferences(MODE_PRIVATE).edit().putString("botTag",botField.getText().toString().trim()).putString("ownerTag",ownerField.getText().toString().trim()).putString("realmName",realmField.getText().toString().trim()).apply();}
     void showSettings(){
@@ -237,7 +278,7 @@ public class MainActivity extends Activity {
             File file=new File(root,"config.json");try(FileOutputStream out=new FileOutputStream(file)){out.write(config.toString(2).getBytes(StandardCharsets.UTF_8));}
             token=secret;
             SupportLog.record(this,"service_start");Intent svc=new Intent(this,BotService.class);ComponentName accepted=Build.VERSION.SDK_INT>=26?startForegroundService(svc):startService(svc);if(accepted==null)throw new IllegalStateException("Android did not accept the start request.");
-            getPreferences(MODE_PRIVATE).edit().putString("botTag",bot).putString("ownerTag",owner).putString("realmName",name).putString("token",token).putBoolean("serviceStarted",true).apply();serviceStarted=true;apiConnected=false;serviceStateSince=System.currentTimeMillis();serviceRevision++;renderPowerButton();
+            getPreferences(MODE_PRIVATE).edit().putString("botTag",bot).putString("ownerTag",owner).putString("realmName",name).putString("token",token).putBoolean("serviceStarted",true).putLong("serviceStartRequestedAt",System.currentTimeMillis()).apply();serviceStarted=true;apiConnected=false;serviceStateSince=System.currentTimeMillis();serviceRevision++;renderPowerButton();
             connection.setText("Starting embedded AI player on this phone…");
             bubble("VEILFORGE","Starting a separate Realm player on the phone. You may need to complete the Microsoft device-code login. No PC is needed.",false);
         } catch(Exception e){serviceStarted=false;apiConnected=false;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();renderPowerButton();bubble("VEILFORGE","Could not start: "+e.getClass().getSimpleName(),false);}
