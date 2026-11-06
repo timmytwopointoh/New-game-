@@ -41,3 +41,19 @@ test('unobserved blocks, custom blocks, falling materials and out-of-plot areas 
  const w=world();w.block=()=>null
  assert.equal(classifyHomeObstruction(w,plot,point).action,'observe')
 })
+
+test('ordinary leaf litter in confirmed home plot is removable without repeated prompts',()=>{
+ const w=world({[key(point)]:'leaf_litter'})
+ const decision=classifyHomeObstruction(w,plot,point)
+ assert.equal(decision.action,'auto-mine',decision.reason)
+ assert.equal(decision.name,'leaf_litter')
+ assert.equal(nextHomeObstruction(w,plot,[point]).action,'auto-mine')
+})
+test('ground leaf litter is not permission to strip canopy, signs, player builds or hazards',()=>{
+ for(const block of ['cherry_leaves','cherry_wall_sign','oak_planks','water','myaddon:tree_leaves']){
+  const w=world({[key(point)]:block})
+  assert.notEqual(classifyHomeObstruction(w,plot,point).action,'auto-mine',block)
+ }
+ const nearbySign=world({[key(point)]:'leaf_litter',[key({x:8,y:65,z:0})]:'cherry_wall_sign'})
+ assert.equal(classifyHomeObstruction(nearbySign,plot,point).action,'ask')
+})
