@@ -29,7 +29,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "git init failed" }
   & git add .
   if ($LASTEXITCODE -ne 0) { throw "git add failed" }
-  & git commit -m "Chibi Island Reborn original 3D engine baseline"
+  & git -c user.name="Chibi Island PC" -c user.email="chibi-island-pc@users.noreply.github.com" commit -m "Chibi Island Reborn original 3D engine baseline"
   if ($LASTEXITCODE -ne 0) { throw "git commit failed; ensure local git identity" }
   if ($PublishPrivateGitHub) {
     & gh repo create $Repo --private --source . --remote origin --push
