@@ -28,7 +28,13 @@ export class CompanionCommands {
  restorePermanentHome(){
   const record=this.homeMemory?.snapshot()
   if(!record)return
-  if(!this.homeProject.restoreLockedHome(record,this.scope))return
+  try{
+   if(!this.homeProject.restoreLockedHome(record,this.scope))throw Error('bad stage count')
+  }catch{
+   this.homeMemory.readOnly=true
+   this.homeMemory.error='Saved home plan is unavailable; original permanent location was not overwritten.'
+   this.homeProject.clear();return
+  }
   this.plot=this.homeProject.plot;this.design=record.design
   this.homeRoutine.setPlot(this.plot)
   this.social.mode='house'
