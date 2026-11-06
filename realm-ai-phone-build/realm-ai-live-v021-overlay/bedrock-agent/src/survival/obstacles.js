@@ -1,4 +1,5 @@
 import nbt from 'prismarine-nbt'
+import {approvedEdit,constructionExposure} from './construction-guard.js'
 // Intent-sensitive recovery. Geometry/provenance are evidence, not proof of placement history.
 const built=/(?:planks|bricks|tiles|stairs|slab|glass|concrete|terracotta|wool|fence|wall|door|sign|lantern|torch|carpet|polished|chiseled|cut_|smooth_)/
 const protectedNames=/(?:chest|barrel|shulker|furnace|hopper|dispenser|dropper|spawner|bedrock|portal|command_block|structure_block|bed$|beehive|bee_nest|vault|trial_spawner)/
@@ -23,8 +24,15 @@ export function miningAssessment(world,pos,{explicit=false,allowBuilt=false,maxM
  const creative=world.gameMode==='creative'&&world.creativeEditsVerified
  if(!world.survivalVerified&&!creative)return {ok:false,reason:'Server Survival or grounded Creative mode and abilities are not verified.'}
  const block=world.block(pos),evidence=placementEvidence(world,pos,block)
+ const approved=approvedEdit(world,'mine',[pos])
+ if(!approved){
+  const key=`${world.dimension}:${pos.x},${pos.y},${pos.z}:${world.blockRevision||0}:${world.terrainRevision||0}`
+  let assessment=world.miningBufferScan?.key===key?world.miningBufferScan.result:null
+  if(!assessment){assessment=constructionExposure(world,[pos]);world.miningBufferScan={key,result:assessment}}
+  if(assessment.state!=='clear')return {ok:false,reason:assessment.state==='protected'?`Mining paused: existing structure (${assessment.near.name}) is within 15 blocks. Request a specific owner confirmation.`:assessment.reason||'Nearby construction is not fully observed.',requiresConfirmation:assessment.state==='protected',evidence}
+ }
  if(!block||!world.position)return {ok:false,reason:'Block or position is unknown.',evidence}
- const ownerAuthorized=world.allowBuiltMining===true
+ const ownerAuthorized=world.allowBuiltMining===true||approved
  if(!ownerAuthorized&&evidence.classification==='protected')return {ok:false,reason:evidence.reason,evidence}
  if(!ownerAuthorized&&!allowBuilt&&evidence.classification==='likely-built')return {ok:false,reason:explicit?'Mining refused: this target is in or beside a likely player build. No block was changed.':'Looks like part of a player build; trying a detour.',evidence}
  if(!ownerAuthorized&&!explicit&&evidence.classification!=='natural-looking')return {ok:false,reason:'Placement is uncertain; not clearing it automatically.',evidence}
