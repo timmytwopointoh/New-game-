@@ -14,6 +14,26 @@ func mat(hex: String, rough: float = 0.7) -> StandardMaterial3D:
 	m.roughness = rough
 	return m
 
+func water_material() -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode cull_disabled;
+void vertex() {
+	VERTEX.y += sin(VERTEX.x * 0.23 + TIME * 1.3) * 0.08;
+	VERTEX.y += cos(VERTEX.z * 0.28 + TIME * 1.1) * 0.07;
+}
+void fragment() {
+	float ripples = sin((UV.x + UV.y) * 38.0 + TIME * 1.6) * 0.07;
+	ALBEDO = mix(vec3(0.13, 0.50, 0.75), vec3(0.30, 0.85, 0.89), 0.63 + ripples);
+	ROUGHNESS = 0.28;
+	METALLIC = 0.05;
+}
+"""
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	return material
+
 func put_mesh(parent: Node3D, shape: PrimitiveMesh, at: Vector3, color_hex: String, rotation_y: float = 0.0) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = shape
@@ -48,7 +68,10 @@ func populate(target: Node3D) -> Dictionary:
 	rng.seed = 142724
 	var ocean := PlaneMesh.new()
 	ocean.size = Vector2(140, 140)
-	put_mesh(root, ocean, Vector3(0, -0.12, 0), COLORS.sea)
+	ocean.subdivide_width = 80
+	ocean.subdivide_depth = 80
+	var water := put_mesh(root, ocean, Vector3(0, -0.12, 0), COLORS.sea)
+	water.material_override = water_material()
 	var sand := CylinderMesh.new()
 	sand.top_radius = 21.0
 	sand.bottom_radius = 21.7
@@ -83,10 +106,34 @@ func populate(target: Node3D) -> Dictionary:
 	for i in 6:
 		var a := TAU * float(i) / 6.0
 		bench(Vector3(cos(a) * 6, 0, sin(a) * 6))
+	coastal_dock()
+	lighthouse()
 	cylinder(root, 2.0, 0.2, Vector3(0, 0.22, 0), "#f3deca")
 	cylinder(root, 1.4, 0.32, Vector3(0, 0.42, 0), "#ffffff")
 	ball(root, Vector3(1.5, 1.3, 1.5), Vector3(0, 0.75, 0), "#8bdef1")
 	return sites
+
+func coastal_dock() -> void:
+	for i in 16:
+		var z := 13.5 + float(i) * 0.53
+		box(root, Vector3(3.5, 0.18, 0.46), Vector3(10.0, 0.31, z), "#c99569")
+	for z in [14.0, 17.0, 20.0]:
+		for x in [8.3, 11.7]:
+			cylinder(root, 0.16, 1.7, Vector3(x, 0.42, z), "#92634a")
+	for i in 4:
+		ball(root, Vector3(0.65, 0.35, 0.70), Vector3(9.0 + float(i) * 0.75, 0.85, 21.0), "#f1e9d2")
+
+func lighthouse() -> void:
+	var at := Vector3(-14.1, 0.0, 11.2)
+	cylinder(root, 1.25, 0.42, at + Vector3(0, 0.25, 0), "#eee9d9")
+	for i in 4:
+		cylinder(root, 0.83 - float(i) * 0.07, 0.74, at + Vector3(0, 0.77 + float(i) * 0.70, 0), "#ffffff" if i % 2 == 0 else "#ea8295")
+	cylinder(root, 0.79, 0.25, at + Vector3(0, 3.74, 0), "#9bddeb")
+	var top := CylinderMesh.new()
+	top.top_radius = 0.13
+	top.bottom_radius = 0.98
+	top.height = 0.90
+	put_mesh(root, top, at + Vector3(0, 4.30, 0), "#e75d8a")
 
 func cottage(at: Vector3, kind: String) -> void:
 	var house := Node3D.new()
