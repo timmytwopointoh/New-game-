@@ -48,7 +48,7 @@ public class PhoneLayoutTest {
    activity.serviceStarted=true;
    assertTrue("Entering past the welcome prompt is a real native tap",stage.performClick());
    activity.apiConnected=true;
-   activity.rovekin.onStatus(new JSONObject("{\\"spawned\\":true,\\"authenticated\\":true,\\"survival\\":{\\"navigation\\":{\\"mode\\":\\"idle\\",\\"state\\":\\"idle\\"}}}"),"In Realm");
+   activity.rovekin.onStatus(new JSONObject().put("spawned",true).put("authenticated",true).put("survival",new JSONObject().put("navigation",new JSONObject().put("mode","idle").put("state","idle"))),"In Realm");
    View chat=stage.getChildAt(1);
    assertNotNull(find(chat,"CUTOFF"));
    assertNotNull(find(chat,"START"));
