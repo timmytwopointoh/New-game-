@@ -34,6 +34,7 @@ public final class RovekinChatPanel {
     private final Activity activity;
     private final RovekinActionRouter router;
     private final RovekinFeatureContract.Authorization authorization;
+    private final Runnable reconnectAndCapture;
     private RovekinFeatureContract.Runtime runtime=
         new RovekinFeatureContract.Runtime(false,false,false,false);
     private List<RovekinFeatureContract.Skill> catalog=Collections.emptyList();
@@ -44,7 +45,12 @@ public final class RovekinChatPanel {
     private Button start,stop,send;
     public RovekinChatPanel(Activity activity,RovekinActionRouter router,
                             RovekinFeatureContract.Authorization authorization){
+        this(activity,router,authorization,null);
+    }
+    public RovekinChatPanel(Activity activity,RovekinActionRouter router,
+                            RovekinFeatureContract.Authorization authorization,Runnable reconnectAndCapture){
         this.activity=activity;this.router=router;this.authorization=authorization;
+        this.reconnectAndCapture=reconnectAndCapture;
     }
     private int dp(float v){return (int)(v*activity.getResources().getDisplayMetrics().density+.5f);}
     static int safeBottomPaddingPx(int bottomInsetPx,int minPx,int gutterPx){
@@ -127,7 +133,7 @@ public final class RovekinChatPanel {
         reconnect.setContentDescription("Reconnect to Realm with saved login");
         reconnect.setBackground(new RippleDrawable(ColorStateList.valueOf(0x66f6dbff),
             grad(new int[]{0xff1f453c,0xff162a38,0xff1c1635},0xffb17ef5,13),null));
-        reconnect.setOnClickListener(v->dispatch(RovekinFeatureContract.Feature.START_SERVICE));
+        reconnect.setOnClickListener(v->{if(reconnectAndCapture!=null)reconnectAndCapture.run();else dispatch(RovekinFeatureContract.Feature.START_SERVICE);});
         // Minimum 48dp touch target, inset into the header border rather than
         // floating in the Android clock / status-bar area.
         LinearLayout.LayoutParams reconnectLP=new LinearLayout.LayoutParams(dp(50),dp(48));
