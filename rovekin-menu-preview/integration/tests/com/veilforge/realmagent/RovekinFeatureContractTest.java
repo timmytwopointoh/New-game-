@@ -30,6 +30,7 @@ public final class RovekinFeatureContractTest {
         public void openSavedPlans() { last = "plans"; }
         public void activateQueue() { last = "activate"; }
         public void stopCurrentJob() { last = "stop"; }
+        public void startBotService() { last = "start"; }
         public void retryBlockedJob() { last = "retry"; }
         public void openSignIn() { last = "auth"; }
         public void openAppUpdates() { last = "updates"; }
@@ -65,8 +66,8 @@ public final class RovekinFeatureContractTest {
         RovekinFeatureContract.Authorization owner = new Identity(true,false);
         RovekinFeatureContract.Authorization developer = new Identity(true,true);
 
-        check(RovekinFeatureContract.publicFeatures(runtime(true,true),catalog()).size()==19,
-            "all 19 public features displayed; others remain in owner/dev console");
+        check(RovekinFeatureContract.publicFeatures(runtime(true,true),catalog()).size()==20,
+            "all 20 public features displayed; others remain in owner/dev console");
         check(RovekinFeatureContract.allDiscoveredSkills(catalog()).size()==4,
             "unrecognized future catalog skills never disappear");
         check(action(router,RovekinFeatureContract.Feature.CHAT,publicUser,runtime(true,true),"find me")
@@ -84,6 +85,9 @@ public final class RovekinFeatureContractTest {
         check(action(router,RovekinFeatureContract.Feature.EMERGENCY_STOP,publicUser,runtime(false,false),"")
             == RovekinActionRouter.Result.HANDLED, "STOP always reachable");
         check(host.last.equals("stop"), "STOP uses existing urgent API");
+        check(action(router,RovekinFeatureContract.Feature.START_SERVICE,publicUser,runtime(false,false),"")
+            == RovekinActionRouter.Result.HANDLED, "connect always available after setup");
+        check(host.last.equals("start"), "connect uses original Android BotService");
         check(action(router,RovekinFeatureContract.Feature.ACCOUNT_SETTINGS,publicUser,runtime(true,true),"")
             == RovekinActionRouter.Result.ACCESS_DENIED, "public cannot open owner console");
         check(action(router,RovekinFeatureContract.Feature.DIAGNOSTIC_EXPORT,owner,runtime(true,true),"")
