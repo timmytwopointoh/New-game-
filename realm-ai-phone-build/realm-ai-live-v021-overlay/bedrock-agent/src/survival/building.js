@@ -19,7 +19,22 @@ export function placementActions(slot,held,creative){
 }
 const full=b=>b?.shapes?.some(q=>q.every((v,i)=>v===(i<3?0:1)))
 const functional=/water|lava|sand$|gravel|powder|anvil|concrete_powder|chest|barrel|furnace|crafting_table|hopper|dispenser|dropper|bedrock|portal|command|structure|spawner|tnt|piston|observer|redstone|bed$|shulker|beehive|bee_nest|farmland|path$|ice|glass|leaves|copper_chest/
-export function blueprint({shape,origin,width=1,height=1,material}){
+export function blueprint({shape,origin,width=1,height=1,material,positions=null}){
+ if(shape==='custom'){
+  if(!Array.isArray(positions)||positions.length<1||positions.length>MAX_SINGLE_BUILD_BLOCKS||
+    ![origin?.x,origin?.y,origin?.z].every(Number.isSafeInteger))throw Error('A custom construction stage needs a verified origin and 1–256 exact block positions.')
+  const seen=new Set()
+  for(const p of positions){
+   if(![p?.x,p?.y,p?.z].every(Number.isSafeInteger)||Math.abs(p.x)>30000000||Math.abs(p.z)>30000000||p.y< -64||p.y>315)
+    throw Error('Custom construction coordinates are outside Bedrock world limits.')
+   if(Math.max(Math.abs(p.x-origin.x),Math.abs(p.y-origin.y),Math.abs(p.z-origin.z))>31)
+    throw Error('Divide custom construction into smaller verified stages (max 32 blocks per axis).')
+   const id=p.x+','+p.y+','+p.z
+   if(seen.has(id))throw Error('A custom stage cannot place twice in the same cell.')
+   seen.add(id)
+  }
+  return {shape,origin:{...origin},material,positions:positions.map(p=>({...p}))}
+ }
  if(!['block','wall','floor','shelter'].includes(shape)||![origin?.x,origin?.y,origin?.z].every(Number.isSafeInteger)||Math.abs(origin.x)>30000000||Math.abs(origin.z)>30000000||origin.y< -64||origin.y>315)throw Error('Choose a supported build shape and whole block coordinates.')
  buildSize({shape,width,height})
  const positions=[];const add=(x,y,z)=>positions.push({x:origin.x+x,y:origin.y+y,z:origin.z+z})
@@ -100,7 +115,7 @@ export class Building{
   }
   if(!w.grounded()&&!j.allowAirborne)return {}
   const slots=this.inventory(j.material);if((w.gameMode==='creative'?!slots.length:slots.reduce((sum,[,item])=>sum+item.count,0)<j.remaining.length)){this.cancel('Supplies changed; no matching hotbar block remains for the unfinished footprint.');return {}}if(!slots.length){this.cancel('No remaining matching hotbar stack; no inventory was invented.');return {}}
-  const stage=Math.min(...j.remaining.map(p=>p.y)),elevated=['wall','shelter'].includes(j.shape)&&w.position.y-1.62<stage-.08
+  const stage=Math.min(...j.remaining.map(p=>p.y)),elevated=['wall','shelter','custom'].includes(j.shape)&&w.position.y-1.62<stage-.08
   const targets=j.remaining.filter(p=>p.y===stage).sort((a,b)=>Math.hypot(a.x-w.position.x,a.y-(w.position.y-1.62),a.z-w.position.z)-Math.hypot(b.x-w.position.x,b.y-(w.position.y-1.62),b.z-w.position.z))
   for(const target of elevated?[]:targets){
    if(!w.airAt(target)){this.cancel('Footprint changed or became unknown; remaining placement cancelled.');return {}}
@@ -119,7 +134,7 @@ export class Building{
     const candidates=[]
     for(let dx=-3;dx<=3;dx++)for(let dz=-3;dz<=3;dz++)for(let dy=0;dy<=5;dy++){
      const p={x:target.x+dx,y:j.origin.y+dy,z:target.z+dz},h=w.supportHeight(p),eye={x:p.x+.5,y:(h??p.y)+1.62,z:p.z+.5}
-     if(!w.walkable(p)||overlapsBody(target,eye)||(['wall','shelter'].includes(j.shape)&&eye.y-1.62<stage-.08)||Math.hypot(eye.x-w.position.x,eye.y-w.position.y,eye.z-w.position.z)<.4||Math.hypot(eye.x-target.x-.5,eye.y-target.y-.5,eye.z-target.z-.5)>3.6)continue
+     if(!w.walkable(p)||overlapsBody(target,eye)||(['wall','shelter','custom'].includes(j.shape)&&eye.y-1.62<stage-.08)||Math.hypot(eye.x-w.position.x,eye.y-w.position.y,eye.z-w.position.z)<.4||Math.hypot(eye.x-target.x-.5,eye.y-target.y-.5,eye.z-target.z-.5)>3.6)continue
      if(!this.anchor(target,eye))continue
      candidates.push(p)
     }
