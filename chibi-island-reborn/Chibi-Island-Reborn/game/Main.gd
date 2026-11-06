@@ -4,6 +4,7 @@ const GrimScript = preload("res://engine/Grim.gd")
 const WorldScript = preload("res://engine/ChibiWorld.gd")
 const MindScript = preload("res://engine/IslandMind.gd")
 const SaveScript = preload("res://engine/SaveSystem.gd")
+const QualityScript = preload("res://engine/QualityProfiles.gd")
 const SKINS := ["#f6d2b8", "#b87955", "#eab18b", "#8b5a43", "#f3d5bb", "#d7a282"]
 const HAIRS := ["#70432e", "#c98a51", "#372d48", "#ef91a9", "#8f7acc", "#f7d48a", "#31313c"]
 const OUTFITS := ["#f68da3", "#78b9e3", "#a18ee7", "#e9bd68", "#7bd1ac", "#d681b6"]
@@ -21,6 +22,7 @@ var sun: DirectionalLight3D
 var focus := Vector3(0, 0.7, 0)
 var yaw: float = -0.30
 var zoom: float = 28.0
+var quality: String = "balanced"
 var panel: PanelContainer
 var status_label: Label
 var details_label: Label
@@ -37,6 +39,7 @@ func _ready() -> void:
 	var sites: Dictionary = world.populate(self)
 	mind.initialize(sites)
 	_setup_light()
+	QualityScript.apply_level(get_viewport(), sun, quality)
 	_setup_camera()
 	_setup_hud()
 	_show_menu()
@@ -161,6 +164,7 @@ func _setup_hud() -> void:
 	layer.add_child(right)
 	_make_button(right, "📍 Center on Grim", func(): _center_grim())
 	_make_button(right, "⏩ Simulation ×", func(): _change_speed())
+	_make_button(right, "🎨 Graphics quality", func(): _cycle_quality())
 	_make_button(right, "📖 Island stories", func(): _stories())
 	toast_label = Label.new()
 	toast_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -265,6 +269,10 @@ func _load(slot: int) -> void:
 	mind = MindScript.new()
 	mind.initialize(world.sites)
 	mind.from_data(state.get("mind", {}))
+	quality = str(state.get("quality", "balanced"))
+	if quality not in QualityScript.PROFILES:
+		quality = "balanced"
+	QualityScript.apply_level(get_viewport(), sun, quality)
 	var saved_grims: Array = state.get("residents", [])
 	for item in saved_grims:
 		if typeof(item) == TYPE_DICTIONARY:
@@ -284,7 +292,7 @@ func _save() -> void:
 	var characters: Array = []
 	for r in grims:
 		characters.append(r.to_data())
-	var state := {"mind": mind.to_data(), "residents": characters, "props": []}
+	var state := {"mind": mind.to_data(), "residents": characters, "props": [], "quality": quality}
 	for prop in props:
 		state["props"].append({"kind": "bench", "x": prop.position.x, "z": prop.position.z})
 	if SaveScript.store(active_slot, state):
@@ -319,7 +327,7 @@ func _save_silent() -> void:
 	var built: Array = []
 	for prop in props:
 		built.append({"kind": "bench", "x": prop.position.x, "z": prop.position.z})
-	SaveScript.store(active_slot, {"mind": mind.to_data(), "residents": characters, "props": built})
+	SaveScript.store(active_slot, {"mind": mind.to_data(), "residents": characters, "props": built, "quality": quality})
 
 func _update_labels() -> void:
 	status_label.text = "🌴 CHIBI ISLAND   ·   Day %d   ·   %02d:00   ·   🪙 %d   ·   🌷 %d Grims" % [mind.day, int(mind.hour), mind.coins, grims.size()]
@@ -383,6 +391,12 @@ func _center_grim() -> void:
 func _change_speed() -> void:
 	mind.speed = 1.0 if mind.speed >= 4.0 else mind.speed * 2.0
 	_toast("Simulation speed ×%.0f" % mind.speed)
+
+func _cycle_quality() -> void:
+	var index: int = QualityScript.PROFILES.find(quality)
+	quality = QualityScript.PROFILES[(index + 1) % QualityScript.PROFILES.size()]
+	QualityScript.apply_level(get_viewport(), sun, quality)
+	_toast("Graphics profile: " + quality)
 
 func _stories() -> void:
 	if mind.memories.is_empty():
