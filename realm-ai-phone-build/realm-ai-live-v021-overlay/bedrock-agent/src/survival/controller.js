@@ -73,6 +73,11 @@ export class SurvivalController{
     name=visible.length===1?visible[0]:owners.length===1?owners[0]:null
    }
    if(!name)return answer('Say “follow <player name>” so I know which player to follow.')
+   // A live Realm may remain spawned while Android has stopped only the
+   // isolated movement loop. Recover that loop once before starting Follow,
+   // subject to actual terrain and server-ability checks.
+   if(this.connection.spawned&&(!this.navigation.spawned||!this.navigation.timer))
+    this.navigation.recoverFromLiveSpawn(this.connection.client,{serverSpawned:true})
    return this.navigation.follow(name)
   }
   m=s.match(/^select (?:hotbar )?slot ([1-9])$/)
