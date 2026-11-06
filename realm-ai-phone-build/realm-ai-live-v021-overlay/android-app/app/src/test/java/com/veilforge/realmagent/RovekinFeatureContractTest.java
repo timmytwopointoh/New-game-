@@ -31,6 +31,7 @@ public final class RovekinFeatureContractTest {
         public void activateQueue() { last = "activate"; }
         public void stopCurrentJob() { last = "stop"; }
         public void startBotService() { last = "start"; }
+        public void reconnectWithDiagnostics() { last = "reconnect-export"; }
         public void retryBlockedJob() { last = "retry"; }
         public void openSignIn() { last = "auth"; }
         public void openAppUpdates() { last = "updates"; }
@@ -68,7 +69,7 @@ public final class RovekinFeatureContractTest {
         RovekinFeatureContract.Authorization owner = new Identity(true,false);
         RovekinFeatureContract.Authorization developer = new Identity(true,true);
 
-        check(RovekinFeatureContract.publicFeatures(runtime(true,true),catalog()).size()==20,
+        check(RovekinFeatureContract.publicFeatures(runtime(true,true),catalog()).size()==21,
             "all 20 public features displayed; others remain in owner/dev console");
         check(RovekinFeatureContract.allDiscoveredSkills(catalog()).size()==4,
             "unrecognized future catalog skills never disappear");
