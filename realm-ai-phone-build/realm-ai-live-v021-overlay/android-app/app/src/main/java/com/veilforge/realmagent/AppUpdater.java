@@ -17,7 +17,7 @@ import javax.net.ssl.HttpsURLConnection;
 
 /** Downloads on a dedicated worker; never uses the bot's API/command executor. */
 public final class AppUpdater {
-    static final String FEED="https://raw.githubusercontent.com/timmytwopointoh/New-game-/realm-live-update-channel/release.json";
+    static final String FEED="https://raw.githubusercontent.com/timmytwopointoh/New-game-/rovekin-official-update-channel/release.json";
     private static final ExecutorService worker=Executors.newSingleThreadExecutor();
     private static final AtomicBoolean busy=new AtomicBoolean();
     private static ScheduledExecutorService monitor;
@@ -47,7 +47,7 @@ public final class AppUpdater {
                 PendingIntent pi=PendingIntent.getActivity(c,91,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
                 if(Build.VERSION.SDK_INT<33 || c.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED){
                     nm.notify(91,new Notification.Builder(c,"realm-updates").setSmallIcon(android.R.drawable.stat_sys_download_done)
-                        .setContentTitle("Realm AI update available").setContentText("Tap to review. The bot can keep running while it downloads.")
+                        .setContentTitle("Rovekin update available").setContentText("Tap to review. The bot can keep running while it downloads.")
                         .setContentIntent(pi).setAutoCancel(true).build());
                     p.edit().putLong("notified",r.version).apply();
                 }
