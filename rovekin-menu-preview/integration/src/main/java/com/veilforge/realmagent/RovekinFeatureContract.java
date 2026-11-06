@@ -165,6 +165,14 @@ public final class RovekinFeatureContract {
             || feature == Feature.MICROSOFT_SIGN_IN) {
             return new FeatureStatus(feature, State.READY, "");
         }
+        // Keep planned advanced features visible in the developer feature matrix,
+        // but NEVER present unfinished controls as functional. New backend
+        // capability + UI host binding must be verified before enabling them.
+        if (feature == Feature.RUNTIME_LOGS || feature == Feature.PACK_INSPECTOR
+            || feature == Feature.EMULATOR_TESTS) {
+            return new FeatureStatus(feature, State.NOT_SUPPORTED,
+                "This developer control is reserved until its live handler is integrated.");
+        }
         if (runtime == null || !runtime.controllerConnected) {
             // Local administrative help such as diagnostics may still be present
             // in the host, but the backend-facing features are marked unavailable.
