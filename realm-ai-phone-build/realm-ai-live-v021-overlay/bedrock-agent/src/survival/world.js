@@ -200,7 +200,10 @@ export class WorldView{
  }
  terrainPenalty(p){return vanillaPathRisk(this,p)}
  walkable(p,{avoidHostiles=true,allowWater=false}={}){
-  // Do not step onto add-on, harmful, triggering or unobserved cells.
+  // Nearby construction is NOT a navigation permission check. Walk and jump
+  // across observed, collision-supported floors and steps (wood, brick, stone,
+  // etc.); only hazards, unsupported geometry or unobserved cells block travel.
+  // Mining and placement enforce the separate 15-block owner-consent buffer.
   if(!Number.isFinite(this.terrainPenalty(p)))return false
   const height=this.supportHeight(p),shallow=allowWater&&this.shallowWater(p)
   if(!shallow&&(height===null||!this.clearBody({x:p.x+.5,y:height+1.62,z:p.z+.5})))return false
