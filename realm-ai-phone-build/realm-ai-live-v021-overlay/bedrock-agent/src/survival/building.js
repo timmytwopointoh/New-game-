@@ -19,12 +19,12 @@ export function placementActions(slot,held,creative){
 }
 const full=b=>b?.shapes?.some(q=>q.every((v,i)=>v===(i<3?0:1)))
 const functional=/water|lava|sand$|gravel|powder|anvil|concrete_powder|chest|barrel|furnace|crafting_table|hopper|dispenser|dropper|bedrock|portal|command|structure|spawner|tnt|piston|observer|redstone|bed$|shulker|beehive|bee_nest|farmland|path$|ice|glass|leaves|copper_chest/
-export function blueprint({shape,origin,width=1,height=1,material,positions=null}){
+export function blueprint({shape,origin,width=1,height=1,material,positions:customPositions=null}){
  if(shape==='custom'){
-  if(!Array.isArray(positions)||positions.length<1||positions.length>MAX_SINGLE_BUILD_BLOCKS||
+  if(!Array.isArray(customPositions)||customPositions.length<1||customPositions.length>MAX_SINGLE_BUILD_BLOCKS||
     ![origin?.x,origin?.y,origin?.z].every(Number.isSafeInteger))throw Error('A custom construction stage needs a verified origin and 1–256 exact block positions.')
   const seen=new Set()
-  for(const p of positions){
+  for(const p of customPositions){
    if(![p?.x,p?.y,p?.z].every(Number.isSafeInteger)||Math.abs(p.x)>30000000||Math.abs(p.z)>30000000||p.y< -64||p.y>315)
     throw Error('Custom construction coordinates are outside Bedrock world limits.')
    if(Math.max(Math.abs(p.x-origin.x),Math.abs(p.y-origin.y),Math.abs(p.z-origin.z))>31)
@@ -33,7 +33,7 @@ export function blueprint({shape,origin,width=1,height=1,material,positions=null
    if(seen.has(id))throw Error('A custom stage cannot place twice in the same cell.')
    seen.add(id)
   }
-  return {shape,origin:{...origin},material,positions:positions.map(p=>({...p}))}
+  return {shape,origin:{...origin},material,positions:customPositions.map(p=>({...p}))}
  }
  if(!['block','wall','floor','shelter'].includes(shape)||![origin?.x,origin?.y,origin?.z].every(Number.isSafeInteger)||Math.abs(origin.x)>30000000||Math.abs(origin.z)>30000000||origin.y< -64||origin.y>315)throw Error('Choose a supported build shape and whole block coordinates.')
  buildSize({shape,width,height})
