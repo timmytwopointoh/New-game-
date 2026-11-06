@@ -80,7 +80,7 @@ export class Navigation{
  routeTo(goal,start=this.world.standPosition(),{allowSteps=true,maxNodes=4096,allowDirt=false,avoidHostiles=true,maxDrop=this.job?.maxDrop||(this.job?.kind==='follow'?5:1),allowBridge=allowDirt,allowWater=false}={}){
   const now=Date.now(),w=this.world
   const memo=fn=>{const cache=new Map();return p=>{const id=key(p);if(!cache.has(id))cache.set(id,fn(p));return cache.get(id)}}
-  const routeWorld={walkable:memo(p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now)),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
+  const routeWorld={walkable:memo(p=>w.walkable(p,{avoidHostiles})&&!(this.blocked.get(key(p))>now)),terrainPenalty:memo(p=>w.terrainPenalty(p)),canJumpBetween:(a,b)=>w.canJumpBetween?.(a,b),canDropBetween:(a,b)=>w.canDropBetween?.(a,b,{maxDrop})}
   // Water and lava are not automatic travel routes. Plan dry steps or a supported, server-confirmed dirt bridge. Never silently wade.
   const dry=findPath(routeWorld,start,goal,{allowSteps,maxNodes,maxDrop})
   if(dry.ok)return dry
