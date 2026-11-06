@@ -90,7 +90,7 @@ export function routeSearchCandidates(world,start,target,{maxSegment=14,range=20
  // First try toward the named player's server bearing, then sweep to
  // either side around trees, cliffs, structures, holes and visible fluids.
  for(const factor of [1,.75,.5,.25]){
-  for(const lateral of [0,-2,2,-4,4,-6,6]){
+  for(const lateral of [0,-2,2,-4,4]){
    const forward=length*factor
    const x=Math.floor(start.x+ux*forward+px*lateral)
    const z=Math.floor(start.z+uz*forward+pz*lateral)
