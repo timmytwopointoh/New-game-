@@ -1,0 +1,39 @@
+name: Rovekin private on-device supervised language learning tests
+on:
+  push:
+    branches: [ feature/rovekin-ondevice-learning-model-v1-20261106 ]
+    paths: [ '.github/workflows/rovekin-ondevice-supervised-learning-tests-20261106.yml' ]
+permissions:
+  contents: read
+jobs:
+  language-learning:
+    if: github.repository == 'timmytwopointoh/New-game-'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate JavaScript syntax before running tests
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/survival/adaptive-intent-model.js
+          node --check src/survival/command-vocabulary.js
+          node --check src/survival/controller.js
+          node --check src/api.js
+      - name: Install reproducible production dependency set
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test genuine supervised learning, private persistence, old glossary and no autonomous execution
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --test \
+            tests/trainable-intent-model.test.js \
+            tests/language-learning.test.js \
+            tests/adaptive-companion-language-memory.test.js \
+            tests/tool-language-memory.test.js \
+            tests/owner-chat-action-handoff.test.js \
+            tests/rovekin-session-retention.test.js
