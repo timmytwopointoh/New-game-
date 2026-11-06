@@ -142,7 +142,7 @@ public final class RovekinChatPanel {
         audienceText=label("PUBLIC CHAT",11,LIME,true);
         heading.addView(audienceText);
         if(activity instanceof MainActivity){
-            TextView build=label(((MainActivity)activity).installedBuildLabel().replace("\\n","  •  "),10,FADED,false);
+            TextView build=label(((MainActivity)activity).installedBuildLabel().replace("\n","  •  "),10,FADED,false);
             heading.addView(build);
         }
         Button connect=featureButton(RovekinFeatureContract.Feature.START_SERVICE,"CONNECT",false,false);
