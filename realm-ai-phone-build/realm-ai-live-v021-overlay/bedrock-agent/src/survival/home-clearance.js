@@ -6,6 +6,7 @@ import {insidePlot} from './companion-plot.js'
 
 const air=new Set(['air','cave_air','void_air'])
 const natural=new Set(['dirt','grass_block','coarse_dirt','rooted_dirt','podzol','mycelium','stone','cobblestone','deepslate','tuff','granite','diorite','andesite','clay','mud','moss_block','dirt_path','snow','snow_layer','netherrack'])
+const groundCover=new Set(['leaf_litter','pink_petals','wildflowers','short_grass','tall_grass','fern','large_fern','dead_bush','short_dry_grass','tall_dry_grass','dandelion','poppy','oxeye_daisy','blue_orchid','allium','azure_bluet','lily_of_the_valley','cornflower'])
 const vegetation=new Set(['short_grass','tall_grass','fern','large_fern','dead_bush','dandelion','poppy','oxeye_daisy','blue_orchid','allium','azure_bluet','lily_of_the_valley','cornflower'])
 const forbidden=/(?:water|lava|fire|magma|cactus|powder_snow|tnt|portal|bedrock|spawner|end_gateway|campfire|berry_bush|cobweb)/
 const falling=/(?:sand|gravel|anvil|concrete_powder)/
@@ -24,7 +25,7 @@ export function classifyHomeObstruction(world,plot,pos,{ownedProjectBlocks=new S
  if(!air.has(stripped(overlay.name)))return {action:'ask',reason:'Occupied fluid or overlay: inspect before altering it.',position:pos,name:n}
  if(n.includes(':')||forbidden.test(n)||falling.test(n))
   return {action:'ask',reason:'Custom, hazardous or unstable block must be reviewed.',position:pos,name:n}
- if(!natural.has(n)&&!vegetation.has(n)&&!treePart(n))
+ if(!natural.has(n)&&!vegetation.has(n)&&!groundCover.has(n)&&!treePart(n))
   return {action:'ask',reason:'Block is not clearly a removable natural obstacle.',position:pos,name:n}
  if(treePart(n)){
   let canopy=false,unknown=false
@@ -36,16 +37,25 @@ export function classifyHomeObstruction(world,plot,pos,{ownedProjectBlocks=new S
   }
   if(!canopy)return {action:unknown?'observe':'ask',reason:'Log without an observed natural canopy may be part of a build.',position:pos,name:n}
  }
- const ext=constructionExposure(world,[pos],{ignoreVerifiedProjectBlocks:ownedProjectBlocks})
- if(ext.state==='protected')return {action:'ask',reason:'An existing structure is within the protected 15-block buffer.',near:ext.near,position:pos,name:n}
- if(ext.state==='unverified')return {action:'observe',reason:ext.reason,position:pos,name:n}
+ // A 50-block home invitation includes clearing short vanilla ground litter
+ // ON the exact authorized construction cells. Preserve existing builds,
+ // tree logs, custom blocks, fluids, hazards and all edits outside the plot.
+ // Nearby torches/walls do not require a six-digit approval to sweep petals.
+ const wasBuilt=world.ownedPlacements?.get(world.dimension+':'+index(pos))
+ if(wasBuilt&&!ownedProjectBlocks.has(index(pos)))
+  return {action:'ask',reason:'This ground-cover block is marked as a previously placed object.',position:pos,name:n}
+ if(!groundCover.has(n)){
+  const ext=constructionExposure(world,[pos],{ignoreVerifiedProjectBlocks:ownedProjectBlocks})
+  if(ext.state==='protected')return {action:'ask',reason:'An existing structure is within the protected 15-block buffer.',near:ext.near,position:pos,name:n}
+  if(ext.state==='unverified')return {action:'observe',reason:ext.reason,position:pos,name:n}
+ }
  const above=world.block({...pos,y:pos.y+1})
  if(!above)return {action:'observe',reason:'Overhead block not yet received.'}
  if(falling.test(stripped(above.name))||forbidden.test(stripped(above.name)))
   return {action:'ask',reason:'Falling block or hazard overhead.',position:pos,name:n}
  if(!b.diggable||!Number.isFinite(b.hardness)||b.hardness<0)
   return {action:'stop',reason:'Server block data does not permit ordinary mining.',position:pos,name:n}
- return {action:'auto-mine',reason:'Ordinary, observed natural obstruction is away from external structures.',position:pos,name:n}
+ return {action:'auto-mine',reason:groundCover.has(n)?'Owner-approved plot allows removal of this ordinary observed ground cover.':'Ordinary, observed natural obstruction is away from external structures.',position:pos,name:n}
 }
 
 export function nextHomeObstruction(world,plot,positions,options={}){
