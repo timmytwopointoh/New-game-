@@ -189,7 +189,10 @@ export function createApi(config,connection,log=console.log){
    }
    if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
      const finishingFollow=/^(?:stop following(?: me)?|finish task)$/i.test(String(raw).trim())
-     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();connection.cancelAutoRecovery?.()
+     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();
+     // STOP cancels the current job only. It must NOT disable Realm reconnect
+     // or terminate the companion's connection; Android service shutdown is a
+     // separate, explicitly administrative action.
      const result=connection.survival?.handle('stop')
      if(finishingFollow)connection.survival?.companion?.social?.finishTask()
      return result?{...result,plans:connection.survival?.commandPlans?.snapshot()}: {accepted:true,queued:false,message:'Stopped.'}
