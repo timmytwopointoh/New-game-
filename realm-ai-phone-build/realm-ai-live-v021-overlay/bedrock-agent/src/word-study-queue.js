@@ -6,7 +6,9 @@ const SENSITIVE=/^(?:password|secret|token|account|email|auth|login|address|tele
 export function parseStudyWords(raw){
  if(typeof raw!=='string'||raw.length>180||/[@/:\\{}\x00-\x1f\x7f0-9]/.test(raw))
   throw Error('Use 1–8 ordinary English words, separated by commas, without numbers or personal information.')
- const words=[...new Set(raw.toLowerCase().split(/[\s,;]+/).filter(Boolean))]
+ const rawWords=raw.toLowerCase().split(/[\s,;]+/).filter(Boolean)
+ if(rawWords.length<1||rawWords.length>8)throw Error('Choose 1–8 valid English words, even when duplicates are included.')
+ const words=[...new Set(rawWords)]
  if(words.length<1||words.length>8||words.some(w=>!VALID.test(w)||SENSITIVE.test(w)))
   throw Error('Choose 1–8 valid English words (3–30 letters), separated by commas.')
  return words
