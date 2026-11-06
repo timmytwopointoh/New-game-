@@ -1,0 +1,36 @@
+name: Rovekin v1.0.3 final home intelligence regression checks
+on:
+  push:
+    branches: [ fix/rovekin-v103-persistent-home-decision-engine-20261106 ]
+    paths:
+      - .github/workflows/rovekin-v103-final-intelligence-regressions.yml
+permissions:
+  contents: read
+jobs:
+  knowledge-and-home:
+    if: github.repository == 'timmytwopointoh/New-game-'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned runtime dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate home lock, recovery, owner permissions, resource language
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --test \
+            tests/permanent-home-memory.test.js \
+            tests/new-home-gift-field.test.js \
+            tests/home-clearance-field.test.js \
+            tests/home-architecture-field.test.js \
+            tests/companion-world-policy.test.js \
+            tests/resource-jobs.test.js \
+            tests/rovekin-session-retention.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js \
+            tests/live-follow-home-anchor.test.js \
+            tests/respawn-live-regressions.test.js
