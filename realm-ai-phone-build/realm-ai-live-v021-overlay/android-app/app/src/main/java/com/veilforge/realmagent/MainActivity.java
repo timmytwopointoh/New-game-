@@ -82,6 +82,10 @@ public class MainActivity extends Activity {
         Button stop=button("STOP",this::stopNow);stop.setBackground(circle(0xff963b49));stop.setContentDescription("Stop command immediately");actions.addView(stop,new FrameLayout.LayoutParams(d(72),d(64),Gravity.START|Gravity.CENTER_VERTICAL));
         activateButton=button("▶",this::activateQueuedPlans);activateButton.setTextSize(22);activateButton.setBackground(circle(0xff208b66));activateButton.setContentDescription("Activate all waiting commands");actions.addView(activateButton,new FrameLayout.LayoutParams(d(74),d(74),Gravity.CENTER));
         commandsButton=button("Commands",this::showJobs);commandsButton.setBackground(shape(0xff963b49));commandsButton.setContentDescription("Commands: open the supported command picker");actions.addView(commandsButton,new FrameLayout.LayoutParams(d(100),d(60),Gravity.END|Gravity.CENTER_VERTICAL));
+        // Chat controls the production app; raw command cards belong to the test APK only.
+        final boolean developerBuild=(getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0;
+        commandsButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
+        activateButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
         LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask or tell me a task…");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
         input.setOnEditorActionListener((v,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_SEND){send(input.getText().toString());return true;}return false;});
     }
@@ -115,7 +119,13 @@ public class MainActivity extends Activity {
         if(vocabulary==null)detail+="Start the bot to see current Realm learning.\n";
         else{detail+="Saved word mappings: "+vocabulary.optInt("count")+" / 200 (private to this Realm).\n";for(String field:new String[]{"actions","materials"}){JSONObject entries=vocabulary.optJSONObject(field);if(entries!=null){Iterator<String> keys=entries.keys();int shown=0;while(keys.hasNext()&&shown++<6){String word=keys.next();detail+=word+" → "+entries.optString(word)+"\n";}}}if(!vocabulary.optString("error").isEmpty())detail+=vocabulary.optString("error")+"\n";}
         if(learning!=null){detail+="\nServer-confirmed tasks: "+learning.optInt("confirmed")+". Blocked: "+learning.optInt("blocked")+". Interrupted: "+learning.optInt("interrupted")+".\n";if(!learning.optString("error").isEmpty())detail+=learning.optString("error")+"\n";}
-        detail+="\nIt remembers your confirmed word corrections and learns from task outcomes. Repeating a failed action shows a reminder to recheck the cause. It does not rewrite its code or learn instructions from ambient player chat.\n\nTry: “what does troll mean?” or “what have you learned?”\nTeach: command teach action dredge = dig\nReview: command vocabulary\nForget: command forget action dredge\n\nPhone plans wait for Activate. Authorized !ai resource commands can start directly in Realm chat. Stop is immediate.";
+        JSONObject knowledge=survival==null?null:survival.optJSONObject("knowledge");
+        JSONObject mind=survival==null?null:survival.optJSONObject("companionMind");
+        if(knowledge!=null)detail+="\\nStored language concepts on this phone: "+knowledge.optInt("words")+
+            ". The knowledge grows in private device storage while space is available; low storage suspends new writes.\\n";
+        if(mind!=null)detail+="Individual companion: "+mind.optInt("verifiedSuccesses")+
+            " confirmed learning successes, "+mind.optInt("decisions")+" decisions considered.\\n";
+        detail+="\\nThe companion can explore related meanings, remember observed biomes and blocks, and learn preferences from verified game outcomes. It is not yet a full neural language model.\\n\\nUse chat to ask it to be funnier, be more serious, look for remembered blocks, or build. The command picker appears only in a developer/test APK; Stop always remains visible.";
         new AlertDialog.Builder(this).setTitle("Language and learning").setMessage(detail).setPositiveButton("Close",null).show();
     }
     JSONObject savedDiagnostics(){
