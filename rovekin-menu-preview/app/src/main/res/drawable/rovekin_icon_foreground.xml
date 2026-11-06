@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Original geometric companion emblem; contained within the 66dp adaptive safe zone. -->
+    <path android:fillColor="#6DFF2A"
+        android:pathData="M29,42 L33,42 L33,68 L29,68 Q24,68 24,63 L24,47 Q24,42 29,42 Z
+        M79,42 L75,42 L75,68 L79,68 Q84,68 84,63 L84,47 Q84,42 79,42 Z"/>
+    <path android:fillColor="#C6D7CD"
+        android:pathData="M40,28 L68,28 Q78,28 78,38 L78,72 Q78,82 68,82 L40,82 Q30,82 30,72 L30,38 Q30,28 40,28 Z"/>
+    <path android:fillColor="#ACFF56"
+        android:pathData="M42,25 L66,25 Q74,25 74,32 L74,36 L34,36 L34,32 Q34,25 42,25 Z"/>
+    <path android:fillColor="#1C3537"
+        android:pathData="M38,37 L70,37 Q75,37 75,43 L75,70 Q75,76 70,76 L38,76 Q33,76 33,70 L33,43 Q33,37 38,37 Z"/>
+    <path android:fillColor="#260B3C"
+        android:pathData="M40,41 L68,41 Q72,41 72,45 L72,67 Q72,71 68,71 L40,71 Q36,71 36,67 L36,45 Q36,41 40,41 Z"/>
+    <path android:fillColor="#CE8DFF"
+        android:pathData="M43,50 L48,50 Q50,50 50,53 L50,61 Q50,64 48,64 L43,64 Q41,64 41,61 L41,53 Q41,50 43,50 Z
+        M60,50 L65,50 Q67,50 67,53 L67,61 Q67,64 65,64 L60,64 Q58,64 58,61 L58,53 Q58,50 60,50 Z"/>
+    <path android:fillColor="#ACFF56"
+        android:pathData="M46,78 L62,78 L62,84 L46,84 Z"/>
+    <path android:fillColor="#B95CFF"
+        android:pathData="M26,34 L29,34 L29,37 L26,37 Z M79,32 L82,32 L82,35 L79,35 Z M81,73 L84,73 L84,76 L81,76 Z"/>
+</vector>
