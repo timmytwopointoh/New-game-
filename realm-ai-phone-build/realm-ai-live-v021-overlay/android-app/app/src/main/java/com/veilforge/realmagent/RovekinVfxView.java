@@ -18,13 +18,13 @@ import android.view.View;
 public final class RovekinVfxView extends View {
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final long start=System.nanoTime();
-    private final float[] fx=new float[48],fy=new float[48],fr=new float[48];
-    private final int[] shade=new int[48];
+    private final float[] fx=new float[112],fy=new float[112],fr=new float[112];
+    private final int[] shade=new int[112];
     private boolean active=true;
     public RovekinVfxView(Context c) {
         super(c); setLayerType(View.LAYER_TYPE_HARDWARE,null);
         java.util.Random rng=new java.util.Random(261106L);
-        for(int i=0;i<48;i++){
+        for(int i=0;i<112;i++){
             fx[i]=rng.nextFloat(); fy[i]=rng.nextFloat();
             fr[i]=1.5f+rng.nextFloat()*3.4f; shade[i]=i%5;
         }
@@ -166,7 +166,7 @@ public final class RovekinVfxView extends View {
             float px=fx[i]*1000f+(float)Math.sin(secs*.7+i)*8;
             float py=(fy[i]*1350f-(secs*(9+(i%7)*3)))%1450f;
             if(py<0)py+=1450f;
-            float r=fr[i];int col=shade[i]==0?0xffe2b2ff:shade[i]==1?0xff9443e5:0xffb77bfa;
+            float r=fr[i];int col=shade[i]==0?0xfff2c9ff:shade[i]==1?0xffa549f7:0xffc77dfd;
             box(real,px,py,r*2,r*2,2,col);
         }
         real.restore();
