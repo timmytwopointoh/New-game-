@@ -174,6 +174,9 @@ export class Navigation{
  }
  updateFollow(now,force=false){
   if(this.job?.kind!=='follow'||this.pendingFlightRecovery||this.pillar||this.flight||this.climbing.steps.size||this.mining.job||this.clearing)return
+  const readiness=this.movementBlock()
+  const health=this.world.attributes['minecraft:health']
+  if(readiness||(health!==undefined&&health<=6)){this.holdFollow(readiness||'Low health; waiting for recovery.',now);return}
   const player=this.world.findPlayer?.(this.job.name)||[...this.world.players.values()].find(p=>p.name.toLowerCase()===this.job.name.toLowerCase())
   if(!player){
    this.route=null;this.state='waiting-for-player';this.reason='No fresh, named player location received. Waiting for player-list or locator update; never guessing from marker color.'
@@ -183,7 +186,7 @@ export class Navigation{
   if(!start)return
   if(flatDistance(this.world.position,target)<2.2&&Math.abs(this.world.position.y-target.y)<.6){this.route=null;this.state='following';this.reason='Close to the followed player.';return}
   if(!force&&this.route?.length&&this.followTarget&&flatDistance(this.followTarget,target)<1&&!this.progress.stalled(now))return
-  if(!force&&now-(this.lastFollowPlan||0)<1000)return
+  if(!force&&now-(this.lastFollowPlan||0)<1250)return
   this.followTarget={...target}
   this.lastFollowPlan=now
   // The headless Bedrock locator-bar signal can describe a named player
@@ -446,7 +449,7 @@ export class Navigation{
  stop(reason='Stopped moving and mining.',notify=true){
   const active=!!this.job||this.route!==null||!!this.flight||!!this.mining.job
   if(this.flight)this.vy=this.flight.vy
-  this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.pendingFollow=null;this.flight=null;this.pendingFlightRecovery=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
+  this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.pendingFollow=null;this.followWaypointVisits.clear();this.flight=null;this.pendingFlightRecovery=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
   if(this.sprinting){this.pendingFlags.push('stop_sprinting');this.sprinting=false}
   if(this.edgeSneaking){this.pendingFlags.push('stop_sneaking');this.edgeSneaking=false}
   this.pickup.stop();this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason);this.survey=null
@@ -503,7 +506,7 @@ export class Navigation{
    if(now-this.unknownSince>=5000){
     const reason='Waiting for server terrain; movement paused, Realm connection kept open.'
     if(this.job||this.route||this.flight||this.mining.job||this.building.job){
-     this.stop(reason)
+     if(!this.holdFollow(reason,now))this.stop(reason)
     }else if(!this.unknownTerrainNoticeAt){
      this.unknownTerrainNoticeAt=now
      this.report(reason)
@@ -553,10 +556,10 @@ export class Navigation{
   }
   let delta={x:0,y:0,z:0},move={x:0,z:0},flags=[]
   let construction=this.pillar?this.pillar.control(now):this.route?.length?this.climbing.beforeStep(this.route[0],now):{}
-  if(construction.error){this.stop(construction.error);construction={waiting:true}}
+  if(construction.error){if(!this.holdFollow(construction.error,now))this.stop(construction.error);construction={waiting:true}}
   if(portal?.active){({delta,move,flags}=portal)}else if(hazard?.active){({delta,move,flags}=hazard)}else if(construction.edgeApproach){
    const p=this.world.position,e=construction.edgeApproach,d=Math.hypot(e.x-p.x,e.z-p.z),speed=Math.min(.035,d),next={x:p.x+(d?(e.x-p.x)/d*speed:0),y:p.y,z:p.z+(d?(e.z-p.z)/d*speed:0)}
-   if(!this.world.clearBody(next)||!this.world.grounded(next)){this.stop('Bridge edge lost collision support; stopped.');construction={waiting:true}}
+   if(!this.world.clearBody(next)||!this.world.grounded(next)){if(!this.holdFollow('Bridge edge lost safe support; replanning.',now))this.stop('Bridge edge lost collision support; stopped.');construction={waiting:true}}
    else{delta={x:next.x-p.x,y:0,z:next.z-p.z};this.world.position=next;move={x:0,z:1};this.state='approaching-bridge-edge'}
   }else if(this.flight){({delta,move,flags}=this.flightStep(now))}
   else if(this.route?.length&&!this.externalMotion&&!this.pendingFlightRecovery&&!construction.waiting&&!this.mining.job&&(this.world.grounded()||this.shallowWading())){
