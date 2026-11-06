@@ -111,6 +111,7 @@ export class Connection extends EventEmitter {
           const selected=original(realms)
           this.survival.authorizeRealmClearing(String(selected.id))
           this.survival.commandPlans.setScope(String(selected.id))
+          this.survival.companion.setScope(String(selected.id))
           this.survival.learning.setScope(String(selected.id))
           this.survival.commandVocabulary.setScope(String(selected.id))
           this.survival.landmarks.setScope(String(selected.id))
