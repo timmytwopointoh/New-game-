@@ -6,6 +6,9 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
+import android.view.WindowInsets;
+import android.os.Build;
+import android.graphics.Insets;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -92,10 +95,35 @@ public final class RovekinChatPanel {
         LinearLayout body=column();
         body.setPadding(dp(12),dp(8),dp(12),dp(10));
         root.addView(body,new FrameLayout.LayoutParams(-1,-1));
+        // Never let gesture bars or the on-screen keyboard cover the input.
+        // Android 11+ supplies actual system/IME insets; older devices rely
+        // on adjustResize with an additional comfortable 18dp bottom gutter.
+        root.setOnApplyWindowInsetsListener((view,insets)->{
+            int bottom=0;
+            if(Build.VERSION.SDK_INT>=30){
+                Insets nav=insets.getInsets(WindowInsets.Type.navigationBars());
+                Insets ime=insets.getInsets(WindowInsets.Type.ime());
+                bottom=Math.max(nav.bottom,ime.bottom);
+            }else bottom=insets.getSystemWindowInsetBottom();
+            view.setPadding(0,0,0,Math.max(dp(18),bottom+dp(12)));
+            return insets;
+        });
+        root.post(root::requestApplyInsets);
 
         LinearLayout top=new LinearLayout(activity);top.setGravity(Gravity.CENTER_VERTICAL);
         TextView logo=label("ROVEKIN",22,PAPER,true);
         logo.setLetterSpacing(.12f);logo.setShadowLayer(dp(7),0,dp(1),0xaa87e46f);
+        // This is a small recessed utility built INTO the top border,
+        // not an extra main action button.
+        TextView reconnect=label("↻",23,VIOLET,true);
+        reconnect.setGravity(Gravity.CENTER);
+        reconnect.setContentDescription("Reconnect to Realm with saved login");
+        reconnect.setBackground(new RippleDrawable(ColorStateList.valueOf(0x66f6dbff),
+            grad(new int[]{0xff1f453c,0xff162a38,0xff1c1635},0xffb17ef5,13),null));
+        reconnect.setOnClickListener(v->dispatch(RovekinFeatureContract.Feature.START_SERVICE));
+        LinearLayout.LayoutParams reconnectLP=new LinearLayout.LayoutParams(dp(38),dp(36));
+        reconnectLP.rightMargin=dp(9);
+        top.addView(reconnect,reconnectLP);
         top.addView(logo,new LinearLayout.LayoutParams(0,dp(38),1));
         logo.setContentDescription("Rovekin");
         // All advanced operations remain in original host, not on the public screen.
@@ -133,7 +161,8 @@ public final class RovekinChatPanel {
 
         // Exactly two stand-alone action buttons: cutoff and start.
         LinearLayout actions=new LinearLayout(activity);
-        stop=button("CUTOFF",false,true,RovekinFeatureContract.Feature.EMERGENCY_STOP);
+        stop=button("STOP",false,true,RovekinFeatureContract.Feature.EMERGENCY_STOP);
+        stop.setContentDescription("Stop the current action; keep Rovekin connected");
         start=button("START",true,false,RovekinFeatureContract.Feature.START_SERVICE);
         LinearLayout.LayoutParams s1=new LinearLayout.LayoutParams(0,dp(51),1f);
         s1.rightMargin=dp(8);
