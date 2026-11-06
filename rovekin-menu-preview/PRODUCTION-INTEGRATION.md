@@ -8,9 +8,11 @@
 
 1. `integration/src/main/java/com/veilforge/realmagent/RovekinFeatureContract.java` — public/owner/developer capability list; dynamic live command catalog; truthful available/waiting/unsupported state.
 2. `integration/src/main/java/com/veilforge/realmagent/RovekinActionRouter.java` — one route per UI action; existing MainActivity handlers only; no shadow bot/plan engine.
-3. `integration/android/RovekinMainActivityHost.java` — *Android* MainActivity adapter, account-only owner settings, existing developer field console only for verified developer.
-4. `integration/tests/` — pure Java action parity and privilege tests.
-5. `integration/verify_integration.py` — requires original Android methods, service, app ID, Microsoft code, command and plan/status endpoints to remain available.
+3. `integration/android/RovekinMainActivityHost.java` — Android MainActivity adapter, account-only owner settings, existing developer field console only for verified developer.
+4. `integration/android/RovekinCatalogAdapter.java` — converts the unfiltered existing bundled/live `JSONArray` command catalog to native feature tiles.
+5. `integration/android/RovekinChatPanel.java` — actual native working chat surface that reparents the existing transcript `scroll`, keeps `MainActivity.bubble()` and delegates actions to the original controller. No printed fake buttons.
+6. `integration/tests/` — pure Java action parity and privilege tests.
+7. `integration/verify_integration.py` — requires original Android methods, service, app ID, Microsoft code, command and plan/status endpoints to remain available.
 
 **Do NOT copy** `rovekin-menu-preview/app/` as a second application into production; it is an intentionally independent demo APK package with no Realm service. **Do NOT import** its fake design-preview mode or inert Chat buttons. Move/upgrade the approved green theme and full-body robot-skinned player art as actual Android resources, keeping controls as native click targets.
 
@@ -91,11 +93,17 @@ No second backend, no duplicated Microsoft client, no replacement game logic, no
 | Full developer field console | Existing `showSettings` | Developer only, verified authorization |
 | Runtime log/pack/emulator inspector | Future real services; not fake UI | Keep marked NOT SUPPORTED until implemented |
 
+## Copy paths for a future final integration
+
+All five production-bound Java classes already declare `package com.veilforge.realmagent;`. Once rebased onto the **latest** good source, copy those exact five files into its existing `app/src/main/java/com/veilforge/realmagent/` package. Do **not** replace `MainActivity.java` wholesale. Wire a small reviewed patch to construct `RovekinMainActivityHost`, `RovekinActionRouter` and `RovekinChatPanel`; display the new chat panel after real sign-in/spawn and pass the original `scroll` to `create(scroll)` to retain all log bubbles. Feed `refresh(..., RovekinCatalogAdapter.fromLiveCatalog(catalog), connection.getText().toString())` from the existing status response. Move only the approved branding resources, not the independent preview application's manifest or package ID. Preserve current in-progress features from the other chat.
+
+**Missing before live integration:** build and wire the production animated splash/AI-name/inviter/MS-auth/onboarding flow; extract verified real owner and developer entitlement from trusted authentication rather than local gamertags; and validate multi-Realm/home/assignment permission enforcement. These are release blockers, not optional future polish. The menu's preview-only `RovekinFlow` is a design state machine in a separate package; it must not be copied into production without real status integration.
+
 ## Pre-merge procedure
 
 - Rebase/cherry-pick ONLY needed UI/integration sources onto the latest live build. Never merge older Android auth/transport files from the protected checkpoint over fresh parallel-work changes.
 - Run `python3 rovekin-menu-preview/integration/verify_integration.py` and fix **all** failures. Build full Android app in the real toolchain; pure Java tests alone are insufficient.
-- Review `git diff`: expected files are mostly new UI classes, approved drawable resources and small view/status hooks in MainActivity, **not** Node connection changes.
+- Review `git diff`: expected files are new UI classes, approved drawable resources and small view/status hooks in MainActivity, **not** Node connection changes.
 - Exercise fresh setup, saved sign-in, Microsoft code, unmodded Realm, large/modded packs, join/spawn, command chat, queue, STOP, navigation, home tasks, updates, report ZIP and owner/developer access on emulator.
 - Confirm old APK is replace-updatable with original package ID, signed by **exact** permanent certificate, increasing versionCode and no uninstall/re-login.
 - Test that owner UI cannot invoke developer operations via altered intents, direct local routes, debug gestures or malformed input; retain real backend authorization. Do NOT ship sensitive signing keys or entitlement secrets in UI resources.
