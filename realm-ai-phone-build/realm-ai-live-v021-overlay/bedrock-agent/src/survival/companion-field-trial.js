@@ -53,6 +53,7 @@ export class CompanionFieldTrial{
   reason:this.reason,result:this.result?.accepted===true?{accepted:true,projectState:this.result?.project?.state}:null}}
  start(now=Date.now()){
   const c=this.companion.c,owner=ownerName(c),scope=this.companion.editScope().realm
+  if(this.companion.homeMemory?.hasHome)return {accepted:true,queued:false,message:'My first home is permanently assigned already. I will not create another.'}
   if(!owner||!scope)return {accepted:false,queued:false,message:'Set one actual owner and join a selected Realm before testing.'}
   if(!c.connection?.spawned)return {accepted:false,queued:false,message:'Join and spawn in your Realm first.'}
   if(this.state==='following'||this.state==='awaiting-arrival')
