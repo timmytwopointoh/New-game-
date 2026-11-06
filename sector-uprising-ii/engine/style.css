@@ -23,4 +23,3 @@
 @keyframes afterlight-scanner{0%,100%{opacity:.4;transform:scaleX(.75)}50%{opacity:1;transform:scaleX(1)}}
 @media (prefers-reduced-motion:reduce){#atmosphere,#lensFlare,#combatScan i{animation:none}.menuDecoration .circle,.menuDecoration .scanner{animation:none}}
 @media(max-width:700px){#combatScan{display:none}.holoCity{opacity:.22!important}#lensFlare{opacity:.2}#atmosphere{opacity:.6}}
-
