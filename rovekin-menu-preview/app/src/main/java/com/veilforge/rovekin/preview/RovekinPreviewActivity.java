@@ -50,6 +50,7 @@ public final class RovekinPreviewActivity extends Activity {
     private FrameLayout stage;
     private EditText nameInput;
     private TextView errorLabel;
+    private ObjectAnimator splashBob, promptBob;
 
     private int dp(float v) { return (int)(v * getResources().getDisplayMetrics().density + .5f); }
     @Override public void onCreate(Bundle state) {
@@ -132,6 +133,8 @@ public final class RovekinPreviewActivity extends Activity {
         small.setGravity(Gravity.CENTER); center(body, small, 9);
     }
     private void render() {
+        if (splashBob != null) { splashBob.cancel(); splashBob = null; }
+        if (promptBob != null) { promptBob.cancel(); promptBob = null; }
         stage = new FrameLayout(this);
         stage.setBackgroundColor(DEEP);
         stage.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -161,7 +164,7 @@ public final class RovekinPreviewActivity extends Activity {
         pic.gravity = Gravity.CENTER_HORIZONTAL; body.addView(logo, pic);
         ObjectAnimator bob = ObjectAnimator.ofFloat(logo, "translationY", 0, -dp(11), 0);
         bob.setDuration(2400); bob.setRepeatCount(ValueAnimator.INFINITE);
-        bob.setInterpolator(new LinearInterpolator()); bob.start();
+        bob.setInterpolator(new LinearInterpolator()); splashBob = bob; bob.start();
         TextView name = text("ROVEKIN", 39, WHITE, true);
         name.setLetterSpacing(.08f); name.setGravity(Gravity.CENTER); center(body, name, 22);
         TextView label = text("YOUR WORLD. YOUR COMPANION.", 12, LIME, true);
@@ -173,7 +176,7 @@ public final class RovekinPreviewActivity extends Activity {
         add(body, prompt, 64);
         ObjectAnimator floatPrompt = ObjectAnimator.ofFloat(prompt, "translationY", 0, -dp(6), 0);
         floatPrompt.setRepeatCount(ValueAnimator.INFINITE);
-        floatPrompt.setDuration(2800); floatPrompt.start();
+        floatPrompt.setDuration(2800); promptBob = floatPrompt; floatPrompt.start();
         TextView footer = text("Independent gaming companion • Menu preview", 11, MUTED, false);
         footer.setGravity(Gravity.CENTER); center(body, footer, 17);
         // Transparent full-screen touch target above the artwork: even taps on
