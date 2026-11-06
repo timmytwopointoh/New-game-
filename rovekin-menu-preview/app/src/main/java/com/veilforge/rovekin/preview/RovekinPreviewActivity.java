@@ -134,6 +134,15 @@ public final class RovekinPreviewActivity extends Activity {
     private void render() {
         stage = new FrameLayout(this);
         stage.setBackgroundColor(DEEP);
+        stage.setOnApplyWindowInsetsListener((v, insets) -> {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets safe = insets.getInsets(
+                    android.view.WindowInsets.Type.systemBars());
+                v.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+            }
+            return insets;
+        });
+        stage.requestApplyInsets();
         stage.addView(new ParticleBackdrop(), new FrameLayout.LayoutParams(-1, -1));
         setContentView(stage);
         switch (flow.screen()) {
@@ -167,7 +176,12 @@ public final class RovekinPreviewActivity extends Activity {
         floatPrompt.setDuration(2800); floatPrompt.start();
         TextView footer = text("Independent gaming companion • Menu preview", 11, MUTED, false);
         footer.setGravity(Gravity.CENTER); center(body, footer, 17);
-        stage.setOnClickListener(v -> { flow.tapAnywhere(); render(); });
+        // Transparent full-screen touch target above the artwork: even taps on
+        // the scroll container or character activate the splash reliably.
+        View tapLayer = new View(this);
+        tapLayer.setContentDescription("Tap anywhere to begin");
+        tapLayer.setOnClickListener(v -> { flow.tapAnywhere(); render(); });
+        stage.addView(tapLayer, new FrameLayout.LayoutParams(-1, -1));
     }
     private EditText field(String hint, String pref) {
         EditText e = new EditText(this);
