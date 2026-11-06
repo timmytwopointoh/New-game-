@@ -17,6 +17,61 @@ export class HomeProject {
   this.reason=`Home shell: ${this.plan.placementsPlanned} block placements in ${this.plan.stages.length} verified stages. A bed, chest, crafting table, furnace and light are separately required.`
   return {accepted:true,queued:false,message:this.reason,project:this.snapshot()}
  }
+ // Resuming after a new socket/session requires server observation of ALL
+ // previously confirmed construction stages. We never replay old placements
+ // or assume a stale saved record proves that blocks are present today.
+ restoreSaved(record,scope){
+  this.preview(record.plot,record.design)
+  this.ownerScope=safeScope(scope)
+  this.restoreTarget=record.verifiedStages
+  this.restoreAutoResume=record.autoResume===true
+  this.state='restoring'
+  this.plan.status='rechecking'
+  this.reason='Permanent home remembered. Waiting for actual Realm blocks before resuming.'
+  return this.snapshot()
+ }
+ recheckSavedStages(now){
+  const c=this.c,w=c.world,n=c.navigation
+  if(!c.connection?.spawned||w.dimension!==this.plot?.dimension||
+      !w.editModeVerified||!w.position)return
+  const count=this.restoreTarget??0
+  for(let i=0;i<count;i++){
+   const stage=this.plan.stages[i]
+   if(!stage)return this.block('Saved stage count exceeds restored blueprint.')
+   for(const p of stage.positions){
+    const actual=w.block(p)
+    if(!actual){
+     if(now-(this.lastReport||0)>10000){
+      this.lastReport=now;this.reason='Home remembered; waiting for the server to load previously built blocks.'
+      try{w.requestNearby?.(n.client)}catch{}
+     }
+     return
+    }
+    const blockName=String(actual.name||'').replace(/^minecraft:/,'')
+    if(blockName!==stage.material){
+     this.state='paused';this.plan.status='paused'
+     this.reason='Saved home stage '+(i+1)+' does not match server blocks at '+key(p)+'. Paused to protect the existing build.'
+     this.c.companion?.homeMemory?.saveProgress({autoResume:false})
+     c.report?.(this.reason)
+     return
+    }
+   }
+  }
+  for(let i=0;i<count;i++){
+   const stage=this.plan.stages[i]
+   stage.status='confirmed';stage.serverConfirmed=stage.positions.length
+  }
+  this.stage=count
+  this.plan.placementsVerified=this.plan.stages.slice(0,count).reduce((sum,st)=>sum+st.positions.length,0)
+  this.plan.status=this.restoreAutoResume?'running':'paused'
+  this.state=this.restoreAutoResume?'running':'paused'
+  this.started=now;this.lastAttempt=0;this.moveAttempts=0
+  this.restoreTarget=null
+  this.reason=this.restoreAutoResume?
+   'Saved home verified against current Realm blocks. Continuing the next unfinished stage.':
+   'Home and progress restored. Owner previously paused automatic work.'
+  c.report?.(this.reason)
+ }
  requestAuthorization(scope,now=Date.now()){
   if(!this.plan||!this.plot)return {accepted:false,queued:false,message:'First ask me to design a home and preview its physical build.'}
   if(this.state!=='preview'&&this.state!=='paused')return {accepted:false,queued:false,message:'Home project is already active or finished.'}
@@ -74,7 +129,7 @@ export class HomeProject {
   return {accepted:true,queued:true,message:this.reason}
  }
  stop(reason='Owner paused home construction.'){
-  if(this.state==='running'){this.state='paused';this.plan.status='paused';this.reason=reason}
+  if(this.state==='running'||this.state==='restoring'){this.state='paused';if(this.plan)this.plan.status='paused';this.reason=reason}
   this.pending=null;this.review=null;this.clearance=null;this.proximityReview=null;this.ownerPauseRequested=false
   if(this.supply.childStarted)this.c.acquisition?.cancel?.('Owner paused the parent home project.')
   this.supply.reset()
@@ -196,6 +251,7 @@ export class HomeProject {
   this.c.report?.('Home project paused: '+this.reason+'. No automatic block replacement or destructive retries.')
  }
  tick(now=Date.now()){
+  if(this.state==='restoring'){this.recheckSavedStages(now);return}
   if(this.state!=='running'||!this.plan||!this.plot||now-(this.lastAttempt||0)<500)return
   this.lastAttempt=now
   if(this.ownerPauseRequested&&this.plan?.stages?.[this.stage]?.status!=='building'){
@@ -227,6 +283,7 @@ export class HomeProject {
    c.mind?.record?.(useKind,s.material,{outcome:'confirmed',
     biome:w.biomeAt?.()?.name||null,evidence:'verified-construction-stage'})
    this.stage++;w.editApproval=null;this.moveAttempts=0;this.supply.reset();this.clearance=null;this.proximityApproval=null
+   this.c.companion?.rememberProgress?.(this.stage)
    c.report?.(`Home stage ${this.stage}/${this.plan.stagesTotal} verified, ${this.plan.placementsVerified} blocks confirmed.`)
    if(this.ownerPauseRequested){this.ownerPauseRequested=false;this.pauseForOwner();return}
    return
