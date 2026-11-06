@@ -52,7 +52,8 @@ public class PhoneLayoutTest {
    // The chat replaces splash and connecting children: there is ONE new chat root.
    assertEquals(1,stage.getChildCount());
    View chat=stage.getChildAt(0);
-   assertNotNull(find(chat,"CUTOFF"));
+   assertNotNull(find(chat,"STOP"));
+   assertNotNull("Reconnect is recessed in the top border",find(chat,"↻"));
    assertNotNull(find(chat,"START"));
    assertNotNull(find(chat,"SEND"));
    assertNull(find(chat,"ALL COMMANDS"));
