@@ -5,21 +5,22 @@ import {HomeProject} from './home-project.js'
 import {HomeRoutine} from './home-routine.js'
 import {NEW_HOME_SPOT,decideFirstHome} from './home-instinct.js'
 import {HomeSocialLoop} from './home-social-loop.js'
+import {CompanionFieldTrial,FIELD_TEST_COMMAND} from './companion-field-trial.js'
 
 // Read-only house design and one-job edit consent. Only the bearer-authenticated
 // local phone API or an owner-allowlisted in-game command can call this handler.
 export class CompanionCommands {
  constructor(controller,scope=null){
   this.c=controller;this.scope=scope||null
-  this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller);this.social=new HomeSocialLoop(this)
+  this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller);this.social=new HomeSocialLoop(this);this.fieldTrial=new CompanionFieldTrial(this)
  }
- setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.social.reset();this.c.world.editApproval=null}
+ setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.social.reset();this.fieldTrial.clear();this.c.world.editApproval=null}
  editScope(){return {realm:this.scope||this.c.commandPlans.scope||null,dimension:this.c.world.dimension}}
- reset(){this.edits.reset();this.homeProject.stop('Realm session interrupted; owner must confirm before resuming.');this.homeRoutine.reset(true);this.social.manualHold();this.c.world.editApproval=null}
- tick(now=Date.now()){this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)}
+ reset(){this.edits.reset();this.homeProject.stop('Realm session interrupted; owner must confirm before resuming.');this.homeRoutine.reset(true);this.social.manualHold();this.fieldTrial.clear();this.c.world.editApproval=null}
+ tick(now=Date.now()){this.fieldTrial.tick(now);this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)}
  onServerTime(p,now=Date.now()){this.homeRoutine.onServerTime(p,now)}
  onServerSystemText(p,now=Date.now()){this.homeRoutine.onSystemText(p,now)}
- snapshot(){return {plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,social:this.social.snapshot(),homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
+ snapshot(){return {plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,fieldTrial:this.fieldTrial.snapshot(),social:this.social.snapshot(),homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
  check(kind,descriptor,positions,execute){
   const c=this.c
   if(!c.connection.spawned)return {accepted:false,queued:false,message:'Join and spawn in the Realm before editing.'}
@@ -43,6 +44,7 @@ export class CompanionCommands {
  afterOwnerAction(raw,result,now=Date.now()){return this.social.afterOwnerAction(raw,result,now)}
  handle(raw){
   const s=String(raw||'').trim().toLowerCase().replace(/[.!?]+$/,'').replace(/^(?:please |can you |could you )/,'')
+  if(FIELD_TEST_COMMAND.test(s))return this.fieldTrial.start()
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
   if(/^confirm home proximity \\d{6}$/.test(s)||s==='cancel home proximity')
