@@ -80,6 +80,13 @@ export class CompanionFieldTrial{
    this.state='paused';this.reason='Ten-minute follow test timed out without a verified arrival.';return
   }
   if(!n.job||n.job.kind!=='follow'||n.job.name?.toLowerCase()!==this.owner.toLowerCase()){
+   // A follow request may be safely queued while the Realm verifies
+   // movement. Pending is not arrival: do not claim land or build yet.
+   if(n.pendingFollow?.name?.toLowerCase()===this.owner.toLowerCase()){
+    this.state='awaiting-arrival'
+    this.reason='Follow is waiting for server-confirmed movement readiness. No home assigned.'
+    return
+   }
    this.state='paused';this.reason='The follow task ended before arrival. No home was assigned.';return
   }
   const at=verifiedArrival(c,this.owner,{now,started:this.startedAt,maxDistance:10})
