@@ -9,7 +9,7 @@ const LEADING_MODAL=/^(?:can|could|would|will) you\b|^(?:i (?:want|need|would li
 const QUESTION=/^(?:who|what|where|when|why|how|do you|are you|is it|can you|could you|would you|will you|should we|what if|tell me about|do we)\b/i
 const REPORT=/\b(?:should(?:n't)? have|could have|would have|wish (?:you|we) (?:had|could)|if only|last time|yesterday you|while you were|you (?:were|was|used to)|you already|i think|he said|she said|they said|someone said|heard that|remember when)\b/i
 const REFERENCE_START=/^(?:dang|wow|ugh|oh man|i |we |they |he |she |everyone |somebody |someone |that |this |the |our |your |you should have|you could have|you would have)/i
-const NON_ADDRESS=/^(?:is|was|were|looks|seems|has|had|said|went|did|does|can|could|would|might|should)\b/i
+const NON_ADDRESS=/^(?:is|was|were|looks|seems|has|had|said|went|did|does)\b/i
 const EXPLICIT_PHONE_MESSAGE=/^(?:!ai|@veilforge)\s+/i
 
 export function interpretNameUtterance(raw,botName,{phone=false}={}){
@@ -30,7 +30,10 @@ export function interpretNameUtterance(raw,botName,{phone=false}={}){
  if(!statement)return {kind:'attention',addressed:true,command:null,reason:'direct name call'}
  // A trailing name by itself in casual/retrospective talk is a reference.
  // A leading name may also introduce feedback rather than a new task.
- if(REPORT.test(statement)||NON_ADDRESS.test(statement)&&isStart)
+ const vocative=new RegExp('^(?:(?:hey|hi|hello|yo|oi|okay|ok|excuse me|listen|please)[,!:\\s]+)?@?'+escaped+'\\\\s*[,!:?]','i').test(input)
+ if(NON_ADDRESS.test(statement)&&isStart&&!vocative)
+  return {kind:'reference',addressed:false,command:null,reason:'third-person description of the bot'}
+ if(REPORT.test(statement))
   return {kind:isStart?'statement':'reference',addressed:isStart,command:null,reason:'descriptive or retrospective speech'}
  if(isEnd&&REFERENCE_START.test(statement)&&!LEADING_MODAL.test(statement))
   return {kind:'reference',addressed:false,command:null,reason:'trailing name in ordinary speech'}
