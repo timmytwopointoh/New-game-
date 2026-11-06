@@ -244,17 +244,12 @@ public final class RovekinEntryOverlay {
         add(overlayPanel,button("CONNECT / RETRY",true,()->connect()),18);
         add(overlayPanel,button("EDIT ACCOUNT",false,()->showAiName("")),8);
         // Technical internals remain in the original service and diagnostics; no version/readme clutter.
-        if(autoConnect && !a.serviceStarted)connect();
+        if(autoConnect)connect();
         if(lastStatus!=null)drawRealStatus(lastStatus);
     }
     private void connect(){
         if(!configured()){showAiName("Set the AI and owner names first.");return;}
-        if(a.serviceStarted){
-            liveStatus="Waiting for the existing on-device service…";
-            if(statusText!=null)statusText.setText(liveStatus);
-            return;
-        }
-        a.startBot(); // ORIGINAL embedded service + saved Microsoft auth and Realm.
+        a.startOrRejoinBot(); // START and CONNECT now rejoin the existing service, too.
         liveStatus=a.connection==null?"Starting bot":a.connection.getText().toString();
         if(statusText!=null)statusText.setText(liveStatus);
     }
