@@ -24,3 +24,9 @@
 #waypoint{color:#fce19e;font-weight:900;}
 #miniButton[hidden]{display:none!important;}
 @media(max-height:420px){#miniStage{min-height:23vh;max-height:30vh;padding:3px;}#miniStage .challengeHeader{font-size:12px}.truckBoard{grid-template-columns:repeat(5,30px);grid-template-rows:repeat(4,25px)}.challengeTile{min-height:42px;font-size:18px}.challengeTile span{font-size:9px}.plateArea{height:60px}.plateRing{border-width:6px}}
+
+/* v0.3: restore original game while the 3D rebuild reaches parity */
+.classicShift{background:linear-gradient(125deg,#efc780,#fff0b6)!important;color:#193e4b!important;border:2px solid #fffbe6!important;box-shadow:0 5px 0 #9e704c!important;letter-spacing:.04em}
+.zoomTools{display:flex;gap:3px;align-items:center;background:#0d3448aa;border:1px solid #70c0c2;padding:3px;border-radius:11px}
+.zoomTools button{font-size:18px;font-weight:1000;min-width:27px;min-height:27px;padding:2px 5px;line-height:1.1;border-radius:8px;background:#e9d0a0;color:#193f4f;box-shadow:none}
+@media(max-height:450px){.zoomTools button{min-height:23px;min-width:23px;font-size:15px;padding:2px}}

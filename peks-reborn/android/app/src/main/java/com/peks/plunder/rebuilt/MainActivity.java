@@ -66,7 +66,8 @@ public final class MainActivity extends Activity {
       }
     },"PeksNative");
     setContentView(game);
-    game.loadUrl("file:///android_asset/index.html");
+    String startPage = "classic".equals(getIntent().getStringExtra("peks_preview_mode")) ? "classic.html" : "index.html";
+    game.loadUrl("file:///android_asset/" + startPage);
   }
   private void beginReportExport(String json){
     pendingReport=json;

@@ -68,6 +68,20 @@ assert.match(activity,/setAllowUniversalAccessFromFileURLs\(false\)/);
 assert.match(activity,/loadUrl\("file:\/\/\/android_asset\/index.html"\)/);
 assert.match(gradle,/applicationId = "com.peks.plunder.rebuilt"/);
 assert.match(gradle,/syncPeksGame/);
+
+/* Preservation gate: legacy gameplay remains directly playable, offline, standalone. */
+const classic=read("game/classic.html");
+assert.ok(classic.length>250000,"The original complete game must be bundled, not a mock placeholder");
+for(const marker of ["frontMenu","frontPlay","frontContinue","function resumeSavedShift",
+ "function ghostPrank","function triggerPrepLemonade","function newEddieRun",
+ "function spawnCustomer","function startMini","function moveWithCollision",
+ "function drawTikiDolphin","function updateCustomers","function v40StructuralWalls",
+ "function drawGuestEmotion","function saveShift","function miniKind"]){
+ assert.ok(classic.includes(marker),"Classic feature missing: "+marker);
+}
+assert.ok(classic.includes('id="rebornClassicBack"')||classic.includes("btn.id='rebornClassicBack'"),"Classic mode lacks return route");
+assert.ok(html.includes('id="classicShift"'),"3D menu lacks original game entry point");
+assert.ok(html.includes('id="zoomIn"')&&html.includes('id="zoomOut"'),"3D camera zoom controls missing");
 const stage={
  dataset:{},innerHTML:"",handlers:{},
  addEventListener(k,f){this.handlers[k]=f;},removeEventListener(k,f){if(this.handlers[k]===f)delete this.handlers[k];},
