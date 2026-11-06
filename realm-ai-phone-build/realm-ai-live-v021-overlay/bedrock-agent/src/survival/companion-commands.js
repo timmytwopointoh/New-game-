@@ -3,21 +3,22 @@ import {blueprint} from './building.js'
 import {constructionExposure,EditConfirmations} from './construction-guard.js'
 import {HomeProject} from './home-project.js'
 import {HomeRoutine} from './home-routine.js'
+import {NEW_HOME_SPOT,decideFirstHome} from './home-instinct.js'
 
 // Read-only house design and one-job edit consent. Only the bearer-authenticated
 // local phone API or an owner-allowlisted in-game command can call this handler.
 export class CompanionCommands {
  constructor(controller,scope=null){
   this.c=controller;this.scope=scope||null
-  this.plot=null;this.design=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller)
+  this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller)
  }
- setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.c.world.editApproval=null}
+ setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.c.world.editApproval=null}
  editScope(){return {realm:this.scope||this.c.commandPlans.scope||null,dimension:this.c.world.dimension}}
  reset(){this.edits.reset();this.homeProject.stop('Realm session interrupted; owner must confirm before resuming.');this.homeRoutine.reset(true);this.c.world.editApproval=null}
  tick(now=Date.now()){this.homeRoutine.tick(now);this.homeProject.tick(now)}
  onServerTime(p,now=Date.now()){this.homeRoutine.onServerTime(p,now)}
  onServerSystemText(p,now=Date.now()){this.homeRoutine.onSystemText(p,now)}
- snapshot(){return {plot:this.plot,design:this.design,homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
+ snapshot(){return {plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
  check(kind,descriptor,positions,execute){
   const c=this.c
   if(!c.connection.spawned)return {accepted:false,queued:false,message:'Join and spawn in the Realm before editing.'}
@@ -56,6 +57,46 @@ export class CompanionCommands {
   }
   if(s==='plan home construction'||s==='preview home build')return this.plot&&this.design?this.homeProject.preview(this.plot,this.design):{accepted:false,queued:false,message:'Design a home on your assigned land first.'}
   if(s==='build your home'||s==='start building your home'||s==='execute home design'||s==='begin home construction')return this.homeProject.requestAuthorization(this.editScope().realm)
+  if(NEW_HOME_SPOT.test(s)){
+   const connection=this.c.connection,n=this.c.navigation
+   if(!connection.spawned)return {accepted:false,queued:false,message:'Please let me join the Realm before assigning a home.'}
+   if(this.homeProject.state==='running'||this.homeProject.state==='furnishing')
+    return {accepted:true,queued:true,message:'Thanks! I already have an active home project. '+this.homeProject.snapshot().reason,project:this.homeProject.snapshot()}
+   if(this.c.resources?.active||this.c.acquisition?.active||this.c.miningJobs?.active||
+      this.c.operations?.pending||(n.job&&n.job.kind!=='follow'))
+    return {accepted:false,queued:false,message:'I have another active job. Say "stop", then tell me this is my new home spot.'}
+   let plot,decision
+   try{
+    plot=grantPlot(this.c.world,connection.config?.ownerPlayerNames||[])
+    decision=decideFirstHome(this.c.world,plot,{
+     serverTime:this.homeRoutine.serverTime,serverTimeAt:this.homeRoutine.serverTimeAt
+    })
+    this.plot=plot;this.design=decision.design;this.firstHomeDecision={
+     choice:decision.choice,daylight:decision.daylight,site:decision.site,
+     materials:decision.materials,priority:decision.priority}
+    this.homeRoutine.setPlot(plot)
+    this.homeProject.preview(plot,this.design)
+    const begin=this.homeProject.beginFromLandGift(this.editScope().realm)
+    if(!begin.accepted)return begin
+    // Following the owner is a safe task to yield; never interrupt an
+    // in-progress resource/mining/build transaction to acquire a plot.
+    if(n.job?.kind==='follow'||n.survey)n.stop('Owner assigned a home; switching to building.',false)
+    this.c.world.enabled=true
+    try{this.c.world.requestNearby?.(connection.client)}catch(e){this.c.world.lastError=String(e.message||e)}
+    const time=decision.daylight.phase==='unknown'?'I will check the sky first':
+     decision.daylight.urgent?'Night is close, so I will prioritize shelter':'I am using the daylight to build shelter first'
+    const message='Thank you for giving me a place to call home! I picked a '+decision.choice.width+
+     ' by '+decision.choice.width+' '+decision.choice.kind+' starter with '+decision.choice.foundation+
+     '. '+time+'. I will improvise as I learn this land!'
+    const globalChatQueued=connection.say(message)
+    this.c.report?.('New home spot: '+decision.choice.style+' ('+decision.choice.foundation+
+     '), site '+decision.site.readiness+', '+decision.daylight.phase+'. Starter project running.')
+    return {accepted:true,queued:true,message:'Home assigned to '+plot.owner+
+     '. '+this.homeProject.snapshot().reason+
+     (globalChatQueued?' Thank-you and creative plan sent to global Realm chat.':' Global chat was not available; view diagnostics.'),
+     plot,decision:this.firstHomeDecision,project:this.homeProject.snapshot(),globalChatQueued}
+   }catch(e){return {accepted:false,queued:false,message:'I could not safely set that home spot: '+String(e.message||e).slice(0,150)}}
+  }
   if(/^(?:this is your land|claim (?:your |my |a )?(?:companion )?(?:plot|land)(?: here)?|give you (?:a |my )?(?:50(?:x|\/| by )50(?:x|\/| by )50 )?(?:plot|land)(?: here)?)(?: 50(?:x|\/| by )50(?:x|\/| by )50)?$/.test(s)){
    if(!this.c.connection.spawned)return {accepted:false,queued:false,message:'Bot is not spawned. No land assigned.'}
    try{this.plot=grantPlot(this.c.world,this.c.connection.config?.ownerPlayerNames||[]);this.design=null;this.homeRoutine.setPlot(this.plot);this.homeProject.clear()
