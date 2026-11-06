@@ -41,6 +41,7 @@ export class CompanionCommands {
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
   if(s==='cancel edit'){this.edits.reset();return {accepted:true,queued:false,message:'Edit approval cancelled. No work started.'}}
+  if(/^confirm clearance \d{6}$/.test(s)||s==='cancel clearance')return this.homeProject.confirmClearance(s,String(this.editScope().realm??''))
   if(/^confirm home \d{6}$/.test(s))return this.homeProject.confirm(s,this.editScope().realm)
   if(s==='cancel home')return this.homeProject.confirm(s,this.editScope().realm)
   if(s==='pause home'||s==='stop home building')return this.homeProject.stop()
