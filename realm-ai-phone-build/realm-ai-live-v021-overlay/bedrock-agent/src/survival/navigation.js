@@ -177,37 +177,45 @@ export class Navigation{
   const readiness=this.movementBlock()
   const health=this.world.attributes['minecraft:health']
   if(readiness||(health!==undefined&&health<=6)){this.holdFollow(readiness||'Low health; waiting for recovery.',now);return}
-  const player=this.world.findPlayer?.(this.job.name)||[...this.world.players.values()].find(p=>p.name.toLowerCase()===this.job.name.toLowerCase())
+  const identifiedPlayer=this.world.findPlayer?.(this.job.name)||[...this.world.players.values()].find(p=>p.name.toLowerCase()===this.job.name.toLowerCase())
+  const hint=this.followTargetHint
+  const player=identifiedPlayer||(hint?{name:this.job.name,position:hint,source:'owner-provided-XYZ'}:null)
   if(!player){
    this.route=null;this.state='waiting-for-player';this.reason='No fresh, named player location received. Waiting for player-list or locator update; never guessing from marker color.'
    return
   }
   const start=this.world.standPosition(),target=player.position
   if(!start)return
-  if(flatDistance(this.world.position,target)<2.2&&Math.abs(this.world.position.y-target.y)<.6){this.route=null;this.state='following';this.reason='Close to the followed player.';return}
+  if(flatDistance(this.world.position,target)<2.2&&Math.abs(this.world.position.y-target.y)<.6){
+   this.route=null
+   this.state=identifiedPlayer?'following':'waiting-for-player'
+   this.reason=identifiedPlayer?'Close to the named player.':'At the owner-provided XYZ waypoint; waiting for a fresh named player position before claiming arrival.'
+   return
+  }
   if(!force&&this.route?.length&&this.followTarget&&flatDistance(this.followTarget,target)<1&&!this.progress.stalled(now))return
-  if(!force&&now-(this.lastFollowPlan||0)<1250)return
+  const policy=this.liveFollowPolicy||{}
+  if(!force&&now-(this.lastFollowPlan||0)<(policy.replanIntervalMs||1250))return
   this.followTarget={...target}
   this.lastFollowPlan=now
   // The headless Bedrock locator-bar signal can describe a named player
   // beyond chunk simulation distance. Travel only through OBSERVED terrain,
   // in short segments, never directly into unknown far-away coordinates.
   if(flatDistance(start,target)>21){
-   const segments=routeSearchCandidates(this.world,start,target,{maxSegment:14,limit:24})
+   const segments=routeSearchCandidates(this.world,start,target,{maxSegment:policy.maxSegmentBlocks||14,limit:policy.candidateLimit||24})
    let lastReason='no grounded path observed'
    // A compass/locator bearing tells us where the named person is, not
    // that a straight line through trees, holes, hills or water is walkable.
    // Try a few short lateral detours, checking each full route with the
    // current collision, no-water and supported-ground pathfinder.
-   for(const segment of segments.slice(0,24)){
+   for(const segment of segments.slice(0,policy.candidateLimit||24)){
     const seen=this.followWaypointVisits.get(key(segment.goal))
-    if(seen&&now-seen.at<120000&&seen.count>=2)continue
+    if(seen&&now-seen.at<(policy.waypointCooldownMs||120000)&&seen.count>=(policy.waypointMaxVisits||2))continue
     const plan=this.routeTo(segment.goal,start,{
-     allowSteps:true,maxNodes:768,allowDirt:true,allowWater:false
+     allowSteps:true,maxNodes:policy.maxRouteNodes||768,allowDirt:true,allowWater:false
     })
     if(!plan.ok){lastReason=String(plan.reason||lastReason);continue}
     this.job.goal=segment.goal;this.assignRoute(plan)
-    this.followWaypointVisits.set(key(segment.goal),{at:now,count:(seen&&now-seen.at<120000?seen.count:0)+1})
+    this.followWaypointVisits.set(key(segment.goal),{at:now,count:(seen&&now-seen.at<(policy.waypointCooldownMs||120000)?seen.count:0)+1})
     if(this.followWaypointVisits.size>64)this.followWaypointVisits.delete(this.followWaypointVisits.keys().next().value)
     this.reason='Following '+this.job.name+' using fresh '+player.source+
      ' bearing. '+(segment.lateralOffset?'Detouring around an obstacle. ':'')+
@@ -230,7 +238,7 @@ export class Navigation{
   candidates.sort((a,b)=>Math.hypot(a.x-target.x,a.z-target.z)+Math.abs(a.y-(target.y-1.62))-Math.hypot(b.x-target.x,b.z-target.z)-Math.abs(b.y-(target.y-1.62)))
   if(candidates.length){const goal=candidates[0];if(this.lastFollowGoal!==key(goal)){this.lastFollowGoal=key(goal);this.recoveryAttempts=0}this.job.goal=goal}
   for(const goal of candidates.slice(0,4)){
-   const plan=this.routeTo(goal,start,{allowSteps:true,maxNodes:768,allowDirt:true})
+   const plan=this.routeTo(goal,start,{allowSteps:true,maxNodes:policy.maxRouteNodes||768,allowDirt:true})
    if(plan.ok){this.job.goal=goal;this.assignRoute(plan);return}
   }
   if(candidates.length){const goal=candidates[0],dirt=new Building(this.world).inventory('dirt').reduce((n,[,i])=>n+i.count,0),rise=goal.y-start.y;if(rise>=2&&rise<=4&&dirt>=rise){this.pillar=new Pillaring(this,rise);this.route=null;return}const adjacent={x:start.x+Math.sign(goal.x-start.x)*(Math.abs(goal.x-start.x)>=Math.abs(goal.z-start.z)?1:0),y:start.y-1,z:start.z+Math.sign(goal.z-start.z)*(Math.abs(goal.x-start.x)<Math.abs(goal.z-start.z)?1:0)},gap=this.world.airAt(adjacent);if((rise>=2&&rise<=4&&dirt<rise||gap&&dirt<2)&&this.onNeedDirt?.(this.job.name,Math.max(2,rise)))return}
@@ -449,7 +457,7 @@ export class Navigation{
  stop(reason='Stopped moving and mining.',notify=true){
   const active=!!this.job||this.route!==null||!!this.flight||!!this.mining.job
   if(this.flight)this.vy=this.flight.vy
-  this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.pendingFollow=null;this.followWaypointVisits.clear();this.flight=null;this.pendingFlightRecovery=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
+  this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.pendingFollow=null;this.followTargetHint=null;this.followWaypointVisits.clear();this.flight=null;this.pendingFlightRecovery=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
   if(this.sprinting){this.pendingFlags.push('stop_sprinting');this.sprinting=false}
   if(this.edgeSneaking){this.pendingFlags.push('stop_sneaking');this.edgeSneaking=false}
   this.pickup.stop();this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason);this.survey=null
