@@ -76,21 +76,46 @@ export class PlayerLocator {
  }
  snapshot(){return {trackedPlayers:this.entries.size,locationUpdatesReceived:this.latestPacketAt>0,knownLocations:this.known.size,hiddenPlayers:this.hidden.size}}
 }
-export function routeSearchWaypoint(world,start,target,{maxSegment=14,range=20}={}){
- if(!start||!target||!finite(start)||!finite(target)||!world?.walkable)return null
+// The locator-bar's server-provided named player position supplies a bearing.
+// Waypoints are a search direction, NOT proof the player is there and NOT
+// permission to traverse unknown terrain. Try alternate bearings around
+// obstacles; Navigation.routeTo must validate the ENTIRE path before movement.
+export function routeSearchCandidates(world,start,target,{maxSegment=14,range=20,limit=24}={}){
+ if(!finite(start)||!finite(target)||typeof world?.walkable!=='function')return []
  const dx=target.x-start.x,dz=target.z-start.z,d=Math.hypot(dx,dz)
- if(d<2.5)return {goal:null,reached:true}
- const length=Math.min(d,maxSegment)
- const ux=dx/d,uz=dz/d
- // Short, directly observed segments; never choose a cell without validated
- // collision, ground support and no-water safety from WorldView.walkable.
+ if(d<2.5)return []
+ const length=Math.min(d,Math.max(2,Math.min(maxSegment,range)))
+ const ux=dx/d,uz=dz/d,px=-uz,pz=ux
+ const out=[],seen=new Set()
+ // First try toward the named player's server bearing, then sweep to
+ // either side around trees, cliffs, structures, holes and visible fluids.
  for(const factor of [1,.75,.5,.25]){
-  const x=Math.floor(start.x+ux*length*factor),z=Math.floor(start.z+uz*length*factor)
-  for(let offsetY=0;offsetY<=3;offsetY++)for(const sign of offsetY?[1,-1]:[1]){
-   const y=Math.floor(start.y+sign*offsetY),p={x,y,z}
-   if(Math.hypot(p.x-start.x,p.z-start.z)<2)return null
-   if(world.walkable(p))return {goal:p,reached:false,remaining:Math.max(0,d-length*factor)}
+  for(const lateral of [0,-2,2,-4,4,-6,6]){
+   const forward=length*factor
+   const x=Math.floor(start.x+ux*forward+px*lateral)
+   const z=Math.floor(start.z+uz*forward+pz*lateral)
+   if(Math.hypot(x-start.x,z-start.z)<2)continue
+   // Only a grounded block in observed terrain can be considered.
+   for(const yDelta of [0,1,-1,2,-2,3,-3]){
+    const goal={x,y:Math.floor(start.y+yDelta),z},id=x+':'+goal.y+':'+z
+    if(seen.has(id))continue
+    seen.add(id)
+    if(!world.walkable(goal))continue
+    const remaining=Math.hypot(target.x-(x+.5),target.z-(z+.5))
+    const progress=d-remaining
+    if(progress<1.5)continue // don't wander sideways with no gain
+    out.push({goal,reached:false,remaining,progress,
+     bearingSource:'named-player-locator',lateralOffset:lateral})
+    break
+   }
   }
  }
- return null
+ // Keep larger safe forward progress first, but test side routes when
+ // a forward destination is blocked (the pathfinder may reject it).
+ return out.slice(0,Math.min(32,Math.max(1,limit)))
+}
+export function routeSearchWaypoint(world,start,target,options={}){
+ if(finite(start)&&finite(target)&&Math.hypot(start.x-target.x,start.z-target.z)<2.5)
+  return {goal:null,reached:true}
+ return routeSearchCandidates(world,start,target,options)[0]||null
 }
