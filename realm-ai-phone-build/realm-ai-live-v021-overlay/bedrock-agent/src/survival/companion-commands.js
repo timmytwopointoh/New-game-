@@ -14,7 +14,7 @@ export class CompanionCommands {
  constructor(controller,scope=null,{homeDirectory=null}={}){
   this.c=controller;this.scope=scope||null
   this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller);this.social=new HomeSocialLoop(this);this.fieldTrial=new CompanionFieldTrial(this)
-  this.homeMemory=new PermanentHome({directory:homeDirectory,scope});this.restorePermanentHome()
+  this.homeMemory=new PermanentHome({directory:homeDirectory,scope});this.homeAutoResumePending=false;this.restorePermanentHome()
  }
  setScope(scope){
   if(String(scope||'')===String(this.scope||''))return
@@ -32,6 +32,7 @@ export class CompanionCommands {
   this.plot=this.homeProject.plot;this.design=record.design
   this.homeRoutine.setPlot(this.plot)
   this.social.mode='house'
+  this.homeAutoResumePending=true
  }
 
  editScope(){return {realm:this.scope||this.c.commandPlans.scope||null,dimension:this.c.world.dimension}}
@@ -39,14 +40,19 @@ export class CompanionCommands {
   this.edits.reset()
   this.homeProject.stop('Realm session interrupted; saved home stays locked.')
   this.homeRoutine.reset(true)
-  if(sessionTransition&&this.homeMemory.hasHome())this.social.reset()
-  else this.social.manualHold()
+  if(sessionTransition&&this.homeMemory.hasHome()){
+   this.social.reset();this.homeAutoResumePending=true
+  }else {this.social.manualHold();this.homeAutoResumePending=false}
   this.fieldTrial.clear();this.c.world.editApproval=null
  }
  tick(now=Date.now()){
   this.fieldTrial.tick(now)
-  if(this.homeMemory.hasHome()&&this.social.mode!=='held'&&this.c.connection?.spawned)
+  if(this.homeAutoResumePending&&this.homeMemory.hasHome()&&this.social.mode!=='held'&&
+     this.c.connection?.spawned&&this.c.world.editModeVerified===true&&
+     this.c.world.dimension===this.plot?.dimension){
    this.homeProject.resumeLockedHomeOnSpawn(this.editScope().realm)
+   this.homeAutoResumePending=false // only once per verified spawn; no failed-stage retry loop
+  }
   this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)
   if(this.homeMemory.hasHome())this.homeMemory.updateVerifiedProgress(this.homeProject)
  }
@@ -165,6 +171,7 @@ export class CompanionCommands {
    catch(e){return {accepted:false,queued:false,message:String(e.message||e)}}
   }
   if(/^(?:design (?:your |a |another )?(?:house|home)|plan (?:your |a |another )?(?:house|home)|redesign (?:your )?(?:house|home)|think of (?:a |another )?(?:house|home) design|go free and think for yourself)$/.test(s)){
+   if(this.homeMemory.hasHome())return {accepted:false,queued:false,message:'My first home blueprint is locked to my permanent plot. I will continue the saved house instead of starting a different design.'}
    if(!this.plot)return {accepted:false,queued:false,message:'Stand at the plot center and say "this is your land" first. Nothing built.'}
    if(this.plot.dimension!==this.c.world.dimension)return {accepted:false,queued:false,message:'Plot belongs to another dimension. Nothing planned.'}
    try{const d=planUniqueHome(this.plot,{previousStyle:this.design?.style})
