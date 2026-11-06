@@ -1,13 +1,15 @@
 // Owner-confirmed staged home construction. Never assumes network placement
 // succeeded: only the existing server-verified Building transaction completes a
 // stage. Does not destroy, replace or "repair" an occupied block automatically.
-import {physicalHomePlan,homeCompletion,assessHomeObstacle,inspectHomeCapacity} from './home-architecture.js'
+import {physicalHomePlan,homeCompletion,inspectHomeCapacity} from './home-architecture.js'
+import {nextHomeObstruction,homeProjectOwnedCoordinates} from './home-clearance.js'
+import {HomeSupply} from './home-supply.js'
 const safeScope=scope=>String(scope??'')
 const key=p=>p.x+','+p.y+','+p.z
 const distance=(a,b)=>a&&b?Math.hypot(a.x-b.x-.5,a.y-b.y-1.62,a.z-b.z-.5):Infinity
 export class HomeProject {
- constructor(controller){this.c=controller;this.clear()}
- clear(){this.plan=null;this.plot=null;this.pending=null;this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0}
+ constructor(controller){this.c=controller;this.supply=new HomeSupply(controller);this.clear()}
+ clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null}
  preview(plot,design){
   this.clear()
   this.plan=physicalHomePlan(plot,design);this.plot=plot;this.state='preview'
@@ -29,12 +31,14 @@ export class HomeProject {
   if(text!==`confirm home ${p.code}`||p.expires<now||p.scope!==safeScope(scope)||p.dimension!==this.c.world.dimension||p.designId!==this.plan?.designId){
    return {accepted:false,queued:false,message:'Home confirmation missing, mismatched or expired. No work started.'}
   }
-  this.pending=null;this.state='running';this.plan.status='running';this.started=now;this.lastAttempt=0;this.moveAttempts=0
+  this.pending=null;this.review=null;this.ownerScope=safeScope(scope);this.state='running';this.plan.status='running';this.started=now;this.lastAttempt=0;this.moveAttempts=0
   return {accepted:true,queued:true,message:'Owner approved this exact home shell blueprint. Starting staged building with Realm checks; furniture and bed still need separate confirmation.'}
  }
  stop(reason='Owner paused home construction.'){
   if(this.state==='running'){this.state='paused';this.plan.status='paused';this.reason=reason}
-  this.pending=null
+  this.pending=null;this.review=null;this.clearance=null
+  if(this.supply.childStarted)this.c.acquisition?.cancel?.('Owner paused the parent home project.')
+  this.supply.reset()
   this.c.world.editApproval=null
   return {accepted:true,queued:false,message:reason,project:this.snapshot()}
  }
@@ -45,7 +49,80 @@ export class HomeProject {
  snapshot(){
   return {state:this.state,reason:this.reason,stage:this.stage,stages:this.plan?.stagesTotal||0,placementsVerified:this.plan?.placementsVerified||0,placementsPlanned:this.plan?.placementsPlanned||0,
    furniture:this.plan?.furniture?.map(x=>({name:x.name,confirmed:x.confirmed}))||[],
-   confirmationPending:!!this.pending,completion:this.plan?.completion||'unverified'}
+   confirmationPending:!!this.pending,clearanceReview:this.review?{position:this.review.position,expires:this.review.expires,reason:this.review.reason}:null,supply:this.supply.snapshot(),completion:this.plan?.completion||'unverified'}
+ }
+ requestClearance(decision,now){
+  if(this.review)return
+  const code=String(Math.floor(100000+Math.random()*900000))
+  this.review={position:{...decision.position},name:decision.name,reason:decision.reason,code,
+    expires:now+120000,scope:this.ownerScope,dimension:this.plot.dimension,stage:this.stage}
+  this.reason='Before I remove '+decision.name+' at '+key(decision.position)+': '+decision.reason+
+    ' Reply "confirm clearance '+code+'" to allow this one block, or "cancel clearance".'
+  this.c.report?.(this.reason)
+ }
+ confirmClearance(raw,scope,now=Date.now()){
+  const v=String(raw||'').trim().toLowerCase(),p=this.review
+  if(v==='cancel clearance'){this.review=null;this.state='awaiting-owner';this.reason='Owner declined removing the obstruction. The home plan remains saved.';return {accepted:true,queued:false,message:this.reason}}
+  if(!p)return {accepted:false,queued:false,message:'There is no obstacle clearance request.'}
+  if(now>p.expires||scope!==p.scope||p.dimension!==this.c.world.dimension||p.stage!==this.stage){
+   this.review=null;return {accepted:false,queued:false,message:'Clearance expired or the stage, Realm or dimension changed.'}
+  }
+  if(v!=='confirm clearance '+p.code)return {accepted:false,queued:false,message:'Confirm the exact six-digit clearance code shown for this one block.'}
+  this.review=null;this.clearance={position:p.position,name:p.name,approved:true,attempts:0,started:0}
+  this.state='running';this.reason='Specific obstruction approved. Checking server and tool requirements before clearing.'
+  return {accepted:true,queued:true,message:this.reason}
+ }
+ prepareClearance(decision,now){
+  const c=this.c,w=c.world,n=c.navigation,p=decision.position
+  if(!this.clearance||key(this.clearance.position)!==key(p)){
+   this.clearance={position:{...p},name:decision.name,approved:decision.action==='auto-mine',attempts:0,started:0}
+  }
+  const job=this.clearance
+  if(job.started>0){
+   if(w.airAt(p)){
+    this.clearance=null;w.editApproval=null;this.reason='Server confirms '+job.name+' was removed; continuing home construction.'
+    return
+   }
+   if(n.job||n.mining.job)return
+   if(now-job.started<1500)return
+   job.attempts++
+   job.started=0;w.editApproval=null
+   if(job.attempts>=3)return this.block('Could not confirm natural obstacle removal after three attempts. Owner can inspect and retry.')
+  }
+  if(n.job||c.operations?.pending||c.acquisition?.active||c.resources?.active||c.miningJobs?.active)return
+  const standing=w.standPosition()
+  if(!standing)return
+  const dis=Math.hypot(standing.x-p.x,standing.y-p.y,standing.z-p.z)
+  if(dis>3||standing.x===p.x&&standing.z===p.z){
+   if(this.moveAttempts>8)return this.block('Could not find safe footing next to obstruction; owner needs to inspect.')
+   const goals=[]
+   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[2,0],[-2,0],[0,2],[0,-2]]){
+    const g={x:p.x+dx,y:standing.y,z:p.z+dz}
+    if(w.walkable(g))goals.push(g)
+   }
+   const goal=goals.find(g=>Math.hypot(g.x-standing.x,g.z-standing.z)>.2)
+   if(!goal){w.requestNearby?.(n.client);return}
+   const movement=n.walk(goal,{allowMining:false,maxDrop:1})
+   if(movement.accepted){this.moveAttempts++;this.reason='Repositioning to mine the natural obstacle safely.'}
+   else{this.moveAttempts++;this.reason=movement.message||'Waiting for a safe route.'}
+   return
+  }
+  // The owner approved an exact house blueprint. The temporary permit is
+  // only for the target block, never an arbitrary neighbor or player build.
+  w.editApproval={kind:'mine',dimension:w.dimension,targets:new Set([key(p)]),expires:now+90000,projectId:this.plan.designId}
+  const result=n.mine(p,{allowAbove:true,allowLowerForward:true})
+  if(result?.accepted){job.started=now;this.reason='Mining '+job.name+' at '+key(p)+'; waiting for server-confirmed air.'}
+  else{
+   w.editApproval=null
+   const msg=String(result?.message||'Cannot mine this block.').slice(0,170)
+   if(/tool|harvest|difficult|pickaxe|shovel|durability/i.test(msg)){
+    const need=/stone|deepslate|granite|diorite|andesite|tuff/.test(job.name)?'stone_pickaxe':'wooden_shovel'
+    const supply=this.supply.begin(need,1,now)
+    this.reason='Preparing '+need+' for obstacle: '+supply.reason
+    if(supply.state==='requires-owner')this.block(supply.reason)
+   }else if(/unknown|unobserved|out of reach|not visible/i.test(msg)){w.requestNearby?.(n.client);this.reason='Observing obstacle before a bounded retry.'}
+   else this.block(msg)
+  }
  }
  block(reason){
   if(this.state!=='running')return
@@ -75,13 +152,30 @@ export class HomeProject {
    const verified=s.positions.every(p=>w.ownedPlacements?.has(`${w.dimension}:${key(p)}`))
    if(!correct||!verified)return this.block('A stage ended without server-confirmed matching blocks at every target')
    s.serverConfirmed=s.positions.length;s.status='confirmed';this.plan.placementsVerified+=s.positions.length
-   this.stage++;w.editApproval=null;this.moveAttempts=0
+   this.stage++;w.editApproval=null;this.moveAttempts=0;this.supply.reset();this.clearance=null
    c.report?.(`Home stage ${this.stage}/${this.plan.stagesTotal} verified, ${this.plan.placementsVerified} blocks confirmed.`)
    return
   }
-  if(n.job||n.survey||c.miningJobs?.active||c.resources?.active||c.operations?.pending)return
-  const problem=assessHomeObstacle({world:w,targets:s.positions,plot:this.plot})
-  if(problem.action!=='build')return this.block(problem.reason)
+  if(this.review){
+   if(now>this.review.expires){this.review=null;this.reason='Obstruction approval timed out; awaiting owner decision.';this.state='awaiting-owner'}
+   return
+  }
+  // The dependency task and original goal are separate. Keep resolving
+  // missing supplies while nested acquisition/crafting is running.
+  if(this.supply.material){
+   const result=this.supply.tick(now)
+   if(result.state==='ready')this.supply.reset()
+   else if(result.state==='requires-owner'||result.state==='suggest-substitute')return this.block(result.reason)
+   else{this.reason=result.reason;return}
+  }
+  if(n.job||n.survey||c.miningJobs?.active||c.resources?.active||c.acquisition?.active||c.operations?.pending)return
+  const owned=homeProjectOwnedCoordinates(w,this.plan.stages,this.stage)
+  const problem=nextHomeObstruction(w,this.plot,s.positions,{ownedProjectBlocks:owned})
+  if(problem.action==='observe'){w.requestNearby?.(n.client);this.reason=problem.reason;return}
+  if(problem.action==='ask'){this.requestClearance(problem,now);return}
+  if(problem.action==='stop')return this.block(problem.reason)
+  if(problem.action==='auto-mine'){this.prepareClearance(problem,now);return}
+  if(problem.action!=='build')return
   // Recheck authorization against this exact blueprint at every stage.
   if(!s.positions.every(p=>p.x>=this.plot.bounds.min.x&&p.x<=this.plot.bounds.max.x&&p.y>=this.plot.bounds.min.y&&p.y<=this.plot.bounds.max.y&&p.z>=this.plot.bounds.min.z&&p.z<=this.plot.bounds.max.z))
    return this.block('Stage no longer fits the approved land bounds')
@@ -101,7 +195,12 @@ export class HomeProject {
    return
   }
   const stock=w.items()[s.material]||0
-  if(w.gameMode!=='creative'&&stock<s.positions.length)return this.block(`Need ${s.positions.length} ${s.material} for this stage; server inventory reports only ${stock}. Craft or gather supplies first.`)
+  if(w.gameMode!=='creative'&&stock<s.positions.length){
+   const result=this.supply.begin(s.material,s.positions.length,now)
+   this.reason=result.reason
+   if(result.state==='requires-owner'||result.state==='suggest-substitute')return this.block(result.reason)
+   return
+  }
   const supply=c.workshop?.hotbar?.(s.material,now)
   if(supply?.state==='working'||supply?.state==='need')return
   if(supply?.state==='blocked')return this.block(supply.reason)
