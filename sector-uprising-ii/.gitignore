@@ -1,0 +1,17 @@
+# Independent game workspace only
+.gradle/
+**/build/
+.idea/
+*.iml
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+*.p12
+*.pem
+__pycache__/
+*.pyc
+*.log
+*.tmp
+.secrets/
