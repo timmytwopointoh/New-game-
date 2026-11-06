@@ -34,7 +34,8 @@ public final class RovekinFeatureContractTest {
         public void openSignIn() { last = "auth"; }
         public void openAppUpdates() { last = "updates"; }
         public void openLearning() { last = "learning"; }
-        public void openSettings() { last = "settings"; }
+        public void openSafeOwnerSettings() { last = "owner_settings"; }
+        public void openDeveloperConsole() { last = "developer_console"; }
         public void stopBotService() { last = "service_stop"; }
         public void exportDiagnostics() { last = "diagnostics"; }
         public void showStatus() { last = "status"; }
@@ -91,7 +92,10 @@ public final class RovekinFeatureContractTest {
             == RovekinActionRouter.Result.ACCESS_DENIED, "developer bit without owner proof rejected");
         check(action(router,RovekinFeatureContract.Feature.ACCOUNT_SETTINGS,owner,runtime(true,true),"")
             == RovekinActionRouter.Result.HANDLED, "owner gets real account screen");
-        check(host.last.equals("settings"), "owner uses existing settings");
+        check(host.last.equals("owner_settings"), "owner sees SAFE account settings, not legacy developer tools");
+        check(action(router,RovekinFeatureContract.Feature.DEV_CONSOLE,developer,runtime(true,true),"")
+            == RovekinActionRouter.Result.HANDLED, "verified developer can reach full console");
+        check(host.last.equals("developer_console"), "legacy full settings only in developer role");
         check(action(router,RovekinFeatureContract.Feature.DIAGNOSTIC_EXPORT,developer,runtime(false,false),"")
             == RovekinActionRouter.Result.HANDLED, "verified developer may export offline diagnostics");
         check(host.last.equals("diagnostics"), "reuses original ZIP exporter");
