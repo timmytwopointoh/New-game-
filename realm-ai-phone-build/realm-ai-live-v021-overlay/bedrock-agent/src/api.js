@@ -211,12 +211,21 @@ export function createApi(config,connection,log=console.log){
      if(isForestryReturnCommand(text)){pendingInterpretation=null;output=connection.survival.handle(text.replace(/^command\s+/i,''))}
      else if(/^(?:offline knowledge|minecraft knowledge|knowledge status)$/i.test(text))output=offlineMinecraftResponse(text,{world:connection.survival?.world})
      else if((m=text.match(/^(?:research and (?:do|perform|execute)|ask google (?:how to|to)|do research on) (.{3,180})$/i)))output=researchTask(m[1])
-     else if((m=text.match(/^(?:research|look up|learn word) ([a-z][a-z-]{1,29})[?.!]?$/i)))output=studyTerm(m[1].trim().toLowerCase(),text,{replyToRealm})
+     else if((m=text.match(/^(?:research|look up|learn word|teach me about) ([a-z][a-z-]{1,29})[?.!]?$/i)))output=studyTerm(m[1].trim().toLowerCase(),text,{replyToRealm})
+     else if((m=text.match(/^command\s+train\s+(?:word|example)\s+([a-z][a-z -]{2,47})\s*=\s*([a-z_ ]+)$/i))){
+      pendingInterpretation=null
+      const target=resolveActionTarget(m[2])||m[2].trim().toLowerCase().replace(/\s+/g,'_')
+      output=connection.survival.intentModel.train(m[1],target)
+     }
+     else if((m=text.match(/^command\s+forget\s+(?:trained word|example)\s+([a-z][a-z -]{2,47})$/i))){
+      pendingInterpretation=null
+      output=connection.survival.intentModel.forget(m[1])
+     }
      else if((m=text.match(/^command\s+teach\s+(action|material)\s+(.+?)\s*=\s*(.+)$/i))){pendingInterpretation=null;const unquote=x=>x.trim().replace(/^["“](.*)["”]$/,'$1');output=vocabulary.teach(m[1].toLowerCase(),unquote(m[2]),unquote(m[3]))}
      else if((m=text.match(/^command\s+forget\s+(action|material)\s+(.+)$/i))){pendingInterpretation=null;output=vocabulary.forget(m[1].toLowerCase(),m[2].trim().replace(/^["“](.*)["”]$/,'$1'))}
      else if(/^(?:command\s+)?(?:learning status|what have you learned|what do you remember|how do you learn|do you have a language model)[?!.]*$/i.test(text)){
-      const v=vocabulary.list(),learned=connection.survival.learning?.snapshot()
-      output={accepted:true,queued:false,message:`I use an offline ${bundledEnglishWordCount}-word English glossary PLUS Bedrock block/item/entity/biome/recipe data, supported command rules, and optional HTTPS lookups—not a neural language model. No Google key is necessary for Minecraft knowledge. I remember ${v.count} owner-confirmed word mappings for this Realm. ${learned?.confirmed||0} task successes were server-confirmed; ${learned?.blocked||0} attempts were blocked and ${learned?.interrupted||0} interrupted. I learn from your corrections and confirmed task outcomes; questions and jokes do not become actions. Use “command vocabulary” to review words or “command forget action <word>” to remove one.`+(v.error?' '+v.error:'')+(learned?.error?' '+learned.error:''),vocabulary:v,learning:learned,plans:plans.snapshot()}
+      const v=vocabulary.list(),learned=connection.survival.learning?.snapshot(),trained=connection.survival.intentModel?.snapshot()
+      output={accepted:true,queued:false,message:`I use an offline ${bundledEnglishWordCount}-word English glossary PLUS Bedrock block/item/entity/biome/recipe data, supported command rules, and optional HTTPS lookups—not a neural language model. No Google key is necessary for Minecraft knowledge. I remember ${v.count} owner-confirmed word mappings for this Realm and my trainable on-device classifier has ${trained?.ownerExamples||0} owner-labeled examples. ${learned?.confirmed||0} task successes were server-confirmed; ${learned?.blocked||0} attempts were blocked and ${learned?.interrupted||0} interrupted. I learn from your corrections and confirmed task outcomes; questions and jokes do not become actions. Use “command vocabulary” to review words or “command forget action <word>” to remove one.`+(v.error?' '+v.error:'')+(learned?.error?' '+learned.error:''),vocabulary:v,learning:learned,intentModel:trained,plans:plans.snapshot()}
      }
      else if((m=text.match(/^(?:by )?([a-z][a-z -]{1,35}?) (?:means|i mean|means to) (.{2,80})[.!]?$/i))&&resolveActionTarget(m[2])){pendingInterpretation=null;output=vocabulary.teach('action',m[1].trim(),resolveActionTarget(m[2]))}
      else if(/^command\s+vocabulary$/i.test(text)){const v=vocabulary.list();output={accepted:true,queued:false,message:`Learned action words: ${Object.keys(v.actions).join(', ')||'none'}. Learned material words: ${Object.keys(v.materials).join(', ')||'none'}. Forget one with “command forget action <word>” or “command forget material <word>”. Teach one with “command teach action <word> = dig” or “command teach material <word> = stone”.`,vocabulary:v}}
@@ -278,10 +287,10 @@ export function createApi(config,connection,log=console.log){
        const materialError=/known material|known block material/i.test(e.message)
        const materialWord=request.trim().split(/\s+/).at(-1)?.replace(/[.,!?]+$/,'')
        const materialSuggestion=materialError&&materialWord?suggestMaterial(materialWord):null
-       if(suggestion&&suggestion.word!==first.toLowerCase()){
+       if(suggestion&&(suggestion.source==='trained'||suggestion.word!==first.toLowerCase())){
         const target=suggestion.id;pendingInterpretation={input:request,scope:vocabulary?.scope,kind:'action',word:first,target,learn:true,createdAt:Date.now()}
         const label=commandCatalog.find(d=>d.id===target)?.label||target
-        output={accepted:false,queued:false,message:`Did you mean “${label}” for “${first}”? Reply yes to save that word mapping and prepare the request, or no to leave it unchanged. Nothing has been saved or queued.` ,plans:plans.snapshot()}
+        output={accepted:false,queued:false,message:`${suggestion.source==='trained'?'My locally trained word model suggests':'Did you mean'} “${label}” for “${first}”? Reply yes to save that word mapping and prepare the request, or no to leave it unchanged. Nothing has been saved or queued or executed.` ,plans:plans.snapshot()}
        }else if(Array.isArray(materialSuggestion)){
         pendingInterpretation={input:request,scope:vocabulary?.scope,kind:'material',word:materialWord,choices:materialSuggestion,createdAt:Date.now()}
         output={accepted:false,queued:false,message:`“${materialWord}” is ambiguous. Which material did you mean? Reply with a number: ${materialSuggestion.map((x,i)=>`${i+1}) ${x}`).join(', ')}. Nothing has been saved or queued.`,plans:plans.snapshot()}
