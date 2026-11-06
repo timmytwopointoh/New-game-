@@ -62,7 +62,7 @@ export class HomeProject {
  }
  confirmClearance(raw,scope,now=Date.now()){
   const v=String(raw||'').trim().toLowerCase(),p=this.review
-  if(v==='cancel clearance'){this.review=null;this.state='awaiting-owner';this.reason='Owner declined removing the obstruction. The home plan remains saved.';return {accepted:true,queued:false,message:this.reason}}
+  if(v==='cancel clearance'){this.review=null;this.state='paused';this.reason='Owner declined removing the obstruction. The home plan remains saved.';return {accepted:true,queued:false,message:this.reason}}
   if(!p)return {accepted:false,queued:false,message:'There is no obstacle clearance request.'}
   if(now>p.expires||scope!==p.scope||p.dimension!==this.c.world.dimension||p.stage!==this.stage){
    this.review=null;return {accepted:false,queued:false,message:'Clearance expired or the stage, Realm or dimension changed.'}
@@ -157,7 +157,7 @@ export class HomeProject {
    return
   }
   if(this.review){
-   if(now>this.review.expires){this.review=null;this.reason='Obstruction approval timed out; awaiting owner decision.';this.state='awaiting-owner'}
+   if(now>this.review.expires){this.review=null;this.reason='Obstruction approval timed out; home project remains saved for later owner confirmation.';this.state='paused'}
    return
   }
   // The dependency task and original goal are separate. Keep resolving
@@ -172,7 +172,10 @@ export class HomeProject {
   const owned=homeProjectOwnedCoordinates(w,this.plan.stages,this.stage)
   const problem=nextHomeObstruction(w,this.plot,s.positions,{ownedProjectBlocks:owned})
   if(problem.action==='observe'){w.requestNearby?.(n.client);this.reason=problem.reason;return}
-  if(problem.action==='ask'){this.requestClearance(problem,now);return}
+  if(problem.action==='ask'){
+   if(this.clearance?.approved&&key(this.clearance.position)===key(problem.position)){this.prepareClearance(problem,now);return}
+   this.requestClearance(problem,now);return
+  }
   if(problem.action==='stop')return this.block(problem.reason)
   if(problem.action==='auto-mine'){this.prepareClearance(problem,now);return}
   if(problem.action!=='build')return
