@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
     LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton,retryButton;String displayedAuthCode="",lastPresentedMicrosoftCode="";AlertDialog settingsDialog;
     String token="",lastProgressText=""; long cursor=0,serviceRevision=0,lastApiSuccessAt=0,serviceStateSince=0; boolean active=false,serviceStarted=false,apiConnected=false;
     final int PORT=8765;
+    RovekinEntryOverlay rovekin; // Existing real Realm/Follow engine is authoritative.
     int d(int v){return (int)(v*getResources().getDisplayMetrics().density);}
     GradientDrawable shape(int color){GradientDrawable r=new GradientDrawable();r.setColor(color);r.setCornerRadius(d(14));return r;}
     GradientDrawable circle(int color){GradientDrawable r=new GradientDrawable();r.setColor(color);r.setShape(GradientDrawable.OVAL);return r;}
@@ -85,7 +86,7 @@ public class MainActivity extends Activity {
         }
         botField=edit("AI Xbox gamertag");ownerField=edit("Your Xbox gamertag");realmField=edit("Realm name");
         botField.setText(getPreferences(MODE_PRIVATE).getString("botTag",""));ownerField.setText(getPreferences(MODE_PRIVATE).getString("ownerTag",""));realmField.setText(getPreferences(MODE_PRIVATE).getString("realmName",""));
-        LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{BASE,0xff10262b}));setContentView(root);
+        LinearLayout root=vertical();root.setPadding(d(10),d(8),d(10),d(6));root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{BASE,0xff10262b}));FrameLayout rovekinStage=new FrameLayout(this);rovekinStage.addView(root,new FrameLayout.LayoutParams(-1,-1));setContentView(rovekinStage);
         root.setOnApplyWindowInsetsListener((v,insets)->{int l=0,t=0,r=0,b=0;if(Build.VERSION.SDK_INT>=30){android.graphics.Insets i=insets.getInsets(android.view.WindowInsets.Type.systemBars());l=i.left;t=i.top;r=i.right;b=i.bottom;}else{l=insets.getSystemWindowInsetLeft();t=insets.getSystemWindowInsetTop();r=insets.getSystemWindowInsetRight();b=insets.getSystemWindowInsetBottom();}v.setPadding(d(10)+l,d(8)+t,d(10)+r,d(6)+b);return insets;});root.requestApplyInsets();
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header,space(1));
         powerButton=button("●",this::toggleBotService);powerButton.setPadding(0,0,0,0);header.addView(powerButton,new LinearLayout.LayoutParams(d(42),d(42)));renderPowerButton();
@@ -98,7 +99,7 @@ public class MainActivity extends Activity {
         buildLabel.setMinHeight(d(44));
         buildLabel.setMaxLines(2);
         buildLabel.setContentDescription("Installed Realm AI version and Android build code: "+installedBuildLabel().replace("\n",", "));
-        header.addView(buildLabel,new LinearLayout.LayoutParams(0,d(44),1));
+        /* Build metadata intentionally hidden from public UI. */
         Button settings=button("⚙",this::showSettings);settings.setContentDescription("Settings");settings.setPadding(0,0,0,0);header.addView(settings,new LinearLayout.LayoutParams(d(42),d(44)));
         connection=txt("Not running",12,MUTED);connection.setMaxLines(4);connection.setPadding(d(12),d(9),d(12),d(9));connection.setBackground(shape(PANEL));connection.setVisibility(View.VISIBLE);root.addView(connection,space(2));
         retryButton=button("Try Again",this::retryBlocked);retryButton.setContentDescription("Retry a blocked task after checking terrain, without adding a duplicate");retryButton.setVisibility(View.GONE);root.addView(retryButton,space(3));
@@ -124,6 +125,8 @@ public class MainActivity extends Activity {
         activateButton.setVisibility(developerBuild?View.VISIBLE:View.GONE);
         LinearLayout entry=new LinearLayout(this);root.addView(entry,space(4));input=edit("Ask or tell me a task…");input.setSingleLine(true);input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);entry.addView(input,new LinearLayout.LayoutParams(0,d(52),1));Button send=button("↑",()->send(input.getText().toString()));send.setContentDescription("Send question or command");entry.addView(send,new LinearLayout.LayoutParams(d(54),d(52)));
         input.setOnEditorActionListener((v,id,event)->{if(id==android.view.inputmethod.EditorInfo.IME_ACTION_SEND){send(input.getText().toString());return true;}return false;});
+        rovekin=new RovekinEntryOverlay(this,rovekinStage,root,RovekinInternalAccess.internalDebugBuildOnly(this));
+        rovekin.attach();
         if(recoverMissingBot){
             // Only on a foreground Activity launch; do not run an unseen
             // background poller or retry indefinitely. Existing private
@@ -145,7 +148,7 @@ public class MainActivity extends Activity {
         ScrollView scroller=new ScrollView(this);LinearLayout body=vertical();body.setPadding(0,d(8),0,d(10));scroller.addView(body);root.addView(scroller,new LinearLayout.LayoutParams(-1,0,1));
         TextView settingsBuild=txt("Installed "+installedBuildLabel().replace("\n"," · "),13,PURPLE);
         settingsBuild.setTextIsSelectable(true);
-        body.addView(settingsBuild,space(4));
+        /* Version is kept in installedBuildLabel() for diagnostics, not on menus. */
         settingsStatus=txt("Connection: "+connection.getText(),13,MUTED);settingsStatus.setMaxLines(4);settingsStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);body.addView(settingsStatus,space(3));
         body.addView(sectionLabel("ACCOUNT"),space(15));for(EditText e:new EditText[]{botField,ownerField,realmField}){if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);body.addView(e,space(6));}
         body.addView(txt("Bot and owner use different Xbox gamertags. Leave Realm blank if only one is joined.",12,MUTED),space(6));
@@ -304,7 +307,7 @@ public class MainActivity extends Activity {
     void updateSettingsStatus(JSONObject verification){if(settingsStatus==null)return;String status="Login identity: Nintendo Switch\nConnection: "+connection.getText();if(verification!=null){String mode=verification.optString("mode","unknown");status+="\nBot mode: "+mode+" · desired: "+verification.optString("desiredMode","survival")+"\n"+verification.optString("reason","");}else if(lastStatus!=null){JSONObject survival=lastStatus.optJSONObject("survival");JSONObject v=survival==null?null:survival.optJSONObject("verification");if(v!=null)status+="\nBot mode: "+v.optString("mode","unknown")+" · "+v.optString("reason","");}settingsStatus.setText(status);}
     void bubble(String who,String body,boolean mine){if(body==null||body.isEmpty())return;LinearLayout row=new LinearLayout(this);row.setGravity(mine?Gravity.RIGHT:Gravity.LEFT);log.addView(row,space(9));
         LinearLayout panel=vertical();panel.setPadding(d(12),d(9),d(12),d(10));panel.setBackground(shape(mine?0xff265c4d:PANEL));row.addView(panel);
-        panel.addView(txt(who,11,PURPLE));TextView content=txt(body,15,WHITE);content.setTextIsSelectable(true);content.setMaxWidth(getResources().getDisplayMetrics().widthPixels-d(94));panel.addView(content,space(4));scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
+        /* Visually clean transcript: no VEILFORGE/Progress sender prefixes. */TextView content=txt(body,15,WHITE);content.setTextIsSelectable(true);content.setMaxWidth(getResources().getDisplayMetrics().widthPixels-d(94));panel.addView(content,space(4));scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
     void startBot(){if(apiConnected){bubble("Progress","Bot is already connected to the local controller. Use Stop bot service before changing account settings or restarting it.",false);return;}if(serviceStarted){bubble("Progress","Bot service is already starting. Wait for its connection status before trying again.",false);return;}String bot=botField.getText().toString().trim(),owner=ownerField.getText().toString().trim(),name=realmField.getText().toString().trim();
         if(bot.length()<2||owner.length()<2||bot.equalsIgnoreCase(owner)||bot.length()>60||owner.length()>60||name.length()>100){bubble("VEILFORGE","Enter two different, valid Xbox gamertags. A separate player cannot use your own active Minecraft identity.",false);return;}
         try {
@@ -480,6 +483,7 @@ public class MainActivity extends Activity {
         if(batch!=null)connection.setText(connection.getText()+" · queued command "+(batch.optInt("total")-batch.optInt("remaining")+1)+"/"+batch.optInt("total"));
         else if(savedPlans!=null&&savedPlans.optInt("pending")>0)connection.setText(connection.getText()+" · "+savedPlans.optInt("pending")+" command(s) waiting");
         updateSettingsStatus(null);
+        if(rovekin!=null)rovekin.onStatus(r,connection.getText().toString());
         if(plan!=null){String progress=plan.optString("id","?")+":"+plan.optString("state","idle")+":"+plan.optInt("current")+":"+plan.optInt("total")+":"+plan.optString("lastResult","");if(!progress.equals(lastProgressText)&&!"idle".equals(plan.optString("state"))){lastProgressText=progress;bubble("Progress","Plan "+plan.optString("id")+" · "+plan.optString("state")+" · "+plan.optInt("current")+"/"+plan.optInt("total")+" steps. "+plan.optString("lastResult",""),false);}}
         JSONObject challenge=r.optJSONObject("authChallenge");
         String code=challenge==null?"":challenge.optString("userCode","").trim();
@@ -487,7 +491,7 @@ public class MainActivity extends Activity {
             displayedAuthCode=code;
             authCodeLabel.setText("MICROSOFT CODE: "+code+"\nOpen https://www.microsoft.com/link and enter it.");
             authCodeLabel.setVisibility(View.VISIBLE);copyAuthCode.setVisibility(View.VISIBLE);
-            if(!code.equals(lastPresentedMicrosoftCode))showAuth(r);
+            if(!code.equals(lastPresentedMicrosoftCode)&&(rovekin==null||rovekin.isChatShown()||(settingsDialog!=null&&settingsDialog.isShowing())))showAuth(r);
         }else{
             displayedAuthCode="";authCodeLabel.setVisibility(View.GONE);copyAuthCode.setVisibility(View.GONE);
             if(!"sign-in-required".equals(phase))lastPresentedMicrosoftCode="";
