@@ -44,6 +44,13 @@ export class CompanionCommands {
  afterOwnerAction(raw,result,now=Date.now()){return this.social.afterOwnerAction(raw,result,now)}
  handle(raw){
   const s=String(raw||'').trim().toLowerCase().replace(/[.!?]+$/,'').replace(/^(?:please |can you |could you )/,'')
+  if(/^(?:field trial status|home field test status|find me test status|how close are you to me)$/.test(s)){
+   const trial=this.fieldTrial.snapshot()
+   return {accepted:true,queued:trial.state==='following'||trial.state==='awaiting-arrival',
+    message:'Field trial: '+trial.state+'. '+(trial.reason||'Waiting for an owner-directed test.')+
+     (trial.state==='building'?' My home project has started.':''),
+    fieldTrial:trial}
+  }
   if(isHomeFieldTestCommand(s))return this.fieldTrial.start()
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
