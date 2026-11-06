@@ -41,3 +41,26 @@ test('unobserved blocks, custom blocks, falling materials and out-of-plot areas 
  const w=world();w.block=()=>null
  assert.equal(classifyHomeObstruction(w,plot,point).action,'observe')
 })
+
+test('owner-approved footprint automatically clears observed leaf litter and petals even near an existing wall',()=>{
+ const wall={x:7,y:65,z:0}
+ for(const plant of ['leaf_litter','pink_petals','short_grass','wildflowers']){
+  const w=world({[key(point)]:plant,[key(wall)]:'polished_blackstone_bricks'})
+  assert.equal(classifyHomeObstruction(w,plot,point).action,'auto-mine',plant)
+ }
+})
+test('ground cover remains protected outside granted land or if placed deliberately by a player',()=>{
+ const w=world({[key(point)]:'leaf_litter'})
+ assert.equal(classifyHomeObstruction(w,plot,{x:30,y:65,z:0}).action,'stop')
+ w.ownedPlacements.set('0:'+key(point),{name:'leaf_litter'})
+ assert.equal(classifyHomeObstruction(w,plot,point).action,'ask')
+})
+test('custom leaf names, actual tree logs, fluids and falling hazards still require review',()=>{
+ for(const name of ['myaddon:leaf_litter','oak_leaves','sand','water']){
+  const w=world({[key(point)]:name})
+  assert.notEqual(classifyHomeObstruction(w,plot,point).action,'auto-mine',name)
+ }
+ const w=world({[key(point)]:'leaf_litter'})
+ w.block=(p,layer=0)=>layer===1?nameOf('water'):nameOf('leaf_litter')
+ assert.equal(classifyHomeObstruction(w,plot,point).action,'ask')
+})
