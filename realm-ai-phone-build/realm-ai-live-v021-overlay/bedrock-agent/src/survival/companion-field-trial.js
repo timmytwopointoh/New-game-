@@ -3,6 +3,10 @@
 // as home. No guess from the locator marker, no teleport, no fake arrival.
 // This runs entirely in the phone bot; a PC emulator can drive the same chat.
 export const FIELD_TEST_COMMAND=/^(?:(?:start|run|try) (?:the |a )?(?:home )?field (?:test|trial)|(?:find|follow|come to|come find|come over to) me (?:and |then )(?:make|set|claim|build|start|use)(?: this| my| your| a| the)?(?: new)? home(?: spot| here)?(?: when (?:you are|you're|you get) (?:within|about|close enough|near) (?:10|ten) blocks)?|find me then (?:make|start|build) (?:your|a) home(?: here)?|find me and (?:start building|build your home|make this your home spot))$/i
+// A natural alternative to the explicit test phrase, with the same
+// owner-approval and fresh-position gate.
+const NATURAL_HOME_TEST=/^(?:find|follow|come (?:find|to)) me (?:and |then )?(?:make this your (?:new )?home spot|set this as your (?:new )?home(?: spot)?|claim this (?:as your )?home(?: spot)?|build your home|start (?:your home|building))(?: when (?:you(?:'re| are)|you get) (?:within|about|near|close enough|close to) (?:10|ten) blocks)?$/i
+export const isHomeFieldTestCommand=s=>FIELD_TEST_COMMAND.test(s)||NATURAL_HOME_TEST.test(s)
 const safePosition=p=>p&&[p.x,p.y,p.z].every(n=>Number.isFinite(n)&&Math.abs(n)<30000000)
 const ownerName=(c)=>{
  const owners=c?.connection?.config?.ownerPlayerNames||[]
