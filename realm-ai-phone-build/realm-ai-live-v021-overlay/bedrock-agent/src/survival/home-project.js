@@ -221,6 +221,11 @@ export class HomeProject {
    const verified=s.positions.every(p=>w.ownedPlacements?.has(`${w.dimension}:${key(p)}`))
    if(!correct||!verified)return this.block('A stage ended without server-confirmed matching blocks at every target')
    s.serverConfirmed=s.positions.length;s.status='confirmed';this.plan.placementsVerified+=s.positions.length
+   // The learner receives evidence ONLY after matching server block updates
+   // and the owned placement registry verified every voxel in this stage.
+   const useKind=s.label?.startsWith('foundation')?'foundation':'build-stage'
+   c.mind?.record?.(useKind,s.material,{outcome:'confirmed',
+    biome:w.biomeAt?.()?.name||null,evidence:'verified-construction-stage'})
    this.stage++;w.editApproval=null;this.moveAttempts=0;this.supply.reset();this.clearance=null;this.proximityApproval=null
    c.report?.(`Home stage ${this.stage}/${this.plan.stagesTotal} verified, ${this.plan.placementsVerified} blocks confirmed.`)
    if(this.ownerPauseRequested){this.ownerPauseRequested=false;this.pauseForOwner();return}
