@@ -10,12 +10,44 @@ const key=p=>p.x+','+p.y+','+p.z
 const distance=(a,b)=>a&&b?Math.hypot(a.x-b.x-.5,a.y-b.y-1.62,a.z-b.z-.5):Infinity
 export class HomeProject {
  constructor(controller){this.c=controller;this.supply=new HomeSupply(controller);this.clear()}
- clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null;this.ownerPauseRequested=false;this.proximityReview=null;this.proximityApproval=null}
+ clear(){this.restoredFromDisk=false;this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null;this.ownerPauseRequested=false;this.proximityReview=null;this.proximityApproval=null}
  preview(plot,design){
   this.clear()
   this.plan=physicalHomePlan(plot,design);this.plot=plot;this.state='preview'
   this.reason=`Home shell: ${this.plan.placementsPlanned} block placements in ${this.plan.stages.length} verified stages. A bed, chest, crafting table, furnace and light are separately required.`
   return {accepted:true,queued:false,message:this.reason,project:this.snapshot()}
+ }
+ // Restore the exact original blueprint, not a freshly randomised shelter.
+ // All saved completed stages came from server-confirmed block transactions.
+ // Still reobserve their block positions before progressing to new stages.
+ restoreLockedHome(record,scope){
+  if(!record?.plot||!record?.design)return false
+  this.preview(record.plot,record.design)
+  const count=record.completedStages
+  if(!Number.isSafeInteger(count)||count<0||count>this.plan.stages.length){
+   this.clear();return false
+  }
+  for(let i=0;i<count;i++){
+   const stage=this.plan.stages[i]
+   stage.status='confirmed';stage.serverConfirmed=stage.positions.length
+  }
+  this.stage=count
+  this.plan.placementsVerified=this.plan.stages.slice(0,count).reduce((n,stage)=>n+stage.positions.length,0)
+  this.ownerScope=safeScope(scope)
+  this.state=count===this.plan.stages.length?'furnishing':'paused'
+  this.plan.status=this.state
+  this.restoredFromDisk=true
+  this.reason='Original home restored at the locked plot. Waiting for Realm spawn and server-observed construction before continuing.'
+  return true
+ }
+ resumeLockedHomeOnSpawn(scope){
+  if(this.state!=='paused'||this.ownerScope!==safeScope(scope)||
+     !this.c.connection?.spawned||this.c.world.dimension!==this.plot?.dimension||
+     this.c.companion?.plot!==this.plot)return false
+  this.state='running';this.plan.status='running';this.started=Date.now()
+  this.lastAttempt=0;this.moveAttempts=0
+  this.reason='Back at my permanent home! Checking actual terrain and the saved construction stage.'
+  return true
  }
  requestAuthorization(scope,now=Date.now()){
   if(!this.plan||!this.plot)return {accepted:false,queued:false,message:'First ask me to design a home and preview its physical build.'}
@@ -203,6 +235,21 @@ export class HomeProject {
   }
   const c=this.c,w=c.world,n=c.navigation
   if(!c.connection.spawned||w.dimension!==this.plot.dimension||!w.editModeVerified)return this.block('Realm, dimension or player build permission is not confirmed')
+  if(this.restoredFromDisk&&this.stage>0){
+   // A rejoin resets chunk caches and the owned-placements map. Do not
+   // re-send a previously completed stage based only on the disk record.
+   for(const stage of this.plan.stages.slice(0,this.stage)){
+    for(const p of stage.positions){
+     const block=w.block(p)
+     if(!block){w.requestNearby?.(n.client);this.reason='Waiting for server terrain near saved home stages.';return}
+     if(block.name!==stage.material){
+      this.block('Saved house differs from server blocks at '+key(p)+'; owner review required before any further edits.')
+      return
+     }
+    }
+   }
+   this.restoredFromDisk=false
+  }
   if(w.attributes['minecraft:health']!==undefined&&w.attributes['minecraft:health']<=6)return this.block('Health too low to continue construction')
   if(now-this.started>2*60*60*1000)return this.block('Two-hour project session limit reached; owner must resume explicitly')
   const s=this.plan.stages[this.stage]
