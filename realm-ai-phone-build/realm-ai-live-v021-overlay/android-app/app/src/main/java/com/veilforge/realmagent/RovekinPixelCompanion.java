@@ -40,38 +40,55 @@ public final class RovekinPixelCompanion extends View {
         return choose(status).name().toLowerCase(Locale.ROOT);
     }
     private static Activity choose(JSONObject status){
-        if(status==null)return Activity.WAIT;
-        if(!status.optBoolean("spawned"))return Activity.WAIT;
+        // The mascot only performs an action after the REAL on-device Realm
+        // controller reports it. No made-up work, no extrapolation from the
+        // user's text or from a stored plan that has not started running.
+        if(status==null||!status.optBoolean("spawned"))return Activity.WAIT;
         JSONObject survival=status.optJSONObject("survival");
-        JSONObject nav=survival==null?null:survival.optJSONObject("navigation");
-        String movement=nav==null?"":nav.optString("mode","").toLowerCase(Locale.ROOT);
-        String motion=nav==null?"":nav.optString("state","").toLowerCase(Locale.ROOT);
-        JSONObject planner=status.optJSONObject("planner");
-        JSONObject plan=survival==null?null:survival.optJSONObject("plans");
-        JSONObject resource=survival==null?null:survival.optJSONObject("resourceTask");
-        String details=String.join(" ",
-            planner==null?"":planner.optString("state","")+" "+planner.optString("action","")+" "+planner.optString("description",""),
-            plan==null?"":plan.optString("active","")+" "+plan.optString("command","")+" "+plan.optString("state",""),
-            resource==null?"":resource.optString("kind","")+" "+resource.optString("state",""),
-            nav==null?"":nav.optString("job","")+" "+nav.optString("kind","")
-        ).toLowerCase(Locale.ROOT);
-        boolean working=details.contains("active")||details.contains("working")||
-            details.contains("running")||details.contains("building")||details.contains("mining");
-        if(details.matches("(?s).*(build|house|shelter|floor|wall|carpentry|workshop).*")
-             && working)return Activity.BUILD;
-        if(details.matches("(?s).*(mine|mining|dig|excavat|quarry).*") && working)
+        if(survival==null)return Activity.IDLE;
+        JSONObject nav=survival.optJSONObject("navigation");
+        JSONObject building=nav==null?null:nav.optJSONObject("building");
+        JSONObject mining=nav==null?null:nav.optJSONObject("mining");
+        JSONObject excavation=survival.optJSONObject("excavation");
+        JSONObject resource=survival.optJSONObject("resourceTask");
+        JSONObject workshop=survival.optJSONObject("workshop");
+        String buildState=lower(building,"state");
+        String mineState=lower(mining,"state");
+        String excavationState=lower(excavation,"state");
+        String resourceKind=lower(resource,"kind");
+        String resourceState=lower(resource,"state");
+        String travelKind=lower(nav,"mode");
+        String travelState=lower(nav,"state");
+        if(active(buildState)&&!(buildState.equals("idle")||buildState.equals("complete")))
+            return Activity.BUILD;
+        if(workshop!=null&&!workshop.isNull("placing")&&!workshop.optString("placing","").isEmpty())
+            return Activity.BUILD;
+        if(active(mineState)||active(excavationState))
             return Activity.MINE;
-        if(details.matches("(?s).*(craft|smelt|forge|workbench).*") && working)
-            return Activity.CRAFT;
-        if((movement.equals("follow")||movement.equals("walk")||movement.equals("route"))
-            && (motion.equals("walking")||motion.equals("moving")||
-                motion.equals("following")||motion.equals("running")))
+        if(resourceKind.matches(".*(?:mine|dig|excavat|quarry).*")&&active(resourceState))
+            return Activity.MINE;
+        if(resourceKind.matches(".*(?:build|wood|house|craft|construction).*")&&active(resourceState))
+            return Activity.BUILD;
+        if(("follow".equals(travelKind)||"walk".equals(travelKind)||"route".equals(travelKind))
+            &&(travelState.equals("walking")||travelState.equals("following")||
+               travelState.equals("running")||travelState.equals("moving")))
             return Activity.WALK;
-        if(motion.contains("mine")||motion.contains("dig"))return Activity.MINE;
-        if(motion.contains("build")||motion.contains("plac"))return Activity.BUILD;
-        if(motion.contains("waiting")||motion.contains("blocked")||motion.contains("stopped")
-            ||motion.contains("landing"))return Activity.WAIT;
+        if(travelState.contains("blocked")||travelState.contains("waiting")||
+           travelState.contains("landing")||travelState.contains("stopped"))
+            return Activity.WAIT;
         return Activity.IDLE;
+    }
+    private static String lower(JSONObject object,String key){
+        return object==null?"":object.optString(key,"").toLowerCase(Locale.ROOT);
+    }
+    private static boolean active(String state){
+        if(state==null||state.isEmpty())return false;
+        switch(state){
+            case "idle":case "complete":case "completed":case "ready":
+            case "blocked":case "waiting":case "stopped":case "cancelled":
+            case "failed":case "interrupted":return false;
+            default:return true;
+        }
     }
     private void rect(Canvas c,int color,float x,float y,float w,float h){
         paint.setColor(color);paint.setStyle(Paint.Style.FILL);
