@@ -79,6 +79,26 @@ func _make_button(parent: Node, title: String, callback: Callable) -> Button:
 	var button := Button.new()
 	button.text = title
 	button.custom_minimum_size = Vector2(178, 40)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color("#ffd5e6")
+	normal.border_color = Color("#ffffff")
+	normal.border_width_bottom = 2
+	normal.corner_radius_top_left = 13
+	normal.corner_radius_top_right = 13
+	normal.corner_radius_bottom_left = 13
+	normal.corner_radius_bottom_right = 13
+	normal.content_margin_left = 12
+	normal.content_margin_right = 12
+	normal.shadow_color = Color("#5e458055")
+	normal.shadow_size = 3
+	var hovered: StyleBoxFlat = normal.duplicate()
+	hovered.bg_color = Color("#b5eced")
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hovered)
+	button.add_theme_stylebox_override("pressed", hovered)
+	button.add_theme_color_override("font_color", Color("#492956"))
+	button.add_theme_color_override("font_hover_color", Color("#273c55"))
+	button.add_theme_font_size_override("font_size", 15)
 	button.pressed.connect(callback)
 	parent.add_child(button)
 	return button
@@ -98,6 +118,17 @@ func _setup_hud() -> void:
 	status_label.add_theme_font_size_override("font_size", 21)
 	title_bar.add_child(status_label)
 	panel = PanelContainer.new()
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color("#fff4f1e8")
+	panel_style.corner_radius_top_left = 18
+	panel_style.corner_radius_top_right = 18
+	panel_style.corner_radius_bottom_left = 18
+	panel_style.corner_radius_bottom_right = 18
+	panel_style.content_margin_left = 12
+	panel_style.content_margin_right = 12
+	panel_style.content_margin_top = 12
+	panel_style.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", panel_style)
 	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	panel.offset_left = 12
 	panel.offset_right = 224
@@ -139,6 +170,17 @@ func _setup_hud() -> void:
 	toast_label.add_theme_font_size_override("font_size", 21)
 	layer.add_child(toast_label)
 	start_layer = PanelContainer.new()
+	var menu_style := StyleBoxFlat.new()
+	menu_style.bg_color = Color("#fff7f1f2")
+	menu_style.corner_radius_top_left = 24
+	menu_style.corner_radius_top_right = 24
+	menu_style.corner_radius_bottom_left = 24
+	menu_style.corner_radius_bottom_right = 24
+	menu_style.content_margin_left = 20
+	menu_style.content_margin_right = 20
+	menu_style.content_margin_top = 20
+	menu_style.content_margin_bottom = 20
+	start_layer.add_theme_stylebox_override("panel", menu_style)
 	start_layer.set_anchors_preset(Control.PRESET_CENTER)
 	start_layer.custom_minimum_size = Vector2(395, 365)
 	start_layer.position = Vector2(-195, -182)
@@ -320,10 +362,7 @@ func _build() -> void:
 	_toast("🪑 A new garden bench has been built!")
 
 func _place_bench(pos: Vector3, record: bool) -> void:
-	var group := Node3D.new()
-	group.position = pos
-	add_child(group)
-	world.bench(Vector3(pos.x, 0, pos.z))
+	var group: Node3D = world.bench(Vector3(pos.x, 0, pos.z))
 	props.append(group)
 	if record:
 		mind.note("A cozy wooden bench appeared near the park.")
