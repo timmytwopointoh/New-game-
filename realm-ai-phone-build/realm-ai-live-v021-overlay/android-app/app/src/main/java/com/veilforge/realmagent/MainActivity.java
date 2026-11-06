@@ -152,11 +152,41 @@ public class MainActivity extends Activity {
         LinearLayout account=new LinearLayout(this);body.addView(account,space(8));account.addView(button("Start bot",this::startBot),new LinearLayout.LayoutParams(0,d(56),1));Button signIn=button("Microsoft sign-in code",this::showAuth);signIn.setContentDescription("Show Microsoft sign-in code");account.addView(signIn,new LinearLayout.LayoutParams(0,d(56),1));
         body.addView(sectionLabel("SESSION"),space(18));LinearLayout modes=new LinearLayout(this);body.addView(modes,space(7));modes.addView(button("Survival",()->modeAction("survival")),new LinearLayout.LayoutParams(0,d(48),1));modes.addView(button("Creative",()->modeAction("creative")),new LinearLayout.LayoutParams(0,d(48),1));
         body.addView(button("Saved plans",this::showPlans),space(7));body.addView(button("Stop bot service",this::stopServiceNow),space(7));
-        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("Export ALL diagnostics — ONE ZIP",this::exportBugReport),space(7));body.addView(button("Learning",this::showLearning),space(7));
+        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("Live Follow patches (no restart)",this::showLiveFollowPatches),space(7));body.addView(button("Export ALL diagnostics — ONE ZIP",this::exportBugReport),space(7));body.addView(button("Learning",this::showLearning),space(7));
         body.addView(txt("Share only a file you choose in Android's picker.",12,MUTED),space(14));Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(5));
         AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();settingsDialog=dialog;dialog.setOnDismissListener(x->{if(settingsDialog==dialog)settingsDialog=null;for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
     }
     TextView sectionLabel(String label){TextView v=txt(label,11,PURPLE);v.setLetterSpacing(.12f);return v;}
+    void showLiveFollowPatches(){
+        if(!apiConnected||token.isEmpty()){
+            new AlertDialog.Builder(this).setTitle("Live Follow patches")
+                .setMessage("Start the embedded bot before checking the signed navigation channel. APK installation is a separate update and requires a restart.")
+                .setPositiveButton("Close",null).show();
+            return;
+        }
+        io.submit(()->{try{
+            JSONObject response=request("GET","/live-patches/status",null);
+            JSONObject status=response.optJSONObject("livePatches");
+            ui.post(()->displayLiveFollowPatches(status));
+        }catch(Exception e){ui.post(()->bubble("VEILFORGE","Live Follow status unavailable: "+e.getMessage(),false));}});
+    }
+    void displayLiveFollowPatches(JSONObject status){
+        if(status==null)return;
+        String policy=status.optJSONObject("policy")==null?"No approved policy":status.optJSONObject("policy").toString();
+        String message="Channel: "+status.optString("channel")+"\nReceiver: "+(status.optBoolean("active")?"running":"not started")+
+            "\nSequence: "+status.optInt("sequence")+"\nSource: "+status.optString("source")+
+            "\nLast check: "+(status.optLong("lastCheckAt",0)>0?new java.util.Date(status.optLong("lastCheckAt")).toString():"not checked")+
+            "\nLast issue: "+status.optString("error","none")+"\nPolicy: "+policy+
+            "\n\nOnly validated Follow settings change live. No Minecraft account, Realm connection, game code, or APK is replaced.";
+        new AlertDialog.Builder(this).setTitle("Signed Follow patches").setMessage(message)
+            .setPositiveButton("Check now",(dialog,which)->{
+                io.submit(()->{try{
+                    JSONObject result=request("POST","/live-patches/check",new JSONObject());
+                    JSONObject current=result.optJSONObject("livePatches");
+                    ui.post(()->displayLiveFollowPatches(current));
+                }catch(Exception e){ui.post(()->bubble("VEILFORGE","Live patch check failed: "+e.getMessage(),false));}});
+            }).setNegativeButton("Close",null).show();
+    }
     void showLearning(){
         if(!apiConnected||token.isEmpty()){showLearningStatus(lastStatus);return;}
         io.submit(()->{try{JSONObject status=request("GET","/status",null);ui.post(()->{lastStatus=status;showLearningStatus(status);});}catch(Exception e){ui.post(()->showLearningStatus(lastStatus));}});
