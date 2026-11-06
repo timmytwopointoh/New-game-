@@ -142,3 +142,13 @@ test('owner STOP pauses house without losing plot, while explicit resume restore
  assert.equal(r.accepted,true)
  assert.equal(f.companion.homeMemory.summary().autoResume,true)
 })
+
+test('six digit home proximity confirmation reaches real guarded builder',()=>{
+ const f=fixture();assert.equal(f.companion.handle('this is your new home spot').accepted,true)
+ const p=f.companion.homeProject
+ p.proximityReview={code:'737015',stage:p.stage,dimension:0,scope:'realm-1',expires:Date.now()+120000}
+ const r=f.companion.handle('confirm home proximity 737015')
+ assert.equal(r.accepted,true,r.message)
+ assert.equal(p.proximityApproval.stage,p.stage)
+ assert.equal(f.companion.handle('confirm home proximity 737015').accepted,false,'approval is one-shot')
+})
