@@ -101,16 +101,26 @@ export class CommandPlans{
  select(id){this.reconcile();if(this.running||this.batch)throw Error('Stop the running plan batch before changing selection.');if(!this.cards.some(c=>c.id===id))throw Error('Choose a saved card.');const previous=this.selected,card=this.cards.find(c=>c.id===id),old={locked:card.activationLocked,state:card.state};this.selected=id;if(card.activationLocked){card.activationLocked=false;card.state='waiting';card.result='Reused; waiting for Activate.'}try{this.persist()}catch(e){this.selected=previous;card.activationLocked=old.locked;card.state=old.state;throw e}return this.snapshot()}
  delete(id){if(this.batch)throw Error('Stop the running plan batch before deleting a card.');if(this.running===id)throw Error('Stop this plan before deleting it.');const before=this.cards,selected=this.selected;this.cards=this.cards.filter(c=>c.id!==id);if(this.selected===id)this.selected=null;try{this.persist()}catch(e){this.cards=before;this.selected=selected;throw e}return this.snapshot()}
  activate(id){
-  this.reconcile();if(this.running!==null||this.batch)throw Error('A plan batch is already running.');if(id!==this.selected)throw Error('Activate only the selected plan.')
-  const card=this.cards.find(c=>c.id===id);if(!card)throw Error('Select a plan first.')
-  if(card.activationLocked)throw Error('Plan already activated. Select the card again to reuse it.')
-  const d=validateDescriptor(card.descriptor);this.validateChoices(d);this.batch={ids:[id],index:0};const result=this.launchBatchItem()
+  this.reconcile();if(this.running!==null||this.batch)throw Error('A plan batch is already running.')
+  const card=this.cards.find(c=>c.id===id);if(!card)throw Error('Choose a saved command.')
+  // Pressing Play on any saved card reuses it, without a separate Reuse step.
+  // Revalidate BEFORE rearming: a completed build must never restart blindly.
+  const d=validateDescriptor(card.descriptor);this.validateChoices(d)
+  const old={selected:this.selected,state:card.state,result:card.result,activationLocked:card.activationLocked}
+  this.selected=id;card.state='waiting';card.result='';card.activationLocked=false
+  try{this.persist()}catch(e){this.selected=old.selected;card.state=old.state;card.result=old.result;card.activationLocked=old.activationLocked;throw e}
+  this.batch={ids:[id],index:0};const result=this.launchBatchItem()
   return {...(result||{accepted:true,queued:true,message:`Started selected command #${id}.`}),plans:this.snapshot()}
  }
  activateQueue(){
   this.reconcile();if(this.running!==null||this.batch)throw Error('A plan batch is already running.')
   const waiting=this.cards.filter(c=>c.state==='waiting'&&!c.activationLocked)
-  if(!waiting.length)throw Error('There are no waiting commands. Prepare or reuse a saved command first.')
+  if(!waiting.length){
+   // Global Play retries only the selected saved command when the waiting
+   // queue is empty, not all previously completed/dangerous world edits.
+   if(this.selected&&this.cards.some(c=>c.id===this.selected))return this.activate(this.selected)
+   throw Error('Select or save a command to play.')
+  }
   // Revalidate the whole queue before its first side effect. Then execute one
   // command at a time and revalidate each card again immediately before use.
   for(const c of waiting){const d=validateDescriptor(c.descriptor);this.validateChoices(d)}
