@@ -88,7 +88,8 @@ export class CompanionCommands {
     return {accepted:false,queued:false,message:'I have another active job. Say "stop", then tell me this is my new home spot.'}
    let plot,decision
    try{
-    plot=grantPlot(this.c.world,connection.config?.ownerPlayerNames||[])
+    plot=grantPlot(this.c.world,connection.config?.ownerPlayerNames||[],undefined,
+     this.fieldTrial.state==='granting-home'?{centerOverride:this.fieldTrial.homeAnchor}:{} )
     decision=decideFirstHome(this.c.world,plot,{
      serverTime:this.homeRoutine.serverTime,serverTimeAt:this.homeRoutine.serverTimeAt,mind:this.c.mind||null
     })
