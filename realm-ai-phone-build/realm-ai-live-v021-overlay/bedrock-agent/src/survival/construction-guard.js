@@ -77,7 +77,7 @@ export class EditConfirmations {
   if(!p)return {accepted:false,queued:false,message:'No edit approval is pending.'}
   if(command==='cancel edit'||command==='no'){this.reset();return {accepted:true,queued:false,message:'Edit cancelled. No blocks were changed.'}}
   if(!/^(?:yes|confirm edit \d{6})$/.test(command))return {accepted:false,queued:false,message:'Confirm with the requested six-digit edit code, or "yes" while this exact approval is pending.'}
-  if(now>p.expires||p.scope!==scope||world.dimension!==p.scope?.dimension){this.reset();return {accepted:false,queued:false,message:'Edit approval expired or the Realm/dimension changed. No work started.'}}
+  if(now>p.expires||p.scope?.realm!==scope?.realm||p.scope?.dimension!==scope?.dimension||world.dimension!==p.scope?.dimension){this.reset();return {accepted:false,queued:false,message:'Edit approval expired or the Realm/dimension changed. No work started.'}}
   if(command!=='yes'&&command!==`confirm edit ${p.code}`)return {accepted:false,queued:false,message:'Wrong confirmation code. No work started.'}
   this.reset()
   const prior=world.editApproval
