@@ -17,6 +17,7 @@ public final class RovekinActionRouter {
         void openSavedPlans();                 // MainActivity.showPlans()
         void activateQueue();                  // MainActivity.activateQueuedPlans()
         void stopCurrentJob();                 // MainActivity.stopNow()
+        void startBotService();                // MainActivity.startBot()
         void retryBlockedJob();                // MainActivity.retryBlocked()
         void openSignIn();                     // MainActivity.showAuth()
         void openAppUpdates();                 // AppUpdater.show(activity)
@@ -76,6 +77,7 @@ public final class RovekinActionRouter {
             case SAVED_PLANS: host.openSavedPlans(); return Result.HANDLED;
             case ACTIVATE_QUEUE: host.activateQueue(); return Result.HANDLED;
             case EMERGENCY_STOP: host.stopCurrentJob(); return Result.HANDLED;
+            case START_SERVICE: host.startBotService(); return Result.HANDLED;
             case RETRY_BLOCKED: host.retryBlockedJob(); return Result.HANDLED;
             case CONNECTION_STATUS: host.showStatus(); return Result.HANDLED;
             case MICROSOFT_SIGN_IN: host.openSignIn(); return Result.HANDLED;
