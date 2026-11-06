@@ -116,6 +116,7 @@ export class Connection extends EventEmitter {
           this.survival.commandVocabulary.setScope(String(selected.id))
           this.survival.landmarks.setScope(String(selected.id))
           this.survival.mind.setScope(String(selected.id))
+          this.survival.knowledge.setScope(String(selected.id))
           this.survival.workshop.setScope(String(selected.id))
           const safeRealmState=String(selected?.state||'').trim().toUpperCase()
           this.realmDiscovery.selectedRealmState=safeRealmState==='OPEN'?'OPEN':safeRealmState==='CLOSED'?'CLOSED':'UNKNOWN'
