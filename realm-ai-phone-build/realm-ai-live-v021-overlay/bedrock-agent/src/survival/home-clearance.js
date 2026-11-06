@@ -6,7 +6,10 @@ import {insidePlot} from './companion-plot.js'
 
 const air=new Set(['air','cave_air','void_air'])
 const natural=new Set(['dirt','grass_block','coarse_dirt','rooted_dirt','podzol','mycelium','stone','cobblestone','deepslate','tuff','granite','diorite','andesite','clay','mud','moss_block','dirt_path','snow','snow_layer','netherrack'])
-const vegetation=new Set(['short_grass','tall_grass','fern','large_fern','dead_bush','dandelion','poppy','oxeye_daisy','blue_orchid','allium','azure_bluet','lily_of_the_valley','cornflower'])
+const vegetation=new Set(['short_grass','tall_grass','fern','large_fern','dead_bush','dandelion','poppy','oxeye_daisy','blue_orchid','allium','azure_bluet','lily_of_the_valley','cornflower','leaf_litter'])
+// Leaf litter is low ground cover in a confirmed owner plot, not an arbitrary
+// canopy leaf, a sign, or a built block. It still requires diggable server
+// data, verified air overlay, known overhead and construction-distance checks.
 const forbidden=/(?:water|lava|fire|magma|cactus|powder_snow|tnt|portal|bedrock|spawner|end_gateway|campfire|berry_bush|cobweb)/
 const falling=/(?:sand|gravel|anvil|concrete_powder)/
 const index=p=>p.x+','+p.y+','+p.z
