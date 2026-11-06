@@ -4,6 +4,7 @@
 import {physicalHomePlan,homeCompletion,inspectHomeCapacity} from './home-architecture.js'
 import {nextHomeObstruction,homeProjectOwnedCoordinates} from './home-clearance.js'
 import {HomeSupply} from './home-supply.js'
+import {constructionExposure} from './construction-guard.js'
 const safeScope=scope=>String(scope??'')
 const key=p=>p.x+','+p.y+','+p.z
 const distance=(a,b)=>a&&b?Math.hypot(a.x-b.x-.5,a.y-b.y-1.62,a.z-b.z-.5):Infinity
@@ -33,6 +34,21 @@ export class HomeProject {
   }
   this.pending=null;this.review=null;this.ownerScope=safeScope(scope);this.state='running';this.plan.status='running';this.started=now;this.lastAttempt=0;this.moveAttempts=0
   return {accepted:true,queued:true,message:'Owner approved this exact home shell blueprint. Starting staged building with Realm checks; furniture and bed still need separate confirmation.'}
+ }
+ // "This is your new home spot" is the owner's explicit invitation to start
+ // this newly created starter shelter, not blanket demolition permission.
+ // The plot and blueprint must be fresh, exact and linked to the same Realm.
+ beginFromLandGift(scope,now=Date.now()){
+  const realm=safeScope(scope)
+  if(!realm||!this.plan||!this.plot||this.state!=='preview'||this.c.world.dimension!==this.plot.dimension)
+   return {accepted:false,queued:false,message:'No fresh, scoped owner home gift. Starter construction did not begin.'}
+  if(!this.c.connection.spawned||this.c.companion?.plot!==this.plot)
+   return {accepted:false,queued:false,message:'Owner plot or Realm spawn changed. Starter construction did not begin.'}
+  this.pending=null;this.review=null;this.ownerScope=realm;this.state='running'
+  this.plan.status='running';this.plan.approvalSource='explicit-new-home-spot'
+  this.started=now;this.lastAttempt=0;this.moveAttempts=0
+  this.reason='Starter shelter invited by the owner. Checking observed terrain and resources; never overwrite other builds.'
+  return {accepted:true,queued:true,message:this.reason,project:this.snapshot()}
  }
  stop(reason='Owner paused home construction.'){
   if(this.state==='running'){this.state='paused';this.plan.status='paused';this.reason=reason}
@@ -179,6 +195,11 @@ export class HomeProject {
   if(problem.action==='stop')return this.block(problem.reason)
   if(problem.action==='auto-mine'){this.prepareClearance(problem,now);return}
   if(problem.action!=='build')return
+  // Being invited to create a home never authorizes damaging neighboring
+  // builds. Recognized nearby construction must be reviewed separately.
+  const risk=constructionExposure(w,s.positions,{ignoreVerifiedProjectBlocks:owned})
+  if(risk.state==='protected')return this.block('Other construction is within the protected 15-block buffer; owner review needed before building here.')
+  if(risk.state==='unverified'){w.requestNearby?.(n.client);this.reason=risk.reason||'Waiting for reliable construction safety evidence.';return}
   // Recheck authorization against this exact blueprint at every stage.
   if(!s.positions.every(p=>p.x>=this.plot.bounds.min.x&&p.x<=this.plot.bounds.max.x&&p.y>=this.plot.bounds.min.y&&p.y<=this.plot.bounds.max.y&&p.z>=this.plot.bounds.min.z&&p.z<=this.plot.bounds.max.z))
    return this.block('Stage no longer fits the approved land bounds')
