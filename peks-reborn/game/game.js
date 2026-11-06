@@ -57,7 +57,7 @@ function bindJoy(){const el=$("joystick"),knob=$("knob");function move(ev){const
  el.addEventListener("pointerdown",e=>{pointer=e.pointerId;el.setPointerCapture(pointer);move(e);});el.addEventListener("pointermove",e=>{if(e.pointerId===pointer)move(e);});el.addEventListener("pointerup",reset);el.addEventListener("pointercancel",reset);}
 /* Level bounds match connected restaurant zones; cabinets and tanks are solid. */
 function walkable(x,z){
- const zone=D.zones.some(a=>x>a.x+.28&&x<a.x+a.w-.28&&z>a.z+.28&&z<a.z+a.h-.28);
+ const zone=D.zones.some(a=>x>=a.x&&x<=a.x+a.w&&z>=a.z&&z<=a.z+a.h);
  if(!zone)return false;
  const blocked=(cx,cz,rx,rz)=>Math.abs(x-cx)<rx&&Math.abs(z-cz)<rz;
  if(blocked(10,8,3.35,1.0))return false;

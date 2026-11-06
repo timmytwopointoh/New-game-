@@ -35,6 +35,30 @@ for(let c of D.crew){
 }
 const walkableStations=D.stations.filter(s=>D.zones.some(z=>s.x>z.x&&s.x<z.x+z.w&&s.z>z.z&&s.z<z.z+z.h));
 assert.equal(walkableStations.length,D.stations.length,"All stations must be within a room/deck");
+// Pathfinding reachability is a quality gate, not a mere zone-membership test.
+const source=read("game/game.js");
+const a=source.indexOf("function walkable(x,z){");
+const b=source.indexOf("function tick(",a);
+assert.ok(a>=0&&b>a,"Walkable function must remain extractable");
+const walkable=vm.runInNewContext(source.slice(a,b)+"\nwalkable",{D});
+const SCALE=4,NX=188,NZ=144;
+const startX=15,startZ=20;
+assert.ok(walkable(startX,startZ),"Spawn inside walkable zone");
+const seen=new Uint8Array(NX*NZ),queue=[startZ*SCALE*NX+startX*SCALE];seen[queue[0]]=1;
+let head=0;
+while(head<queue.length){
+ const cell=queue[head++],x=cell%NX,z=Math.floor(cell/NX);
+ for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const nx=x+dx,nz=z+dz,idx=nz*NX+nx;
+  if(nx<0||nz<0||nx>=NX||nz>=NZ||seen[idx]||!walkable(nx/SCALE,nz/SCALE))continue;
+  seen[idx]=1;queue.push(idx);
+ }
+}
+for(const s of D.stations){
+ assert.ok(walkable(s.x,s.z),"Station physically blocked: "+s.id);
+ const sx=Math.round(s.x*SCALE),sz=Math.round(s.z*SCALE);
+ assert.ok(seen[sz*NX+sx],"Station disconnected from spawn: "+s.id);
+}
 const manifest=read("android/app/src/main/AndroidManifest.xml");
 const gradle=read("android/app/build.gradle.kts");
 const activity=read("android/app/src/main/java/com/peks/plunder/rebuilt/MainActivity.java");
@@ -63,4 +87,4 @@ for(let choice of ["KEEP","LEAVE","KEEP","LEAVE","KEEP","LEAVE"]){
 }
 assert.equal(completions,1);assert.equal(progress,6);
 ch.stop();assert.equal(stage.handlers.click,undefined);
-console.log("PASS: JS parse, UI bindings, 19-character progression, 15 reachable stations, 6-step interactive challenge, offline Android application wiring.");
+console.log("PASS: JS parse, UI bindings, 19-character progression, 15 connected stations, 6-step interactive challenge, offline Android application wiring.");
