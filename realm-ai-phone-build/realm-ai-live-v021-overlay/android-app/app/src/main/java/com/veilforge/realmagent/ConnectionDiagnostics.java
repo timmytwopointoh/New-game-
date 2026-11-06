@@ -71,6 +71,22 @@ final class ConnectionDiagnostics {
             result.put("failure",failure(input.optJSONObject("failure")));result.put("lastFailure",failure(input.optJSONObject("lastFailure")));
             String state=input.optString("processState");result.put("processState",Arrays.asList("running","stopped","crashed").contains(state)?state:"unknown");
             JSONObject identity=input.optJSONObject("clientIdentity");if(identity!=null&&((identity.optString("platform").equals("Android")&&identity.optInt("deviceOS")==1)||(identity.optString("platform").equals("Nintendo")&&identity.optInt("deviceOS")==12))&&identity.optString("flow").equals("live"))result.put("clientIdentity",new JSONObject().put("platform",identity.optString("platform")).put("deviceOS",identity.optInt("deviceOS")).put("flow","live"));
+            // ADB test-lab receives only fixed movement-readiness states and
+            // booleans. No player identity, player coordinates or chat content.
+            String gate=input.optString("movementGate","unavailable");
+            String[] allowedGates={"unavailable","unknown","not-spawned","awaiting-respawn",
+                "input-locked","flight-active","mode-unknown","abilities-unknown",
+                "abilities-loading","abilities-incompatible","terrain-unknown",
+                "body-obstructed","not-grounded","ready"};
+            result.put("movementGate",Arrays.asList(allowedGates).contains(gate)?gate:"unknown");
+            String movementState=input.optString("movementState","other");
+            String[] allowedStates={"idle","stopped","following","walking","waiting-for-player",
+                "waiting-for-terrain","waiting-for-readiness","blocked",
+                "arrived-predicted","loading","landing","other"};
+            result.put("movementState",Arrays.asList(allowedStates).contains(movementState)?movementState:"other");
+            for(String flag:new String[]{"movementVerified","movementTerrainKnown",
+                "movementAbilityKnown","movementGrounded","followPending","followActive"})
+                result.put(flag,Boolean.TRUE.equals(input.opt(flag)));
             result.put("savedAuthentication","kept");
         }catch(JSONException ignored){}
         return result;
