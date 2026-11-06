@@ -1,5 +1,6 @@
 // Server-confirmed placement only. Survival consumes inventory; Creative uses the server-reported held block without inventing an inventory item.
 import {placementEvidence} from './obstacles.js'
+import {approvedEdit,constructionExposure} from './construction-guard.js'
 const MAX_SINGLE_BUILD_BLOCKS=256
 export function buildSize({shape,width=1,height=1}){
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||width>32||height>32)throw Error('Use positive whole dimensions up to 32 blocks per side for a single build stage.')
@@ -42,6 +43,9 @@ export class Building{
   if(this.job)return {accepted:false,queued:false,message:'A building job is already active.'}
   const denied=this.check();if(denied)return {accepted:false,queued:false,message:denied}
   let design;try{design=blueprint(descriptor)}catch(e){return {accepted:false,queued:false,message:e.message}}
+  const exposed=constructionExposure(this.world,design.positions)
+  const approved=approvedEdit(this.world,'build',design.positions,now)
+  if(exposed.state!=='clear'&&!approved)return {accepted:false,queued:false,confirmationRequired:exposed.state==='protected',message:exposed.state==='protected'?`Existing construction within 15 blocks of this build (${exposed.near.name}). Ask the owner to confirm these exact coordinates.`:exposed.reason||'Unknown nearby construction; request more terrain first.'}
   const internalStructure=descriptor.internalStructure===true&&['chest','crafting_table','furnace'].includes(design.material)
   const w=this.world,definition=w.registry.blocksByName[design.material]
   if(!definition||!internalStructure&&(functional.test(design.material)||!full(w.Block.fromStateId(definition.defaultState,0))))return {accepted:false,queued:false,message:'Choose a simple full solid block, such as dirt, cobblestone, stone or planks. Interactive, falling, partial and hazardous blocks are not supported.'}
@@ -56,10 +60,10 @@ export class Building{
     if(!air(b)&&!w.ownedPlacements?.has(`${w.dimension}:${key(q)}`)&&placementEvidence(w,q,b).classification!=='natural-looking')return {accepted:false,queued:false,message:'Footprint is beside an existing build or protected block; choose a clear location.'}
    }
   }
-  this.job={...design,allowAirborne:descriptor.allowAirborne===true,remaining:design.positions.map(p=>({...p})),confirmed:new Set(),pending:null,started:now,lastProgress:now,approachAttempts:0};this.state='building';this.reason=creative?'Creative placement prepared; every block requires server confirmation.':'Build prepared; each block requires server and inventory confirmation.';this.placed=0;this.total=design.positions.length
+  this.job={...design,constructionApprovalUsed:exposed.state!=='clear'&&approved,allowAirborne:descriptor.allowAirborne===true,remaining:design.positions.map(p=>({...p})),confirmed:new Set(),pending:null,started:now,lastProgress:now,approachAttempts:0};this.state='building';this.reason=creative?'Creative placement prepared; every block requires server confirmation.':'Build prepared; each block requires server and inventory confirmation.';this.placed=0;this.total=design.positions.length
   return {accepted:true,queued:true,message:`Building ${design.shape}: ${this.total} ${design.material}, origin ${key(design.origin)}; +X width, +Z length. Existing blocks are preserved. Waiting for server-confirmed placements${creative?' (Creative does not consume the held block)':''}.`}
  }
- cancel(reason='Building stopped. Confirmed blocks remain in the Realm.') {if(this.job){this.state='interrupted';this.reason=`${reason} ${this.placed}/${this.total} placements confirmed.`;this.job=null;this.report(this.reason)}}
+ cancel(reason='Building stopped. Confirmed blocks remain in the Realm.') {if(this.job){if(this.job.constructionApprovalUsed)this.world.editApproval=null;this.state='interrupted';this.reason=`${reason} ${this.placed}/${this.total} placements confirmed.`;this.job=null;this.report(this.reason)}}
  anchor(target,eye=this.world.position){
   const w=this.world,j=this.job
   for(const d of directions){const p={x:target.x+d.x,y:target.y+d.y,z:target.z+d.z},b=w.block(p)
@@ -78,6 +82,7 @@ export class Building{
  tick(now=Date.now(),routeTo=null){
   const j=this.job,w=this.world;if(!j)return {}
   const denied=this.check();if(denied){this.cancel(denied);return {}}
+  if(j.constructionApprovalUsed&&!approvedEdit(w,'build',j.positions,now)){this.cancel('Owner confirmation expired or the approved coordinates changed; stopped.');return {}}
   if(now-j.started>Math.min(1800000,Math.max(180000,j.positions.length*7000))){this.cancel('Build stage time limit reached. Confirmed placements stay in the Realm; remaining blocks were not assumed complete.');return {}}
   if(j.pending){
    const p=j.pending,block=w.block(p.target),version=w.blockVersion(p.target),stack=w.inventory.get(p.slot)
@@ -86,7 +91,7 @@ export class Building{
     p.blockConfirmed=true
     if(p.creative||(w.inventoryProtocol?w.inventoryProtocol.consumed(p.slot,p.inventoryBefore):stack?.network_id===p.heldId&&stack.count===p.count-1||(p.count===1&&(!stack?.network_id||stack.count===0)))){
      w.ownedPlacements?.set(`${w.dimension}:${key(p.target)}`,{...p.target,dimension:w.dimension,name:j.material});j.confirmed.add(key(p.target));j.remaining=j.remaining.filter(q=>key(q)!==key(p.target));j.pending=null;j.lastProgress=now;j.approachAttempts=0;this.placed++;this.report(p.creative?`Server confirms ${this.placed}/${this.total} placed ${j.material} in Creative; held block was not consumed.`:`Server confirms ${this.placed}/${this.total} placed ${j.material}; inventory decreased by one.`)
-     if(!j.remaining.length){this.state='confirmed';this.reason=p.creative?`Server confirms all ${this.total} ${j.material} Creative placements.`:`Server confirms all ${this.total} ${j.material} placements and inventory consumption.`;this.job=null;this.report(this.reason)}
+     if(!j.remaining.length){if(j.constructionApprovalUsed)w.editApproval=null;this.state='confirmed';this.reason=p.creative?`Server confirms all ${this.total} ${j.material} Creative placements.`:`Server confirms all ${this.total} ${j.material} placements and inventory consumption.`;this.job=null;this.report(this.reason)}
      return {}
     }
    }
