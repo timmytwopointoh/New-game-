@@ -354,6 +354,15 @@ export function createApi(config,connection,log=console.log){
      const result=await patches.check()
      return send(200,{accepted:true,patch:result,livePatches:patches.snapshot()})
    }
+   if(req.method==='POST'&&pathname==='/rejoin'){
+      const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'))
+      if(Number.isSafeInteger(epoch)&&epoch<stopEpoch)
+       return send(200,{accepted:false,queued:false,message:'Stop cancelled the stale rejoin request.'})
+      // The local token-authenticated Rovekin START button may request a new
+      // join WITHOUT clearing the saved Microsoft session, reinstalling APK,
+      // stopping the whole Android service, or spawning duplicate clients.
+      return send(200,connection.reconnect())
+   }
    if(req.method==='POST'&&pathname==='/navigation/retry'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch<stopEpoch)return send(200,{accepted:false,message:'Stop cancelled this retry.'});const nav=connection.survival?.navigation;return send(200,nav?nav.retryBlockedFollow():{accepted:false,message:'Join the Realm first.'})}
     if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,message('stop'))}
    if(req.method==='GET'&&(pathname==='/knowledge/blocks'||pathname==='/knowledge/entities')){
