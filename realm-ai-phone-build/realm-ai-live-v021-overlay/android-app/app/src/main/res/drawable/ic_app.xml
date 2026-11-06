@@ -1,7 +1,24 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#20122F" android:pathData="M0,0h108v108h-108z"/>
-    <path android:fillColor="#AC83EC" android:pathData="M54,14 L90,35 L90,76 L54,97 L18,76 L18,35z"/>
-    <path android:fillColor="#39264B" android:pathData="M54,25 L80,40 L80,71 L54,86 L28,71 L28,40z"/>
-    <path android:fillColor="#F5DAFE" android:pathData="M38,45h12v12h-12z M58,45h12v12h-12z"/>
-    <path android:fillColor="#AA85EF" android:pathData="M46,68h16v6h-16z"/>
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Original full-body blocky robot companion, not an official game character. -->
+    <path android:fillColor="#092519" android:pathData="M0,0 L108,0 L108,108 L0,108 Z"/>
+    <path android:fillColor="#175C35" android:pathData="M0,84 L15,80 L33,87 L54,78 L73,84 L93,76 L108,85 L108,108 L0,108 Z"/>
+    <path android:fillColor="#5D22A0" android:pathData="M10,12 L98,12 L98,95 L10,95 Z"/>
+    <path android:fillColor="#21143F" android:pathData="M17,19 L91,19 L91,88 L17,88 Z"/>
+    <path android:fillColor="#BD74FF" android:pathData="M16,26 L21,26 L21,35 L16,35 Z M86,34 L93,34 L93,41 L86,41 Z M11,69 L17,69 L17,75 L11,75 Z M93,66 L98,66 L98,73 L93,73 Z"/>
+    <path android:fillColor="#58D63E" android:pathData="M26,47 L37,47 L37,81 L26,81 Z M71,47 L82,47 L82,81 L71,81 Z"/>
+    <path android:fillColor="#94FF62" android:pathData="M29,50 L33,50 L33,74 L29,74 Z M74,50 L78,50 L78,74 L74,74 Z"/>
+    <path android:fillColor="#527F6A" android:pathData="M38,69 L52,69 L52,93 L38,93 Z M56,69 L70,69 L70,93 L56,93 Z"/>
+    <path android:fillColor="#84F04D" android:pathData="M39,46 L69,46 L69,78 L39,78 Z"/>
+    <path android:fillColor="#153B32" android:pathData="M43,50 L65,50 L65,74 L43,74 Z"/>
+    <path android:fillColor="#C37EFF" android:pathData="M49,55 L59,55 L59,67 L49,67 Z"/>
+    <path android:fillColor="#EDF9E8" android:pathData="M33,19 L76,19 L76,50 L33,50 Z"/>
+    <path android:fillColor="#A5B7B4" android:pathData="M36,23 L72,23 L72,47 L36,47 Z"/>
+    <path android:fillColor="#1A3442" android:pathData="M39,28 L69,28 L69,43 L39,43 Z"/>
+    <path android:fillColor="#CF90FF" android:pathData="M43,33 L49,33 L49,40 L43,40 Z M59,33 L65,33 L65,40 L59,40 Z"/>
+    <path android:fillColor="#8EF75E" android:pathData="M35,18 L73,18 L73,23 L35,23 Z"/>
+    <path android:fillColor="#C4FF8F" android:pathData="M43,49 L65,49 L65,51 L43,51 Z"/>
+    <path android:fillColor="#99FF66" android:pathData="M37,90 L52,90 L52,95 L37,95 Z M56,90 L71,90 L71,95 L56,95 Z"/>
 </vector>
