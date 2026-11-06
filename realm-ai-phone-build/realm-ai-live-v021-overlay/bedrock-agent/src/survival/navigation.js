@@ -15,7 +15,7 @@ const flatDistance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z)
 export class Navigation{
  constructor(world,report=()=>{}){
   this.world=world;this.report=report;this.client=null;this.timer=null;this.route=null;this.state='idle';this.reason='';this.tick=0n;this.lastInputAt=0;this.lastPoseAt=0;this.listeners=[];this.lastRequestAt=0
-  this.hazards=new HazardRecovery(this);this.vy=0;this.progress=new ProgressTracker();this.mining=new Mining(world,report);this.building=new Building(world,report);this.climbing=new Climbing(world,report);this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.blocked=new Map();this.recoveryAttempts=0;this.decisions=[];this.pendingFlags=[];this.survey=null;this.pickup=new Pickup(world);this.defense={lastAttempt:0,lastStrike:0,strikes:0,attackedId:null,state:'idle',reason:'',threat:null}
+  this.hazards=new HazardRecovery(this);this.vy=0;this.progress=new ProgressTracker();this.mining=new Mining(world,report);this.building=new Building(world,report);this.climbing=new Climbing(world,report);this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.blocked=new Map();this.recoveryAttempts=0;this.decisions=[];this.pendingFlags=[];this.sprinting=false;this.survey=null;this.pickup=new Pickup(world);this.defense={lastAttempt:0,lastStrike:0,strikes:0,attackedId:null,state:'idle',reason:'',threat:null}
  }
  note(action,reason){this.decisions.push({action,reason});this.decisions=this.decisions.slice(-6);this.reason=reason;this.report(reason)}
  attach(client){
@@ -112,7 +112,8 @@ export class Navigation{
   this.client.queue('serverbound_loading_screen',{type:2,loading_screen_id:this.loading.id})
   this.loading.state='complete'
  }
- walk(goal,{allowMining=false,maxDrop=1}={}){
+ walk(goal,{allowMining=false,maxDrop=1,pace='walk'}={}){
+  if(!['walk','run'].includes(pace))return {accepted:false,queued:false,message:'Choose walking or running.'}
   if(!Number.isSafeInteger(maxDrop)||maxDrop<1||maxDrop>5)return {accepted:false,queued:false,message:'Planned drops must be 1–5 blocks.'}
   const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
   if(allowMining&&!this.world.editModeVerified)return {accepted:false,queued:false,message:'Clear-path work requires this player’s verified Survival or grounded Creative mode; no movement or mining started.'}
@@ -121,13 +122,13 @@ export class Navigation{
   if(!start||![goal?.x,goal?.y,goal?.z].every(Number.isSafeInteger)||Math.abs(goal.x-start.x)+Math.abs(goal.z-start.z)+Math.abs(goal.y-start.y)>48)return {accepted:false,queued:false,message:'Choose whole feet-level coordinates within 48 blocks.'}
   if(!this.world.walkable(start)||!this.world.walkable(goal))return {accepted:false,queued:false,message:'Start and destination must be clear, safe, observed standing cells. Use dig for an explicit block target.'}
   this.stop('',false);this.progress.reset();this.recoveryAttempts=0;this.blocked.clear();this.startedAt=Date.now()
-  this.job={kind:'solo',goal:{...goal},allowMining,maxDrop};const plan=this.routeTo(goal,start,{allowSteps:true,allowDirt:true})
+  this.job={kind:'solo',goal:{...goal},allowMining,maxDrop,pace};const plan=this.routeTo(goal,start,{allowSteps:true,allowDirt:true})
   if(!plan.ok){
    if(allowMining&&this.recover(plan.reason,this.startedAt))return {accepted:true,queued:true,message:this.reason}
    this.job=null;return {accepted:false,queued:false,message:(plan.reason||'No safe route')+' Water and lava crossings require a confirmed dry bridge or a detour; I will not walk into fluid.'}
   }
   this.assignRoute(plan)
-  return {accepted:true,queued:!!this.route.length,message:this.route.length?`Solo route: ${this.route.length} steps${plan.dirtRequired?`, using ${plan.dirtRequired} server-confirmed dirt placements`:""}. I will try another route if blocked${allowMining?', then consider one natural-looking, easy block if necessary':''}.`:'Already in that block according to the client position.'}
+  return {accepted:true,queued:!!this.route.length,message:this.route.length?`${pace==='run'?'Running when safe, walking on difficult terrain.':'Walking.'} Solo route: ${this.route.length} steps${plan.dirtRequired?`, using ${plan.dirtRequired} server-confirmed dirt placements`:""}. I will try another route if blocked${allowMining?', then consider one natural-looking, easy block if necessary':''}.`:'Already in that block according to the client position.'}
  }
  follow(name){
   const blocked=this.movementBlock();if(blocked)return {accepted:false,queued:false,message:blocked}
@@ -365,6 +366,7 @@ export class Navigation{
   const active=!!this.job||this.route!==null||!!this.flight||!!this.mining.job
   if(this.flight)this.vy=this.flight.vy
   this.routeAlignment=null;this.pillar=null;this.pendingUse=null;this.route=null;this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.afterJumpGoal=null;this.clearing=null;this.state='stopped';this.reason=reason
+  if(this.sprinting){this.pendingFlags.push('stop_sprinting');this.sprinting=false}
   if(this.edgeSneaking){this.pendingFlags.push('stop_sneaking');this.edgeSneaking=false}
   this.pickup.stop();this.mining.cancel(reason);this.building.cancel(reason);this.climbing.cancel(reason);this.survey=null
   // Send neutral input now, including abort_break, rather than waiting for the next timer tick.
@@ -489,7 +491,8 @@ export class Navigation{
     const dx=target.x+.5-p.x,dz=target.z+.5-p.z,d=Math.hypot(dx,dz)
     if(d<.07){this.route.shift();if(!this.route.length){this.route=null;this.state='arrived-predicted';this.arrivedAt=now;this.reason='Route inputs finished; server movement confirmation may still be pending.'}}
     else{
-     const speed=Math.min(.215,d),next={x:p.x+dx/d*speed,y:p.y,z:p.z+dz/d*speed}
+     const fast=this.job?.pace==='run'&&this.world.grounded()&&target.y===a.y&&!this.edgeSneaking&&!construction.sneak&&!this.shallowWading()&&Number(this.world.attributes['minecraft:player.hunger']??20)>=7
+     const speed=Math.min(fast?.27:.215,d),next={x:p.x+dx/d*speed,y:p.y,z:p.z+dz/d*speed}
      const height=this.world.supportHeight(target)
      if(!this.world.clearBody(next)&&height!==null&&height+1.62>p.y&&height+1.62-p.y<=1&&this.world.clearBody({...p,y:height+1.62}))next.y=height+1.62
      const wading=!!this.job?.waterRouting&&(this.shallowWading()||this.world.shallowWater(target))
@@ -500,6 +503,9 @@ export class Navigation{
    }
   }
   if(construction.sneak){flags.push('sneaking','sneak_down');if(!this.edgeSneaking)flags.push('start_sneaking');this.edgeSneaking=true}else if(this.edgeSneaking){flags.push('stop_sneaking');this.edgeSneaking=false}
+  const sprintNow=!!(move.z&&this.job?.pace==='run'&&this.world.grounded()&&!this.flight&&!this.edgeSneaking&&!construction.sneak&&!construction.edgeApproach&&Math.hypot(delta.x,delta.z)>.22&&!this.shallowWading())
+  if(sprintNow){if(!this.sprinting)flags.push('start_sprinting');flags.push('sprinting');this.sprinting=true}
+  else if(this.sprinting){flags.push('stop_sprinting');this.sprinting=false}
   if(move.z){this.progress.commanded(Math.hypot(delta.x,delta.z));if(delta.x||delta.z)this.yaw=Math.atan2(-delta.x,delta.z)*180/Math.PI}
   if(this.externalMotion){const impulse=this.applyMotion(now);delta.x+=impulse.x;delta.z+=impulse.z}
   if(!this.flight&&!hazard?.active&&!portal?.active){
@@ -558,6 +564,6 @@ export class Navigation{
   }catch(e){this.stop('Input packet failed: '+String(e.message||e).slice(0,100));this.detach()}
   try{this.onResourceTick?.(now)}catch(e){this.reportRuntimeError?.(e);this.stop('Internal resource task error.');this.onResourceError?.(e)}
  }
- snapshot(){return {pillar:this.pillar?{confirmed:this.pillar.done,total:this.pillar.rise,phase:this.pillar.phase}:null,environmentRecovery:this.hazards.snapshot(),state:this.state,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,flightRecovery:this.pendingFlightRecovery?{state:this.state,landing:this.pendingFlightRecovery.landing}:null,reason:this.reason,waterRisk:{shallowWading:this.shallowWading(),crossingPlanned:!!this.job?.waterRouting,maxConsecutiveWaterBlocks:8,deepWaterSupported:false},physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
- detach(){this.externalMotion=null;this.motionTick=undefined;this.followTarget=null;this.routeAlignment=null;this.lastClearanceBlock=null;this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.pendingFlags=[];this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
+ snapshot(){return {pillar:this.pillar?{confirmed:this.pillar.done,total:this.pillar.rise,phase:this.pillar.phase}:null,environmentRecovery:this.hazards.snapshot(),state:this.state,pace:this.job?.pace||'walk',sprinting:this.sprinting===true,mode:this.job?.kind||'idle',following:this.job?.kind==='follow'?this.job.name:null,remaining:this.route?.length||0,flightRecovery:this.pendingFlightRecovery?{state:this.state,landing:this.pendingFlightRecovery.landing}:null,reason:this.reason,waterRisk:{shallowWading:this.shallowWading(),crossingPlanned:!!this.job?.waterRouting,maxConsecutiveWaterBlocks:8,deepWaterSupported:false},physics:{grounded:this.world.grounded(),terrainKnown:this.world.terrainKnown(),bodyClear:this.world.position?this.world.clearBody(this.world.position):false,feetY:this.world.position?this.world.position.y-1.62:null,verticalVelocity:this.vy,serverGrounded:this.world.serverGrounded??null,lastServerFeedbackAt:this.lastServerTick===null||this.lastServerTick===undefined?null:this.lastPoseAt,inputLocks:{...this.world.inputLocks},loading:this.loading?.state||'not-started'},progress:this.progress.snapshot(),building:this.building.snapshot(),climbing:this.climbing.snapshot(),mining:this.mining.snapshot(),decisions:this.decisions,pickup:this.pickup.snapshot(),survey:this.survey?{state:this.survey.state,step:this.survey.step,total:12,visibleBlocks:this.survey.seen.size}:null,defense:{...this.defense}}}
+ detach(){this.externalMotion=null;this.motionTick=undefined;this.followTarget=null;this.routeAlignment=null;this.lastClearanceBlock=null;this.pillar=null;this.portalControl=null;this.pendingUse=null;this.hazards=new HazardRecovery(this);if(this.timer)clearInterval(this.timer);this.timer=null;for(const [e,f] of this.listeners)this.client?.off(e,f);this.listeners=[];this.route=null;this.job=null;this.flight=null;this.pendingFlightRecovery=null;this.pendingFlags=[];this.sprinting=false;this.pickup.reset();this.mining.reset();this.building.reset();this.climbing.reset();this.spawned=false;this.edgeSneaking=false;this.lastFollowGoal=null;this.unknownSince=null;this.vy=0;this.loading=null;this.lastServerTick=null;this.survey=null;this.defense={lastAttempt:0,state:'idle',reason:'',threat:null}}
 }
