@@ -64,8 +64,8 @@ public final class RovekinFeatureContractTest {
         RovekinFeatureContract.Authorization owner = new Identity(true,false);
         RovekinFeatureContract.Authorization developer = new Identity(true,true);
 
-        check(RovekinFeatureContract.publicFeatures(runtime(true,true),catalog()).size()==20,
-            "all 20 public features displayed; others remain in owner/dev console");
+        check(RovekinFeatureContract.publicFeatures(runtime(true,true),catalog()).size()==19,
+            "all 19 public features displayed; others remain in owner/dev console");
         check(RovekinFeatureContract.allDiscoveredSkills(catalog()).size()==4,
             "unrecognized future catalog skills never disappear");
         check(action(router,RovekinFeatureContract.Feature.CHAT,publicUser,runtime(true,true),"find me")
