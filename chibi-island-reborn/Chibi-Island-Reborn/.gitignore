@@ -1,0 +1,13 @@
+.godot/
+.import/
+build/
+dist/
+*.apk
+*.aab
+*.exe
+*.pck
+*.keystore
+*.jks
+*.pem
+*.key
+generated/

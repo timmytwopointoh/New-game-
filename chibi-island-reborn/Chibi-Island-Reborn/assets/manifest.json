@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "project": "Chibi Island Reborn",
+  "style": "expressive polished chibi anime, tropical colors, warm soft lighting",
+  "runtime_engine": "Godot 4.3+",
+  "asset_engine": "ChibiWorld (local procedural) / VEILFORGE VQ optional validated export",
+  "status": "original procedural placeholders pending native QA",
+  "models": [
+    {"id":"grim_body","generator":"engine/Grim.gd","validated":false},
+    {"id":"island_world","generator":"engine/ChibiWorld.gd","validated":false}
+  ],
+  "quality_budgets": {"resident_triangles_max":12000,"texture_max_dimension":1024,"mobile_fps_goal":30}
+}
