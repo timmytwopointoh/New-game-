@@ -43,7 +43,7 @@ export class Connection extends EventEmitter {
   recoverUnexpectedPlayedSession(){
     if(!this.wasSpawnedThisSession||this.manualRecoveryStop||this.lastFailure||
        this.authChallenge?.userCode||this.authState==='sign-in-required')return false
-    if(!['none','transport-close','transport-end'].includes(this.transportCloseKind))return false
+    if(!['transport-close','transport-end'].includes(this.transportCloseKind))return false
     if(!['remote-transport','unknown','network-error'].includes(this.transportCloseOrigin))return false
     const now=Date.now()
     if(!this.sessionCloseWindowAt||now-this.sessionCloseWindowAt>600000){
