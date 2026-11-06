@@ -144,7 +144,14 @@ export class CommandPlans{
   const card=this.cards.find(c=>c.id===this.batch.ids[this.batch.index]);if(!card||card.state!=='waiting'||card.activationLocked){this.finishBatch('Queue stopped because a command is no longer waiting.');return {accepted:false,queued:false,message:'Queue stopped because a command is no longer waiting.'}}
   try{
    const d=validateDescriptor(card.descriptor);this.validateChoices(d);card.activationLocked=true;card.state='running';this.running=card.id;this.activeStartedAt=Date.now();this.activeServerPoseAt=this.controller.world?.lastPoseAt||0;this.activeGoal=d.id==='walk'||d.id==='clear'?{x:d.values.x,y:d.values.y,z:d.values.z}:null
-   const result=this.controller.handle(renderDescriptor(d));card.result=result?.message||''
+   // The native Android Commands > Follow card triggers the observed-owner field
+    // trial; chat is not required. Other players remain normal Follow targets.
+    // Home is granted only after the server verifies proximity, never on Play.
+    const owners=this.controller.connection?.config?.ownerPlayerNames||[]
+    const ownerFollow=d.id==='follow'&&owners.length===1&&
+      (d.values.player.toLowerCase()==='me'||d.values.player.toLowerCase()===String(owners[0]).toLowerCase())
+    const trial=ownerFollow&&this.controller.companion?.fieldTrial&&this.controller.companion?.editScope()?.realm
+    const result=trial?this.controller.companion.fieldTrial.start():this.controller.handle(renderDescriptor(d));card.result=result?.message||''
    if(!result?.accepted){this.controller.learning?.record(d,'blocked',card.result);card.state='blocked';this.running=null;this.finishBatch(`Queue stopped at #${card.id}: ${card.result}`);return result||{accepted:false,queued:false,message:card.result}}
    this.controller.report?.(`Queue ${this.batch.index+1}/${this.batch.ids.length}: started #${card.id} ${renderDescriptor(d)}.`)
    if(!this.controller.navigation?.job&&!result?.queued&&!['ensure','rejoin'].includes(d.id)){this.controller.learning?.record(d,'unverified',card.result);card.state='completed';card.result=card.result||'Completed.';this.running=null;this.controller.report?.(`Command #${card.id} completed. Next queued command starts in two seconds.`);this.scheduleNext();return result}
