@@ -94,7 +94,7 @@ func _make_button(parent: Node, title: String, callback: Callable) -> Button:
 	normal.content_margin_right = 12
 	normal.shadow_color = Color("#5e458055")
 	normal.shadow_size = 3
-	var hovered: StyleBoxFlat = normal.duplicate()
+	var hovered := normal.duplicate() as StyleBoxFlat
 	hovered.bg_color = Color("#b5eced")
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hovered)
@@ -533,6 +533,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pan(event.relative)
 	if event is InputEventScreenDrag:
 		_pan(event.relative)
+	if event is InputEventScreenTouch and event.pressed:
+		_select_screen(event.position)
 
 func _pan(delta: Vector2) -> void:
 	focus.x = clampf(focus.x - delta.x * 0.032, -15, 15)
