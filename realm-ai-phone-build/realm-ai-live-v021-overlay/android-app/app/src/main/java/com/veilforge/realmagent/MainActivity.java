@@ -268,7 +268,55 @@ public class MainActivity extends Activity {
     }
     static final int REQUEST_EXPORT_REPORT=41022;
     void showBugReports(){new AlertDialog.Builder(this).setTitle("All-in-one Bug Report ZIP").setMessage(SupportBundle.issues(this)).setPositiveButton("Export ONE ZIP",(d,w)->exportBugReport()).setNegativeButton("Close",null).show();}
-    void exportBugReport(){Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/zip");save.putExtra(Intent.EXTRA_TITLE,"Realm-AI-Live-ALL-DIAGNOSTICS-"+System.currentTimeMillis()+".zip");try{startActivityForResult(save,REQUEST_EXPORT_REPORT);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open a save location for the report.",false);}}
+    void exportBugReport(){Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/zip");save.putExtra(Intent.EXTRA_TITLE,rovekinDiagnosticFilename(System.currentTimeMillis()));try{startActivityForResult(save,REQUEST_EXPORT_REPORT);}catch(ActivityNotFoundException e){bubble("Progress","Android could not open a save location for the report.",false);}}
+    static String rovekinDiagnosticFilename(long timestamp){
+        return "Rovekin-ALL-DIAGNOSTICS-"+Math.max(0,timestamp)+".zip";
+    }
+    /**
+     * The in-border reconnect control is also a one-tap crash evidence tool.
+     * Save ONE sanitized all-in-one ZIP into Downloads/Rovekin. On Android 9
+     * and older, ask the user to choose a save location instead of using
+     * unsafe external-storage permissions. ZIP export never blocks rejoin.
+     */
+    void reconnectWithDiagnosticZip(){
+        saveDiagnosticZipToDownloads();
+        startOrRejoinBot();
+    }
+    void saveDiagnosticZipToDownloads(){
+        if(Build.VERSION.SDK_INT<29){exportBugReport();return;}
+        supportIo.submit(()->{
+            JSONObject live=null;
+            if(serviceStarted&&token!=null&&!token.isEmpty()){
+                try{live=request("GET","/support/snapshot",null);}catch(Exception ignored){}
+            }
+            Uri uri=null;
+            try{
+                ContentValues values=new ContentValues();
+                values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                    rovekinDiagnosticFilename(System.currentTimeMillis()));
+                values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE,"application/zip");
+                values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS+"/Rovekin");
+                values.put(android.provider.MediaStore.MediaColumns.IS_PENDING,1);
+                uri=getContentResolver().insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);
+                if(uri==null)throw new IOException("Android Downloads is unavailable");
+                try(OutputStream out=getContentResolver().openOutputStream(uri)){
+                    if(out==null)throw new IOException("Android could not open the ZIP destination");
+                    SupportBundle.export(this,out,live);
+                }
+                ContentValues complete=new ContentValues();
+                complete.put(android.provider.MediaStore.MediaColumns.IS_PENDING,0);
+                getContentResolver().update(uri,complete,null,null);
+                SupportLog.record(this,"reconnect_report_exported");
+                ui.post(()->bubble("Progress","Saved all-in-one diagnostics ZIP to Downloads/Rovekin. Realm reconnect was requested separately.",false));
+            }catch(Exception e){
+                if(uri!=null)try{getContentResolver().delete(uri,null,null);}catch(Exception ignored){}
+                SupportLog.record(this,"reconnect_report_failed");
+                ui.post(()->bubble("Progress","Reconnect was requested, but Android could not save the diagnostics ZIP. Use the all-in-one report export in Settings.",false));
+            }
+        });
+    }
     void writeBugReport(Uri destination){supportIo.submit(()->{
         JSONObject live=null;
         // Read-only, authenticated local snapshot. Unreachable or crashed bot
