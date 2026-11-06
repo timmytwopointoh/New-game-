@@ -1,4 +1,5 @@
 import {resolveToolInstruction} from './tool-language.js'
+import {interpretNameUtterance} from './name-intent.js'
 import {isForestryReturnCommand} from './survival/forestry-return.js'
 import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
 import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/command-vocabulary.js'
@@ -111,8 +112,20 @@ export function createApi(config,connection,log=console.log){
  }
  const message=raw=>{
    if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
+   const addressed=interpretNameUtterance(raw,
+    connection.username||connection.config?.minecraft?.botPlayerName,{phone:true})
+   if(addressed.kind==='attention'){
+    connection.survival?.companion?.hearName?.(raw)
+    return {accepted:true,queued:false,message:"I'm listening. You can talk to me normally or ask me to do something."}
+   }
+   if(addressed.addressed&&(addressed.command||addressed.content))
+    raw=addressed.command||addressed.content
    const companion=connection.survival?.companion?.handle(raw)
    if(companion)return companion
+   // Both the phone chat bar and the owner-only Realm chat use this same
+   // memory interpreter; a historical sighting alone never authorizes mining.
+   const memoryReply=connection.survival?.resourceRecall?.handle(raw)
+   if(memoryReply)return memoryReply
    // Recognized owner action, not a conversational ping, temporarily yields
    // the home task. Both phone API and owner-only Realm chat use this path.
    connection.survival?.companion?.beforeOwnerAction(raw)
