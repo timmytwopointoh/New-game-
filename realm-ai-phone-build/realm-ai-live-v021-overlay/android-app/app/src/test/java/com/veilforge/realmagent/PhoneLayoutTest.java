@@ -53,7 +53,12 @@ public class PhoneLayoutTest {
    assertEquals(1,stage.getChildCount());
    View chat=stage.getChildAt(0);
    assertNotNull(find(chat,"STOP"));
-   assertNotNull("Reconnect is recessed in the top border",find(chat,"↻"));
+   View reconnect=find(chat,"↻");
+   assertNotNull("Reconnect remains embedded in the top border",reconnect);
+   assertTrue("Reconnect has a phone-accessible 48dp+ touch target",
+      reconnect.getLayoutParams().width>=48);
+   assertFalse("The chat page has no permanent purple particle overlay",
+      hasDescendantOfType(chat,RovekinParticleVeil.class));
    assertNotNull(find(chat,"START"));
    assertNotNull(find(chat,"SEND"));
    assertNull(find(chat,"ALL COMMANDS"));
@@ -63,7 +68,16 @@ public class PhoneLayoutTest {
    assertNull(find(chat,"0.44.5-rovekin-clean-follow-preview"));
    activity.bubble("VEILFORGE","I am following the trail.",false);
    assertNotNull(find(chat,"I am following the trail."));
+   assertTrue("A new AI reply uses the animated, self-contained Nether halo",
+       hasDescendantOfType(chat,RovekinNetherBubble.class));
    assertNull("Messages display content only, never VEILFORGE sender tags",find(chat,"VEILFORGE"));
+ }
+ boolean hasDescendantOfType(View parent,Class<?> clazz){
+   if(clazz.isInstance(parent))return true;
+   if(parent instanceof ViewGroup){ViewGroup g=(ViewGroup)parent;
+     for(int i=0;i<g.getChildCount();i++)
+       if(hasDescendantOfType(g.getChildAt(i),clazz))return true;}
+   return false;
  }
  @Test public void popupValidationKeepsInvalidPlanOpen()throws Exception{JSONObject def=new JSONObject("{\"id\":\"walk\",\"label\":\"Walk\",\"fields\":[{\"id\":\"x\",\"label\":\"X\",\"type\":\"integer\",\"min\":-30000000,\"max\":30000000},{\"id\":\"y\",\"label\":\"Feet-level Y\",\"type\":\"integer\",\"min\":-64,\"max\":320},{\"id\":\"z\",\"label\":\"Z\",\"type\":\"integer\",\"min\":-30000000,\"max\":30000000}]}");activity.showCommandForm(def);AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertTrue(dialog.isShowing());assertEquals("Save plan",dialog.getButton(AlertDialog.BUTTON_POSITIVE).getText());dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertTrue("Invalid coordinates must not dismiss/save",dialog.isShowing());assertNotNull(find(dialog.getWindow().getDecorView(),"Enter X"));dialog.dismiss();}
  @Test public void everySharedCatalogFormOpensOnPhone()throws Exception{java.io.InputStream in=activity.getAssets().open("nodejs-project/src/survival/command-catalog.json");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);in.close();JSONArray catalog=new JSONArray(out.toString("UTF-8"));activity.options=new JSONObject("{\"owners\":[\"Owner\"],\"players\":[\"Player\"],\"hotbar\":[{\"slot\":1,\"known\":true,\"name\":\"stone_pickaxe\",\"count\":1}],\"visible\":[]}");int forms=0;for(int i=0;i<catalog.length();i++){JSONObject def=catalog.getJSONObject(i);if(def.getJSONArray("fields").length()==0)continue;activity.showCommandForm(def);AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertTrue(def.getString("id"),dialog.isShowing());assertNotNull(dialog.getButton(AlertDialog.BUTTON_POSITIVE));dialog.dismiss();forms++;}assertTrue(forms>=10);}
