@@ -22,7 +22,7 @@
         <!-- DUMP is a protected Android permission held by local ADB shell, not regular apps.
              Provider also checks calling UID and only exposes sanitized diagnostic enums/counts. -->
         <provider android:name="com.veilforge.realmagent.TestLabDiagnosticsProvider"
-            android:authorities="com.veilforge.realmagent.live.testlab"
+            android:authorities="com.rovekin.companion.testlab"
             android:exported="true"
             android:readPermission="android.permission.DUMP"
             android:grantUriPermissions="false"/>
