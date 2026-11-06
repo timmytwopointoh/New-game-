@@ -90,7 +90,8 @@ jobs:
             tests/new-home-gift-field.test.js \
             tests/home-clearance-field.test.js \
             tests/home-architecture-field.test.js \
-            tests/companion-world-policy.test.js
+            tests/companion-world-policy.test.js \
+            tests/resource-jobs.test.js
           # Keep all other traversal/respawn cases required; the four known
           # dirt-staircase regressions are separately recorded below.
           node --test --test-name-pattern='ordinary walking|missing dirt|low ceilings|death sends|Hardcore' tests/traversal-respawn.test.js
@@ -144,3 +145,5 @@ jobs:
 # Re-run exact full Android lifecycle tests after correcting Robolectric teardown.
 
 # Retry after fixing persistent-home resume fallthrough and owner confirmation regex.
+
+# Retry: persistent home resume fix, protected-block approvals, and quantity-tail commands.
