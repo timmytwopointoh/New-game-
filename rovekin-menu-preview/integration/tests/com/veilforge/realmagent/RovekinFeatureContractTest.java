@@ -35,6 +35,7 @@ public final class RovekinFeatureContractTest {
         public void openSignIn() { last = "auth"; }
         public void openAppUpdates() { last = "updates"; }
         public void openLearning() { last = "learning"; }
+        public void openResearchPrompt() { last = "research_prompt"; }
         public void openSafeOwnerSettings() { last = "owner_settings"; }
         public void openDeveloperConsole() { last = "developer_console"; }
         public void stopBotService() { last = "service_stop"; }
@@ -107,6 +108,9 @@ public final class RovekinFeatureContractTest {
             == RovekinActionRouter.Result.NOT_SUPPORTED, "never fake unimplemented emulator console");
         check(action(router,RovekinFeatureContract.Feature.ASSIGN_PLAYER,owner,runtime(true,true),"")
             == RovekinActionRouter.Result.NOT_SUPPORTED, "player reassignment must wait for backend permission enforcement");
+        check(action(router,RovekinFeatureContract.Feature.RESEARCH,publicUser,runtime(true,true),"")
+            == RovekinActionRouter.Result.HANDLED, "research opens a real chat request prompt");
+        check(host.last.equals("research_prompt"), "research delegates to original chat backend");
         check(action(router,RovekinFeatureContract.Feature.COMMAND_CATALOG,publicUser,runtime(false,false),"")
             == RovekinActionRouter.Result.HANDLED, "offline command discovery remains");
         check(RovekinFeatureContract.status(RovekinFeatureContract.Feature.MICROSOFT_SIGN_IN,
