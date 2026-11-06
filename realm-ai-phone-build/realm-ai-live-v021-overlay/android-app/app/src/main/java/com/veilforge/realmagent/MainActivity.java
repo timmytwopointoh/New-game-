@@ -461,7 +461,7 @@ public class MainActivity extends Activity {
             displayedAuthCode=code;
             authCodeLabel.setText("MICROSOFT CODE: "+code+"\nOpen https://www.microsoft.com/link and enter it.");
             authCodeLabel.setVisibility(View.VISIBLE);copyAuthCode.setVisibility(View.VISIBLE);
-            if(!code.equals(lastPresentedMicrosoftCode) && (rovekin==null||rovekin.isChatShown()))showAuth(r);
+            if(!code.equals(lastPresentedMicrosoftCode) && (rovekin==null||rovekin.isChatShown()||(settingsDialog!=null&&settingsDialog.isShowing())))showAuth(r);
         }else{
             displayedAuthCode="";authCodeLabel.setVisibility(View.GONE);copyAuthCode.setVisibility(View.GONE);
             if(!"sign-in-required".equals(phase))lastPresentedMicrosoftCode="";
