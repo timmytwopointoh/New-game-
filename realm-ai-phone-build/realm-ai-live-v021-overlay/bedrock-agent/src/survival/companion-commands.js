@@ -5,22 +5,54 @@ import {HomeProject} from './home-project.js'
 import {HomeRoutine} from './home-routine.js'
 import {NEW_HOME_SPOT,decideFirstHome} from './home-instinct.js'
 import {HomeSocialLoop} from './home-social-loop.js'
+import {PermanentHome} from './permanent-home.js'
 import {CompanionFieldTrial,isHomeFieldTestCommand} from './companion-field-trial.js'
 
 // Read-only house design and one-job edit consent. Only the bearer-authenticated
 // local phone API or an owner-allowlisted in-game command can call this handler.
 export class CompanionCommands {
- constructor(controller,scope=null){
+ constructor(controller,scope=null,{homeDirectory=null}={}){
   this.c=controller;this.scope=scope||null
   this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits=new EditConfirmations();this.homeProject=new HomeProject(controller);this.homeRoutine=new HomeRoutine(controller);this.social=new HomeSocialLoop(this);this.fieldTrial=new CompanionFieldTrial(this)
+  this.homeMemory=new PermanentHome({directory:homeDirectory,scope});this.restorePermanentHome()
  }
- setScope(scope){if(scope===this.scope)return;this.scope=scope||null;this.plot=null;this.design=null;this.firstHomeDecision=null;this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null);this.social.reset();this.fieldTrial.clear();this.c.world.editApproval=null}
+ setScope(scope){
+  if(String(scope||'')===String(this.scope||''))return
+  this.scope=scope?String(scope):null
+  this.plot=null;this.design=null;this.firstHomeDecision=null
+  this.edits.reset();this.homeProject.clear();this.homeRoutine.setPlot(null)
+  this.social.reset();this.fieldTrial.clear();this.c.world.editApproval=null
+  this.homeMemory.setScope(this.scope)
+  this.restorePermanentHome()
+ }
+ restorePermanentHome(){
+  const record=this.homeMemory?.snapshot()
+  if(!record)return
+  if(!this.homeProject.restoreLockedHome(record,this.scope))return
+  this.plot=this.homeProject.plot;this.design=record.design
+  this.homeRoutine.setPlot(this.plot)
+  this.social.mode='house'
+ }
+
  editScope(){return {realm:this.scope||this.c.commandPlans.scope||null,dimension:this.c.world.dimension}}
- reset(){this.edits.reset();this.homeProject.stop('Realm session interrupted; owner must confirm before resuming.');this.homeRoutine.reset(true);this.social.manualHold();this.fieldTrial.clear();this.c.world.editApproval=null}
- tick(now=Date.now()){this.fieldTrial.tick(now);this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)}
+ reset(){
+  this.edits.reset()
+  this.homeProject.stop('Realm session interrupted; saved home stays locked.')
+  this.homeRoutine.reset(true)
+  if(this.homeMemory.hasHome())this.social.reset()
+  else this.social.manualHold()
+  this.fieldTrial.clear();this.c.world.editApproval=null
+ }
+ tick(now=Date.now()){
+  this.fieldTrial.tick(now)
+  if(this.homeMemory.hasHome()&&this.c.connection?.spawned)
+   this.homeProject.resumeLockedHomeOnSpawn(this.editScope().realm)
+  this.social.tick(now);this.homeRoutine.tick(now);this.homeProject.tick(now)
+  if(this.homeMemory.hasHome())this.homeMemory.updateVerifiedProgress(this.homeProject)
+ }
  onServerTime(p,now=Date.now()){this.homeRoutine.onServerTime(p,now)}
  onServerSystemText(p,now=Date.now()){this.homeRoutine.onSystemText(p,now)}
- snapshot(){return {plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,fieldTrial:this.fieldTrial.snapshot(),social:this.social.snapshot(),homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
+ snapshot(){return {permanentHome:this.homeMemory.hasHome()?{locked:true,center:this.plot?.center,owner:this.plot?.owner,dimension:this.plot?.dimension,completedStages:this.homeMemory.record.completedStages}:null,plot:this.plot,design:this.design,firstHomeDecision:this.firstHomeDecision,fieldTrial:this.fieldTrial.snapshot(),social:this.social.snapshot(),homeProject:this.homeProject.snapshot(),homeRoutine:this.homeRoutine.snapshot(),pendingEdit:this.edits.pending?{kind:this.edits.pending.kind,expires:this.edits.pending.expires}:null}}
  check(kind,descriptor,positions,execute){
   const c=this.c
   if(!c.connection.spawned)return {accepted:false,queued:false,message:'Join and spawn in the Realm before editing.'}
@@ -51,7 +83,7 @@ export class CompanionCommands {
      (trial.state==='building'?' My home project has started.':''),
     fieldTrial:trial}
   }
-  if(isHomeFieldTestCommand(s))return this.fieldTrial.start()
+  if(isHomeFieldTestCommand(s))return this.homeMemory.hasHome()?{accepted:true,queued:false,message:'My first home is permanent. I will not accept another home assignment.',plot:this.plot,project:this.homeProject.snapshot()}:this.fieldTrial.start()
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
   if(/^confirm home proximity \\d{6}$/.test(s)||s==='cancel home proximity')
@@ -79,6 +111,9 @@ export class CompanionCommands {
   if(s==='plan home construction'||s==='preview home build')return this.plot&&this.design?this.homeProject.preview(this.plot,this.design):{accepted:false,queued:false,message:'Design a home on your assigned land first.'}
   if(s==='build your home'||s==='start building your home'||s==='execute home design'||s==='begin home construction')return this.homeProject.requestAuthorization(this.editScope().realm)
   if(NEW_HOME_SPOT.test(s)){
+   if(this.homeMemory.readOnly)return {accepted:false,queued:false,message:this.homeMemory.error}
+   if(this.homeMemory.hasHome())return {accepted:true,queued:this.homeProject.state==='running',
+    message:'I already have one permanent home at '+Object.values(this.plot.center).join(', ')+'. It stays there through reconnects; I will not select or move to a second home.',plot:this.plot,project:this.homeProject.snapshot()}
    const connection=this.c.connection,n=this.c.navigation
    if(!connection.spawned)return {accepted:false,queued:false,message:'Please let me join the Realm before assigning a home.'}
    if(this.homeProject.state==='running'||this.homeProject.state==='furnishing')
@@ -100,6 +135,8 @@ export class CompanionCommands {
     this.homeProject.preview(plot,this.design)
     const begin=this.homeProject.beginFromLandGift(this.editScope().realm)
     if(!begin.accepted)return begin
+    const locked=this.homeMemory.claim(plot,this.design)
+    if(!locked.ok){this.homeProject.clear();this.plot=null;this.design=null;this.homeRoutine.setPlot(null);return {accepted:false,queued:false,message:locked.message}}
     // Following the owner is a safe task to yield; never interrupt an
     // in-progress resource/mining/build transaction to acquire a plot.
     if(n.job?.kind==='follow'||n.survey)n.stop('Owner assigned a home; switching to building.',false)
@@ -121,6 +158,8 @@ export class CompanionCommands {
   }
   if(/^(?:this is your land|claim (?:your |my |a )?(?:companion )?(?:plot|land)(?: here)?|give you (?:a |my )?(?:50(?:x|\/| by )50(?:x|\/| by )50 )?(?:plot|land)(?: here)?)(?: 50(?:x|\/| by )50(?:x|\/| by )50)?$/.test(s)){
    if(!this.c.connection.spawned)return {accepted:false,queued:false,message:'Bot is not spawned. No land assigned.'}
+   if(this.homeMemory.hasHome())return {accepted:true,queued:false,message:'I already have a permanent home and land plot. I will not move it.',plot:this.plot}
+   if(this.homeMemory.readOnly)return {accepted:false,queued:false,message:this.homeMemory.error}
    try{this.plot=grantPlot(this.c.world,this.c.connection.config?.ownerPlayerNames||[]);this.design=null;this.homeRoutine.setPlot(this.plot);this.homeProject.clear()
     return {accepted:true,queued:false,message:'Recorded a 50×50×50 planning area centered on your visible player position. No blocks changed. Say "design your home".',plot:this.plot}}
    catch(e){return {accepted:false,queued:false,message:String(e.message||e)}}
