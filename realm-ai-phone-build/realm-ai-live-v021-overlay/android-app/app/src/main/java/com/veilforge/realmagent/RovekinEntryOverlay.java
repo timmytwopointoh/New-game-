@@ -148,7 +148,10 @@ public final class RovekinEntryOverlay {
         a.getWindow().setStatusBarColor(0xff052719);
         a.getWindow().setNavigationBarColor(0xff052719);
         legacy.setVisibility(View.GONE);
-        showSplash();
+        // Returning users bypass the first-run welcome and account screens.
+        // The real saved-session/Realm checks still run; chat opens on server spawn.
+        if(configured())connectScreen(!a.serviceStarted);
+        else showSplash();
     }
     private void showSplash(){
         screen=Screen.SPLASH;createVisuals();
@@ -240,8 +243,7 @@ public final class RovekinEntryOverlay {
         openLoginButton.setVisibility(View.GONE); add(overlayPanel,openLoginButton,8);
         add(overlayPanel,button("CONNECT / RETRY",true,()->connect()),18);
         add(overlayPanel,button("EDIT ACCOUNT",false,()->showAiName("")),8);
-        TextView statusFooter=text("Existing Bedrock connection, Realm packs, account and work plans are kept unchanged.",11,MUTED,false);
-        statusFooter.setGravity(Gravity.CENTER);add(overlayPanel,statusFooter,13);
+        // Technical internals remain in the original service and diagnostics; no version/readme clutter.
         if(autoConnect && !a.serviceStarted)connect();
         if(lastStatus!=null)drawRealStatus(lastStatus);
     }
@@ -301,6 +303,7 @@ public final class RovekinEntryOverlay {
                 ||r.optBoolean("spawned",false),
             r.optBoolean("spawned",false),false);
         chat.refresh(actual,RovekinCatalogAdapter.fromLiveCatalog(catalog),liveStatus);
+        chat.setAvatarStatus(r);
     }
     /** Called from the existing MainActivity.update() UI callback. */
     public void onStatus(JSONObject realStatus,String legacyConnectionText){
