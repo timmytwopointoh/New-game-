@@ -4,7 +4,8 @@ import {isForestryReturnCommand} from './survival/forestry-return.js'
 import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
 import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/command-vocabulary.js'
 import {respondToConversation,isConversationQuestion} from './conversation.js'
-import {bundledEnglishWordCount} from './lexicon/lookup.js'
+import {bundledEnglishWordCount,lookupEnglishWord} from './lexicon/lookup.js'
+import {parseStudyWords,studyWordBatch} from './word-study-queue.js'
 import http from 'node:http'
 import crypto from 'node:crypto'
 import {parseCommand} from '../pack-template/scripts/commands.js'
@@ -72,6 +73,33 @@ export function createApi(config,connection,log=console.log){
      catch(e){survival.report('Google explained the task, but nothing ran: '+String(e.message||e).slice(0,190))}
    }).catch(e=>{if(epoch===researchEpoch&&!abort.signal.aborted)survival?.report('Automatic Google research blocked: '+String(e.message||e).slice(0,150))}).finally(()=>{if(googleAbort===abort)googleAbort=null})
    return {accepted:true,queued:true,message:'Researching with Google AI and validating the result against observed Realm terrain. Supported steps will launch automatically; no Activate tap. Stop cancels pending research.'}
+ }
+ function studyWordList(raw,{replyToRealm=false}={}){
+  let words
+  try{words=parseStudyWords(raw)}catch(e){
+   return {accepted:false,queued:false,message:String(e.message||e)}
+  }
+  const survival=connection.survival,scope=survival?.commandVocabulary?.scope,epoch=researchEpoch
+  if(!survival||!scope)return {accepted:false,queued:false,message:'Identify the Realm before saving its words; no game action started.'}
+  if(researching)return {accepted:false,queued:false,message:'A word-study session is already running.'}
+  researching=true
+  const current=()=>epoch===researchEpoch&&survival===connection.survival&&
+   scope===survival.commandVocabulary?.scope
+  studyWordBatch(words,{memory:survival.knowledge,lookupOffline:lookupEnglishWord,
+   lookupOnline:dictionaryResearch.configured()?word=>dictionaryResearch.study(word):null,
+   isCurrent:current}).then(result=>{
+    if(!current()||result.aborted)return
+    const message='I studied '+words.length+' words: '+result.stored+' learned, '+
+     result.cached+' already remembered, '+result.unknown+' unconfirmed, '+
+     result.failed+' unavailable. '+result.online+' needed online dictionary lookup. '+
+     'These meanings are saved privately for this Realm; NO Minecraft task was started.'
+    survival.report(message)
+    if(replyToRealm&&connection.spawned)connection.say(message.slice(0,240))
+  }).catch(e=>{
+    if(current())survival.report('Word study could not finish: '+String(e.message||e).slice(0,100))
+  }).finally(()=>{researching=false})
+  return {accepted:true,queued:true,message:'Studying '+words.length+
+   ' words in the offline glossary, then looking up unknown words only. No Minecraft actions will run.'}
  }
  function studyTerm(word,original=null,{replyToRealm=false}={}){
   const publish=text=>{
@@ -211,6 +239,7 @@ export function createApi(config,connection,log=console.log){
      if(isForestryReturnCommand(text)){pendingInterpretation=null;output=connection.survival.handle(text.replace(/^command\s+/i,''))}
      else if(/^(?:offline knowledge|minecraft knowledge|knowledge status)$/i.test(text))output=offlineMinecraftResponse(text,{world:connection.survival?.world})
      else if((m=text.match(/^(?:research and (?:do|perform|execute)|ask google (?:how to|to)|do research on) (.{3,180})$/i)))output=researchTask(m[1])
+     else if((m=text.match(/^(?:study words|learn these words|look up words) (.{3,180})$/i)))output=studyWordList(m[1],{replyToRealm})
      else if((m=text.match(/^(?:research|look up|learn word|teach me about) ([a-z][a-z-]{1,29})[?.!]?$/i)))output=studyTerm(m[1].trim().toLowerCase(),text,{replyToRealm})
      else if((m=text.match(/^command\s+train\s+(?:word|example)\s+([a-z][a-z -]{2,47})\s*=\s*([a-z_ ]+)$/i))){
       pendingInterpretation=null
