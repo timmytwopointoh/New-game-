@@ -7,6 +7,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -104,6 +105,19 @@ public final class RovekinChatPanel {
         b.setTextColor(primary?INK:PAPER);
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x60d4ffb0),
             rounded(fill,border,15),null));
+        b.setOnTouchListener((view,event)->{
+            switch(event.getActionMasked()){
+                case MotionEvent.ACTION_DOWN:
+                    view.animate().scaleX(.965f).scaleY(.955f).translationY(px(1)).setDuration(95).start();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    view.animate().scaleX(1f).scaleY(1f).translationY(0).setDuration(150).start();
+                    break;
+                default: break;
+            }
+            return false;
+        });
         return b;
     }
 
@@ -127,6 +141,10 @@ public final class RovekinChatPanel {
         heading.addView(label("ROVEKIN",25,PAPER,true));
         audienceText=label("PUBLIC CHAT",11,LIME,true);
         heading.addView(audienceText);
+        if(activity instanceof MainActivity){
+            TextView build=label(((MainActivity)activity).installedBuildLabel().replace("\\n","  •  "),10,FADED,false);
+            heading.addView(build);
+        }
         Button connect=featureButton(RovekinFeatureContract.Feature.START_SERVICE,"CONNECT",false,false);
         header.addView(connect,new LinearLayout.LayoutParams(px(105),px(48)));
         body.addView(header,line(0));
