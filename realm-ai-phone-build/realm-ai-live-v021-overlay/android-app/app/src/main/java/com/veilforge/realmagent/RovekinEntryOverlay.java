@@ -284,7 +284,7 @@ public final class RovekinEntryOverlay {
         if(painting!=null)painting.setAnimated(false);
         frame.setOnClickListener(null);
         frame.removeAllViews(); // transcript still lives in the hidden legacy root.
-        chat=new RovekinChatPanel(a,router,trustedRole);
+        chat=new RovekinChatPanel(a,router,trustedRole,a::reconnectWithDiagnosticZip);
         View chatView=chat.create(a.scroll);
         frame.addView(chatView,new FrameLayout.LayoutParams(-1,-1));
         if(status!=null)refreshChat(status);
