@@ -134,3 +134,5 @@ jobs:
 
 # Regression retry: recovery requires observed transport-close or transport-end,
 # never the idle no-close state after a completed task.
+
+# Re-run exact full Android lifecycle tests after correcting Robolectric teardown.
