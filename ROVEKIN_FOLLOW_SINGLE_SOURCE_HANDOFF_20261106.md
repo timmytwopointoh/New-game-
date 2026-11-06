@@ -34,6 +34,16 @@
 - First-time onboarding retains distinct bot and owner gamertags and a real Microsoft device code. Returning configured users skip the welcome/setup sequence and proceed to live connection; chat opens after **actual** server-confirmed spawn.
 - Owner and developer functionality remains in the original controller and action router. Release entitlement defaults closed; hidden controls must never become public bypasses.
 
+
+## Next live Follow trial from the previous chat (do not hardcode into public defaults)
+
+- Owner's current live test position: **X=162, Y=96, Z=53** in the **Iremder** Realm. This is a test waypoint/goal, not a universal spawn point or production-default home.
+- The bot must **follow the owner or navigate toward this verified position** using its live navigation, player locator and command. Once it actually reaches the owner, store that as the desired home only after the in-game location is confirmed; never announce home saved before the server verifies it.
+- Obstacles/readiness/terrain gaps must **pause and retry**, not silently abandon Follow, disconnect or loop forever. Use bounded replans, dry routing where possible, dirt stairs/bridges only with actual inventory and server block confirmations, and preserve no-water preference.
+- Previous Follow chat said the old chat box did not move the bot, so the command picker was used for testing. The **current** Android `POST /message` backend now invokes `executeOwnerChatAction` from `owner-chat-actions.js` for explicit `follow me` / `find me` / `follow <player>` requests. The new main UI's sole **SEND** button reaches this route through existing `MainActivity.send`. Verify this on the phone; do not claim live walking until observed.
+- Preserve the companion's personality and avoid accidental scaffold-creation loops, spurious stops, fake movement/position, or unsolicited disconnection.
+- Server-confirmed movement toward the owner, home anchor persistence and avatar state truthfulness are still **live acceptance criteria**, not verified successes.
+
 ## Next steps only (do not separately rework older UI or navigation source)
 
 1. Use *this* branch as the sole joint integration starting point for ongoing Follow + Rovekin development; if any newer Follow branch appears, compare and selectively port its verified changes into a **fresh** integration branch or this one after review. Do not cherry-pick an older MainActivity over newer gameplay.
