@@ -306,8 +306,66 @@ public class MainActivity extends Activity {
     void activateQueuedPlans(){planAction("activate-queue",new JSONObject());}
     void updateSettingsStatus(JSONObject verification){if(settingsStatus==null)return;String status="Login identity: Nintendo Switch\nConnection: "+connection.getText();if(verification!=null){String mode=verification.optString("mode","unknown");status+="\nBot mode: "+mode+" · desired: "+verification.optString("desiredMode","survival")+"\n"+verification.optString("reason","");}else if(lastStatus!=null){JSONObject survival=lastStatus.optJSONObject("survival");JSONObject v=survival==null?null:survival.optJSONObject("verification");if(v!=null)status+="\nBot mode: "+v.optString("mode","unknown")+" · "+v.optString("reason","");}settingsStatus.setText(status);}
     void bubble(String who,String body,boolean mine){if(body==null||body.isEmpty())return;LinearLayout row=new LinearLayout(this);row.setGravity(mine?Gravity.RIGHT:Gravity.LEFT);log.addView(row,space(9));
-        LinearLayout panel=vertical();panel.setPadding(d(12),d(9),d(12),d(10));panel.setBackground(shape(mine?0xff265c4d:PANEL));row.addView(panel);
-        /* Visually clean transcript: no VEILFORGE/Progress sender prefixes. */TextView content=txt(body,15,WHITE);content.setTextIsSelectable(true);content.setMaxWidth(getResources().getDisplayMetrics().widthPixels-d(94));panel.addView(content,space(4));scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
+        if(RovekinNetherBubble.isAiSpeaker(who,mine)){
+            // Only the companion's own words bounce out of a short Nether-particle halo.
+            // No sender labels appear in either transcript, and owner bubbles stay plain.
+            row.addView(new RovekinNetherBubble(this,body,getResources().getDisplayMetrics().widthPixels));
+        }else{
+            LinearLayout panel=vertical();panel.setPadding(d(12),d(9),d(12),d(10));
+            panel.setBackground(shape(mine?0xff265c4d:PANEL));row.addView(panel);
+            TextView content=txt(body,15,WHITE);content.setTextIsSelectable(true);
+            content.setMaxWidth(getResources().getDisplayMetrics().widthPixels-d(94));
+            panel.addView(content,space(4));
+        }
+        scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));}
+    long lastRejoinTapAt=0;
+    /**
+     * One user-visible START button: start the local service if stopped,
+     * or rejoin the Realm using the EXISTING Microsoft cache if it is running.
+     * Never clears auth, changes the account or starts duplicate bot processes.
+     */
+    void startOrRejoinBot(){
+        if(!serviceStarted){startBot();return;}
+        final long now=android.os.SystemClock.elapsedRealtime();
+        if(now-lastRejoinTapAt<3500L)return; // no accidental multiple joins
+        lastRejoinTapAt=now;
+        final long revision=serviceRevision;
+        io.submit(()->{
+            try{
+                JSONObject status=request("GET","/status",null);
+                if(status.optBoolean("spawned",false)){
+                    ui.post(()->{if(revision==serviceRevision)bubble("Progress","Already in the Realm. Your companion is ready for commands.",false);});
+                    return;
+                }
+                String phase=status.optString("authState","");
+                if("sign-in-required".equals(phase)||"microsoft-device-code".equals(phase)){
+                    ui.post(()->{if(revision==serviceRevision)bubble("Progress","Microsoft sign-in is pending. Use the code already on the connection screen.",false);});
+                    return;
+                }
+                JSONObject result=request("POST","/rejoin?epoch="+commandEpoch,new JSONObject());
+                ui.post(()->{if(revision!=serviceRevision)return;
+                    bubble("Progress",result.optString("message","Checking the saved Realm login."),false);
+                    update();
+                });
+            }catch(Exception error){
+                // If the service process truly exited, do not leave the
+                // public START button permanently stuck saying "starting".
+                boolean processAlive=embeddedAgentProcessAlive();
+                ui.post(()->{
+                    if(revision!=serviceRevision)return;
+                    if(!processAlive){
+                        serviceStarted=false;serviceStateSince=0;apiConnected=false;
+                        getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();
+                        SupportLog.record(this,"rejoin_dead_service_restart");
+                        startBot();
+                    }else{
+                        bubble("Progress","Bot process is still running; the local connection is unavailable. Checking its status without deleting sign-in.",false);
+                        update();
+                    }
+                });
+            }
+        });
+    }
     void startBot(){if(apiConnected){bubble("Progress","Bot is already connected to the local controller. Use Stop bot service before changing account settings or restarting it.",false);return;}if(serviceStarted){bubble("Progress","Bot service is already starting. Wait for its connection status before trying again.",false);return;}String bot=botField.getText().toString().trim(),owner=ownerField.getText().toString().trim(),name=realmField.getText().toString().trim();
         if(bot.length()<2||owner.length()<2||bot.equalsIgnoreCase(owner)||bot.length()>60||owner.length()>60||name.length()>100){bubble("VEILFORGE","Enter two different, valid Xbox gamertags. A separate player cannot use your own active Minecraft identity.",false);return;}
         try {
