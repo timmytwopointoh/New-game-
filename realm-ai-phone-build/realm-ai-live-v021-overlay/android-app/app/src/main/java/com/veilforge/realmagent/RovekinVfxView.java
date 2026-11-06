@@ -31,6 +31,7 @@ public final class RovekinVfxView extends View {
         setContentDescription("An original emerald robot-skinned block-world player floats near a shimmering purple portal.");
     }
     public void setAnimated(boolean yes){active=yes;if(yes)invalidate();}
+    @Override protected void onDetachedFromWindow(){active=false;super.onDetachedFromWindow();}
     private void fill(int col){p.reset();p.setAntiAlias(true);p.setColor(col);p.setStyle(Paint.Style.FILL);}
     private void box(Canvas c,float x,float y,float w,float h,float radius,int col){
         fill(col);c.drawRoundRect(new RectF(x,y,x+w,y+h),radius,radius,p);
