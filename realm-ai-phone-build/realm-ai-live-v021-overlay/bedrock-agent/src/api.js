@@ -111,6 +111,8 @@ export function createApi(config,connection,log=console.log){
  }
  const message=raw=>{
    if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
+   const companion=connection.survival?.companion?.handle(raw)
+   if(companion)return companion
    if(/^(?:try again|retry blocked|retry task)$/i.test(String(raw).trim())){
      const nav=connection.survival?.navigation
      if(nav?.job?.kind==='follow')return nav.retryBlockedFollow()
