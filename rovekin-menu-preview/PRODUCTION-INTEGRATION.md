@@ -110,4 +110,4 @@ All five production-bound Java classes already declare `package com.veilforge.re
 - Make sure every visible control actually calls its handler; no background artwork may contain printed fake buttons. Any unsupported feature is disabled with a useful reason and still accessible through live catalog when eventually implemented.
 - Do not ship until runtime and emulator tests pass. The current branch is an isolated design/integration candidate, **not** a verified production APK.
 
-**Static verification completed during authoring:** 13/13 inspected method/package/path predicates matched the protected source, and all 30 enum features were found in router case coverage. This is not a Java compiler run, Android build, role-security audit or Realm test.
+**Static verification completed during authoring:** 13/13 inspected method/package/path predicates matched the protected source, and all 31 current feature IDs have router case coverage. All 16 host methods have corresponding Android adapter methods. This is not a Java compiler run, Android build, role-security audit or Realm test.
