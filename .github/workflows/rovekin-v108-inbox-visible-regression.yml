@@ -1,0 +1,40 @@
+name: Rovekin v1.0.8 real inbox UX and safety gate
+on:
+  push:
+    branches: [fix/rovekin-v108-inbox-visible-actions-20261107]
+    paths:
+      - .github/workflows/rovekin-v108-inbox-visible-regression.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/owner-inbox.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-inbox-v108-visible.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inbox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned phone bot dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run end-to-end inbox safety and existing home/permission regression
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/api.js
+          node --check src/survival/owner-inbox.js
+          node --test \
+            tests/rovekin-inbox-v108-visible.test.js \
+            tests/rovekin-inbox-conversation.test.js \
+            tests/rovekin-companion-goals.test.js \
+            tests/rovekin-v107-goal-resume-and-support.test.js \
+            tests/permanent-home-memory.test.js \
+            tests/home-clearance-field.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js \
+            tests/rovekin-session-retention.test.js
