@@ -3,7 +3,7 @@ import {interpretNameUtterance} from './name-intent.js'
 import {isForestryReturnCommand} from './survival/forestry-return.js'
 import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
 import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/command-vocabulary.js'
-import {respondToConversation,isConversationQuestion} from './conversation.js'
+import {respondToConversation,isConversationUtterance} from './conversation.js'
 import {bundledEnglishWordCount} from './lexicon/lookup.js'
 import http from 'node:http'
 import path from 'node:path'
@@ -298,8 +298,12 @@ export function createApi(config,connection,log=console.log){
         output={accepted:false,queued:false,showCatalog:true,message:`I don't recognize “${first}” as an action. What did you mean? Reply with a supported action such as dig, walk, find, follow or look. I’ll remember the correction for this Realm. Nothing has been saved or queued yet.`,plans:plans.snapshot()}
        }else output={accepted:false,queued:false,showCatalog:true,message:e.message+' Choose an option to open its required fields. Nothing was saved or queued.',plans:plans.snapshot()}
       }
-     }else if(isConversationQuestion(text)){
-      const reply=respondToConversation(text,{vocabulary,world:connection.survival?.world,navigation:connection.survival?.navigation})
+     }else if(isConversationUtterance(text)){
+      // Normal chat is never a failed code command. Use known Minecraft
+      // facts and the Realm-scoped conversational context, without touching
+      // the movement/edit interpreter unless a separate command is explicit.
+      const reply=respondToConversation(text,{vocabulary,world:connection.survival?.world,
+       navigation:connection.survival?.navigation,memory:conversation})
       const offline=offlineMinecraftResponse(text,{world:connection.survival?.world})
       let descriptor=null;try{descriptor=parseDescriptor(reply)}catch{}
       const needResearch=typeof reply==='string'&&/I don.t have a reliable answer to that question yet/i.test(reply)
@@ -327,7 +331,7 @@ export function createApi(config,connection,log=console.log){
        else if(route?.kind==='dictionary')output=studyTerm(route.word,route.original,{replyToRealm})
        else if(route?.kind==='needs-ai')output={accepted:false,queued:false,message:unsupportedResearchResponse(),plans:plans.snapshot()}
        else if(direct)output={...direct,plans:plans.snapshot()}
-       else {const reply=respondToConversation(text,{vocabulary});let conversational=null;try{conversational=parseDescriptor(reply)}catch{}if(conversational&&['status','movement','inventory','about','recipe'].includes(conversational.id))output=connection.survival.handle(renderDescriptor(conversational));else output={accepted:true,queued:false,message:reply,plans:plans.snapshot()}}
+       else {const reply=respondToConversation(text,{vocabulary,world:connection.survival?.world,navigation:connection.survival?.navigation,memory:conversation});let conversational=null;try{conversational=parseDescriptor(reply)}catch{}if(conversational&&['status','movement','inventory','about','recipe'].includes(conversational.id))output=connection.survival.handle(renderDescriptor(conversational));else output={accepted:true,queued:false,message:reply,plans:plans.snapshot()}}
       }
      }
     }catch(e){connection.trace?.error(e);output={accepted:false,queued:false,message:'An internal command error was recorded. Export Settings → Bug reports → Export ZIP. '+String(e.message||e).slice(0,100),plans:plans.snapshot()}}
