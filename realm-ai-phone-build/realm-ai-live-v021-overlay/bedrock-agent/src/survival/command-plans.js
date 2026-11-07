@@ -193,7 +193,13 @@ export class CommandPlans{
    if(this.controller.connection?.spawned&&elapsed>1000){this.completeActive('Realm connection and spawn were restored.');return}
    if(elapsed>60000)this.failActive('Realm rejoin was not confirmed; remaining commands stayed queued.');return
   }
-  if(descriptor.id==='look'){if(nav?.survey)return;this.completeActive('360-degree survey finished or was interrupted; inspect scan results before acting.');return}
+  if(descriptor.id==='look'){
+   if(nav?.survey)return
+   if((nav?.lastSurveyConfirmedAt||0)>=this.activeStartedAt)
+    this.completeActive('Observed 360-degree survey completed all twelve steps.')
+   else this.unverifiedActive('Survey inputs stopped without all twelve observed steps; no completion claimed.')
+   return
+  }
   if(['strip_mine','quarry'].includes(descriptor.id)){const task=this.controller.miningJobs;if(task?.active){if(task.active.state==='blocked')this.failActive(task.active.reason);return}if(task?.last?.state==='completed')this.completeActive(task.last.reason);else this.failActive(task?.last?.reason||'Excavation interrupted.');return}
   if(descriptor.id==='gather'){const task=this.controller.acquisition||this.controller.resources;if(task?.active){if(task.active.state==='blocked')this.failActive(task.active.reason);return;}if(task?.last?.state==='completed')this.completeActive(task.last.reason);else this.failActive(task?.last?.reason||'Gathering interrupted.');return}
   if(descriptor.id==='craft'){const ops=this.controller.operations;if(ops?.pending)return;if(ops?.state==='confirmed')this.completeActive(ops.reason);else this.failActive(ops?.reason||'Crafting unconfirmed.');return}
@@ -203,7 +209,7 @@ export class CommandPlans{
    if(['failed','interrupted','unverified'].includes(nav?.pickup?.state)){this.failActive(nav.pickup.reason||'Item pickup not confirmed.');return}
   }
   if(descriptor.id==='dig'){
-   if(nav?.mining?.result==='confirmed'||nav?.state==='confirmed'){this.completeActive(nav.reason||'Server confirmed the block break.');return}
+   if(nav?.mining?.result==='confirmed'){this.completeActive(nav.mining.reason||'Server confirmed the requested block break.');return}
    if(nav?.mining?.result==='cancelled'||['interrupted','stopped','failed'].includes(nav?.state)){this.failActive(nav.reason||'Mining did not complete.');return}
   }else if(['place','build_wall','build_floor','build_shelter'].includes(descriptor.id)){
    if(nav?.building?.state==='confirmed'){this.completeActive(nav.building.reason||'Server confirmed all placements.');return}
@@ -214,11 +220,39 @@ export class CommandPlans{
    if(!nav?.job&&['stopped','blocked','waiting-for-terrain','failed'].includes(nav?.state)){this.failActive(nav.reason||'Movement was blocked or interrupted.');return}
    if(!nav?.job&&elapsed>12000)this.failActive('Movement inputs ended without server confirmation of the destination; remaining queue stayed waiting.')
   }else if(!nav?.job&&descriptor.id!=='rejoin'){
-   this.completeActive(card.result||'Completed.');return
+   this.unverifiedActive('Inputs ended without an authoritative result for '+descriptor.id+'. Not treating task as success.')
+   return
   }
   if(elapsed>180000)this.failActive('Command timed out without server confirmation; remaining queue stayed waiting.')
  }
- completeActive(reason){const card=this.cards.find(c=>c.id===this.running);if(card){this.controller.learning?.record(card.descriptor,'confirmed',reason);card.state='completed';card.result=reason;this.controller.report?.(`Command #${card.id} confirmed complete. Next queued command starts in two seconds.`)}this.running=null;this.persist();this.scheduleNext()}
+ completeActive(reason){
+  const card=this.cards.find(c=>c.id===this.running)
+  if(card){
+   this.controller.learning?.record(card.descriptor,'confirmed',reason)
+   // This is the first production connection between the adaptive model
+   // and actual server-verified outcomes. Never train it on UI acceptance,
+   // a predicted arrival or a mere "request sent" response.
+   const d=card.descriptor,id=d.id,material=d.values?.material||'observed'
+   const proof=id==='dig'||id==='quarry'||id==='strip_mine'?'server-block-update':
+    id==='walk'||id==='clear'?'server-position':
+    ['place','build_wall','build_floor','build_shelter'].includes(id)?'verified-construction-stage':
+    ['collect','gather','craft'].includes(id)?'server-inventory-increase':null
+   if(proof)this.controller.mind?.record(id==='dig'||id==='quarry'||id==='strip_mine'?'mine':id,
+      material,{outcome:'confirmed',evidence:proof})
+   card.state='completed';card.result=reason
+   this.controller.report?.(`Command #${card.id} confirmed complete. Next queued command starts in two seconds.`)
+  }
+  this.running=null;this.persist();this.scheduleNext()
+ }
+ unverifiedActive(reason){
+  const card=this.cards.find(c=>c.id===this.running)
+  if(card){
+   this.controller.learning?.record(card.descriptor,'unverified',reason)
+   card.state='finished-unverified';card.result=reason
+  }
+  this.running=null
+  this.finishBatch('Queue held: '+reason+' Inspect actual Realm state before continuing.')
+ }
  failActive(reason){const card=this.cards.find(c=>c.id===this.running);if(card){this.controller.learning?.record(card.descriptor,'blocked',reason);card.state='blocked';card.result=reason}this.running=null;this.finishBatch(`Queue stopped at #${card?.id||'?'}: ${reason}`)}
  scheduleNext(){if(!this.batch)return;this.persist();if(this.batch.index+1>=this.batch.ids.length){this.finishBatch('All queued commands processed.');return}if(this.batchTimer)clearTimeout(this.batchTimer);this.batchTimer=setTimeout(()=>{this.batchTimer=null;if(this.batch){this.batch.index++;this.launchBatchItem()}},this.batchDelayMs);this.batchTimer.unref?.()}
  finishBatch(message){if(this.batchPoll)clearInterval(this.batchPoll);this.batchPoll=null;if(this.batchTimer)clearTimeout(this.batchTimer);this.batchTimer=null;this.batch=null;this.running=null;this.lastBatchMessage=message;this.controller.report?.(message);this.controller.connection?.emit?.('plan-batch-update',{message});this.persist()}
