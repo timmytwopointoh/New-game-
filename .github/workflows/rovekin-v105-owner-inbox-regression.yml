@@ -1,0 +1,46 @@
+name: Rovekin v1.0.5 inbox, conversation and home liveness gate
+on:
+  push:
+    branches: [fix/rovekin-v105-owner-inbox-home-liveness-20261107]
+    paths:
+      - .github/workflows/rovekin-v105-owner-inbox-regression.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/**
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-inbox-conversation.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/app/src/main/java/com/veilforge/realmagent/**
+permissions:
+  contents: read
+jobs:
+  knowledge-and-consent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned standalone phone Minecraft dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check syntax, safe approvals, language, chat and home regression
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/api.js
+          node --check src/survival/owner-inbox.js
+          node --check src/survival/conversation-memory.js
+          node --check src/survival/construction-guard.js
+          node --test \
+            tests/rovekin-inbox-conversation.test.js \
+            tests/companion-field-trial.test.js \
+            tests/permanent-home-memory.test.js \
+            tests/new-home-gift-field.test.js \
+            tests/home-architecture-field.test.js \
+            tests/home-clearance-field.test.js \
+            tests/owner-chat-action-handoff.test.js \
+            tests/rovekin-session-retention.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js \
+            tests/traversal-respawn.test.js \
+            tests/companion-world-policy.test.js \
+            tests/minecraft-goal-knowledge.test.js \
+            tests/minecraft-mob-knowledge.test.js
