@@ -1,0 +1,63 @@
+name: Rovekin real on-phone neural model native llama.cpp ARM64 build
+on:
+  push:
+    branches: [feat/rovekin-v112-native-offline-llm-20261107]
+    paths: [.github/workflows/rovekin-v112-llama-arm64.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android NDK and Ninja
+        run: |
+          set -euo pipefail
+          if [ ! -s "$ANDROID_HOME/ndk/27.2.12479018/build/cmake/android.toolchain.cmake" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.2.12479018' || true
+          fi
+          test -s "$ANDROID_HOME/ndk/27.2.12479018/build/cmake/android.toolchain.cmake"
+          cmake --version
+          ninja --version
+      - name: Build pinned source as real Android ARM64 llama-server
+        run: |
+          set -euo pipefail
+          mkdir llama-src
+          cd llama-src
+          git init -q
+          git remote add origin https://github.com/ggml-org/llama.cpp.git
+          git fetch --depth=1 origin e95426f16982054c379ca7bdc8186996dd22f0fe
+          git checkout -q --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = e95426f16982054c379ca7bdc8186996dd22f0fe
+          cmake -S . -B build-arm64 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/27.2.12479018/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DGGML_LLAMAFILE=OFF \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF \
+            -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_TESTS=OFF -DGGML_VULKAN=OFF \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build build-arm64 --target llama-server --parallel 4
+          test -s build-arm64/bin/llama-server
+          readelf -h build-arm64/bin/llama-server | grep -q 'AArch64'
+      - name: Stage genuine executables and linked libraries
+        run: |
+          set -euo pipefail
+          mkdir -p native-arm64
+          cp llama-src/build-arm64/bin/llama-server native-arm64/librovekin_llama_server.so
+          chmod 755 native-arm64/librovekin_llama_server.so
+          for f in llama-src/build-arm64/bin/lib*.so; do
+            cp -L "$f" native-arm64/
+          done
+          test -s native-arm64/libllama.so
+          test -s native-arm64/libggml.so
+          file native-arm64/*
+          readelf -d native-arm64/librovekin_llama_server.so | grep NEEDED
+          (cd native-arm64 && sha256sum *.so > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rovekin-llama-android-arm64-e95426f
+          path: native-arm64/
+          if-no-files-found: error
+          retention-days: 30
