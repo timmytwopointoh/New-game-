@@ -2,6 +2,7 @@
 // tokens can change the Realm. A saved question/annotation is NOT a permit.
 // A stale/reconnected request is never replayed as an action.
 import crypto from 'node:crypto'
+import {resolveActionTarget} from './command-vocabulary.js'
 const idFor=(type,scope,code,extra='')=>type+'-'+crypto.createHash('sha256').update([scope,code,extra].join('|')).digest('hex').slice(0,16)
 const text=s=>String(s||'').replace(/[\x00-\x1f\x7f]/g,' ').replace(/\s+/g,' ').trim().slice(0,240)
 export class OwnerInbox{
@@ -59,8 +60,18 @@ export class OwnerInbox{
    const note=text(explanation)
    if(note.length<2)return {accepted:false,queued:false,message:'Write a short explanation before sending.'}
    this.lastNotes.push({id,at:now,explanation:note});this.lastNotes=this.lastNotes.slice(-12)
-   // An explanation is context, NEVER an approval, an edit grant or free-form
-   // command injection. The matching permit remains pending until its TTL.
+   // A bounded, recognized action clarification goes through the existing
+   // owner-teaching flow, which prepares a card but never activates it.
+   const interpretation=this.interpretation()
+   const safeTarget=active.kind==='clarification'&&interpretation?.kind==='unknown-action'?
+     resolveActionTarget(note):null
+   if(safeTarget){
+    const result=this.dispatch(safeTarget)
+    return {...result,message:'Understood: '+String(result?.message||'The action was explained.')+
+      ' The correction was not permission to edit the world.',inbox:this.snapshot(now)}
+   }
+   // Free-form explanations are memory/context, NEVER grants or arbitrary
+   // executable code. The original permission remains pending until its TTL.
    return {accepted:true,queued:false,message:'I received your explanation for “'+active.title+'”. No edit permission was granted. You can still Approve or Deny.',inbox:this.snapshot(now)}
   }
   let result
