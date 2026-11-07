@@ -5,6 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import {companionPriorities} from './companion-priorities.js'
 const MAX_GOALS=16
 const statuses=new Set(['requested','working','blocked','waiting-owner','interrupted','shell-verified','completed','cancelled'])
 const categories=new Set(['home','follow','movement','materials','build','craft','explore','other'])
@@ -13,8 +14,9 @@ const sensitive=/\b(?:password|passcode|login|auth(?:entication)? token|access t
 export function classifyCompanionGoal(raw){
  const s=safeText(raw,180).toLowerCase().replace(/[.!?]+$/,'').replace(/^(?:hey rovekin |rovekin |please |can you |could you )/,'')
  if(!s||sensitive.test(s))return null
- if(/^(?:this is your (?:new )?home spot|give you (?:a )?home|design (?:your )?home|build (?:your |the )?home|start building (?:your |the )?home|resume (?:home|building home|house work)|go (?:back )?home|return home|head home|home field (?:test|trial))\b/.test(s))return 'home'
+ if(/^(?:this is your (?:new )?home spot|give you (?:a )?home|design (?:your )?home|build (?:your |the )?home|start building (?:your |the )?home|resume (?:home|building home|house work)|home field (?:test|trial))\b/.test(s))return 'home'
  if(/^(?:follow(?: me)?|come (?:to|with) me|find me|come here|walk to me)\b/.test(s))return 'follow'
+ if(/^(?:go (?:back )?home|return home|head home)\b/.test(s))return 'movement'
  if(/^(?:walk|go to|travel|move to|navigate|climb)\b/.test(s))return 'movement'
  if(/^(?:get|gather|collect|mine|dig|chop|harvest|quarry|strip|fetch|find and mine)\b/.test(s))return 'materials'
  if(/^(?:build|place|make a (?:house|shelter|wall|floor)|construct)\b/.test(s))return 'build'
@@ -22,7 +24,8 @@ export function classifyCompanionGoal(raw){
  if(/^(?:roam|explore|scout|survey|search the area)\b/.test(s))return 'explore'
  return null
 }
-const validGoal=g=>g&&typeof g.id==='string'&&/^[a-f0-9]{16}$/.test(g.id)&&categories.has(g.category)&&statuses.has(g.status)&&typeof g.intent==='string'&&g.intent.length<=180&&Number.isSafeInteger(g.at)&&Number.isSafeInteger(g.updatedAt)&&typeof g.detail==='string'&&g.detail.length<=180
+const validGoal=g=>g&&typeof g.id==='string'&&/^[a-f0-9]{16}$/.test(g.id)&&categories.has(g.category)&&statuses.has(g.status)&&typeof g.intent==='string'&&g.intent.length<=180&&Number.isSafeInteger(g.at)&&Number.isSafeInteger(g.updatedAt)&&typeof g.detail==='string'&&g.detail.length<=180&&
+ (g.note===undefined||(typeof g.note==='string'&&g.note.length<=150))
 export class CompanionGoalJournal{
  constructor({directory=null,scope=null}={}){
   this.directory=directory;this.scope=null;this.file=null;this.goals=[];this.error='';this.readOnly=false;this.counter=0
@@ -97,7 +100,9 @@ export class CompanionGoalJournal{
    const count=home.plan?.placementsVerified||0
    const detail='Home stage '+stage+(steps?'/'+steps:'')+
      ', '+count+' blocks server-verified. '+safeText(home.reason,90)
-   if(home.state==='running')this.transition('working',detail,now,{progress:count})
+   if(home.proximityReview||home.review||home.pending)
+    this.transition('waiting-owner','An exact home-stage permission is waiting in the envelope. No protected edit was sent.',now,{progress:count})
+   else if(home.state==='running')this.transition('working',detail,now,{progress:count})
    else if(home.state==='paused'){
     if(!survival.companion?.homeMemory?.record?.autoResume)
      this.transition('interrupted','Home is saved and on an owner hold. Say resume home if you want to continue.',now,{progress:count})
@@ -142,11 +147,16 @@ export class CompanionGoalJournal{
  answer(raw,{survival=null,spawned=false}={}){
   const t=safeText(raw).toLowerCase().replace(/[.!?]+$/,'')
   const status=/^(?:what (?:are|were) you (?:working on|doing)|what (?:were|are) we (?:doing|working on)|what was (?:my|our) last (?:task|goal|command)|what's your (?:current|last) goal|current goal|goal status|my goals|task journal|what happened to (?:the|my|our) (?:last )?(?:task|goal)|what stopped you|why did you stop|do you still remember my task)$/.test(t)
-  const help=/^(?:what do you need from me|how can i help you|do you need (?:help|anything)|what should we do next|what's next|why are you waiting)$/.test(t)
+  const help=/^(?:what do you need from me|how can i help you|do you need (?:help|anything)|what should (?:we|i) do next|what's next|why are you waiting|any suggestions|what would help|what are your priorities)$/.test(t)
   if(!status&&!help)return null
   const g=this.latest()
+  const priorities=companionPriorities({survival,spawned})
+  const advice=priorities.length?' My top observed priority is: '+priorities[0].title+'. '+priorities[0].why+
+   ' Suggested next step: '+priorities[0].suggestedOwnerRequest:''
   if(!g)return {accepted:true,queued:false,message:
-   'I have no remembered active task for this Realm. You can ask me to Follow, collect materials, or give me one permanent home. I will not invent completed work.'}
+   'I have no remembered active task for this Realm. I will not invent completed work.'+(help?advice:
+   ' You can ask me to follow, collect materials, or give me one permanent home.'),
+   priorities:help?priorities:undefined}
   this.observe({survival,spawned})
   const current=this.latest()
   const currentText='Your last '+current.category+' goal was “'+current.intent+'”. Status: '+current.status+
@@ -158,11 +168,11 @@ export class CompanionGoalJournal{
    else if(current.status==='working')next=' I am attempting it now; server-confirmed progress is shown separately.'
    else if(current.category==='home')next=' You can request home status, or explicitly say resume home after checking the plot.'
   }
-  return {accepted:true,queued:false,message:currentText+next,goal:{...current}}
+  return {accepted:true,queued:false,message:currentText+next+(help?advice:''),goal:{...current},priorities:help?priorities:undefined}
  }
  helpPrompt({spawned=false}={},now=Date.now()){
   const g=this.latest()
-  if(!spawned||!g||!['blocked','waiting-owner'].includes(g.status)||g.ackVersion===g.helpVersion)return null
+  if(!spawned||!g||g.status!=='blocked'||g.ackVersion===g.helpVersion)return null
   if(!g.helpVersion||now-g.updatedAt>1800000)return null
   return {id:'guidance-'+g.id+'-'+g.helpVersion,kind:'guidance',category:'Help',
    title:g.category==='home'?'Home work needs your help':'I need a little help',
