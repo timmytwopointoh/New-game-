@@ -62,7 +62,7 @@ function conversationalContext(raw,{world=null,navigation=null,memory=null}={}){
   if(/answ|respond/.test(s))return 'I was giving generic acknowledgments instead of answering your question. I can now discuss what you said, answer grounded Realm and Minecraft questions, or say specifically what I cannot verify. Which question did I miss?'
   return 'I hear you. My navigation reports '+state+'. '+(reason||'There is no verified active route at the moment.')+' I will not fake a walk; ask "why are you stuck?" for the exact movement gate.'
  }
- if(/^(?:can you (?:hear|read|understand) me|do you understand me|can we talk|can you talk|are you listening|do you actually understand|why do you sound like a robot)[?.!]*$/.test(s))
+ if(/^(?:can you (?:hear|read|understand) me|do you understand me|can we talk|can you talk|are you listening|are you there|do you actually understand|why do you sound like a robot)[?.!]*$/.test(s))
   return 'Yes, I received your text. I can have a limited offline conversation, remember recent Realm messages, and answer questions from actual Minecraft data. I am not a full neural language model, so I will ask when I cannot work out a meaning.'
  if(/^(?:what (?:do you think|are your thoughts)(?: about| of)?|how do you feel about) (.{2,90})[?.!]*$/.test(s)){
   const topic=s.match(/^(?:what (?:do you think|are your thoughts)(?: about| of)?|how do you feel about) (.{2,90})[?.!]*$/)?.[1]
