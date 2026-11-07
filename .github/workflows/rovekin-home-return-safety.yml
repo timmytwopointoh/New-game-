@@ -1,0 +1,43 @@
+name: Rovekin home-return and owner-follow safety checks
+on:
+  push:
+    branches:
+      - fix/rovekin-v103-live-home-follow-20261106
+    paths:
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/companion-field-trial.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/companion-commands.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/home-project.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/companion-field-trial.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/permanent-home-memory.test.js
+      - .github/workflows/rovekin-home-return-safety.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  home-and-movement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Restore pinned local Bedrock agent dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check home return, real owner approach, building safety and movement
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/survival/companion-field-trial.js
+          node --check src/survival/companion-commands.js
+          node --check src/survival/home-project.js
+          node --test \
+            tests/companion-field-trial.test.js \
+            tests/live-follow-home-anchor.test.js \
+            tests/permanent-home-memory.test.js \
+            tests/new-home-gift-field.test.js \
+            tests/follow-readiness-queue.test.js \
+            tests/clearance-follow.test.js \
+            tests/home-clearance-field.test.js \
+            tests/rovekin-session-retention.test.js
