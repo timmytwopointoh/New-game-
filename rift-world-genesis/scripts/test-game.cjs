@@ -21,7 +21,7 @@ function harness(initialStore={}){
  const nodes={};for(const m of html.matchAll(/id="([^"]+)"/g))nodes[m[1]]=node(m[1]);
  const document={getElementById:id=>nodes[id],hidden:false};
  let now=0;
- const sandbox={console,document,innerWidth:1120,innerHeight:650,devicePixelRatio:1,requestAnimationFrame:fn=>raf.push(fn),addEventListener:()=>{},localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=v},Math,JSON,performance:{now:()=>now}};
+ const sandbox={console,document,innerWidth:1120,innerHeight:650,devicePixelRatio:1,location:{search:''},requestAnimationFrame:fn=>raf.push(fn),addEventListener:()=>{},localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=v},Math,JSON,performance:{now:()=>now}};
  sandbox.window=sandbox;sandbox.window.AudioContext=class { constructor(){this.currentTime=0;this.state='running';this.destination={}}createOscillator(){return {type:'',frequency:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},start(){},stop(){}}}createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}}}resume(){}};
  vm.runInNewContext(js,sandbox,{timeout:4000,filename:'game.js'});
  function tick(n=1){for(let i=0;i<n;i++){const fn=raf.shift();assert(fn,'animation loop missing');now+=16.67;fn(now)}}

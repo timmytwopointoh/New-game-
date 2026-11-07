@@ -217,5 +217,5 @@ function drawMap(){let cv=$('miniMap'),k=cv.getContext('2d'),w=cv.width,h=cv.hei
 function frame(time){if(!last)last=time;let dt=Math.min(.045,(time-last)/1000);last=time;clock+=dt;try{update(dt);if(scene==='menu'||scene==='help'){drawMenuBackdrop()}else if(state){drawScene()}}catch(err){if(!frame.logged){frame.logged=true;console.error('RIFTCORE_RENDER_ERROR',err)}}requestAnimationFrame(frame)}
 addEventListener('pagehide',save);addEventListener('visibilitychange',()=>{if(document.hidden&&scene==='game')save()});
 window.RiftGame={back,save,version:'0.1.0-genesis-alpha',debug:()=>({scene,level:state?.p?.level,closed:state?.closed?.length,kills:state?.kills,enemies:enemies.length,arena:!!arena})};
-mainMenu();console.log('RIFTCORE_MENU_READY');requestAnimationFrame(frame);
+if(location.search.includes('preview=world'))start(true);else mainMenu();console.log('RIFTCORE_MENU_READY');requestAnimationFrame(frame);
 })();

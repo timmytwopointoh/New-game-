@@ -38,7 +38,8 @@ public final class MainActivity extends Activity {
         });
         world.setWebViewClient(new WebViewClient());
         setContentView(world);
-        world.loadUrl("file:///android_asset/index.html");
+        String preview = getIntent().getStringExtra("rift_preview_mode");
+        world.loadUrl("file:///android_asset/index.html" + ("world".equals(preview) ? "?preview=world" : ""));
     }
     @Override protected void onPause() { if (world != null) world.onPause(); super.onPause(); }
     @Override protected void onResume() { super.onResume(); if (world != null) world.onResume(); }
