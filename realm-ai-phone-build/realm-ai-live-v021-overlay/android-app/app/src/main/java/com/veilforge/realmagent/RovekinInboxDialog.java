@@ -58,6 +58,27 @@ public final class RovekinInboxDialog {
                 .setPositiveButton("OK",null).show());}
         });
     }
+    private static void sendSafeDemo(MainActivity a,AlertDialog current){
+        if(a.token==null||a.token.isEmpty()||!a.serviceStarted)return;
+        a.io.submit(()->{
+            try{
+                JSONObject result=a.request("POST","/inbox/demo",new JSONObject());
+                a.ui.post(()->{
+                    if(current!=null&&current.isShowing())current.dismiss();
+                    if(!result.optBoolean("accepted",false)){
+                        new AlertDialog.Builder(a).setTitle("Practice inbox")
+                            .setMessage(result.optString("message","The controller did not create a test."))
+                            .setPositiveButton("OK",null).show();
+                        return;
+                    }
+                    show(a);
+                });
+            }catch(Exception e){a.ui.post(()->new AlertDialog.Builder(a)
+                .setTitle("Inbox test unavailable")
+                .setMessage("The on-phone controller is not responding. No game commands were sent.")
+                .setPositiveButton("OK",null).show());}
+        });
+    }
     private static void submit(MainActivity a,String id,String decision,String explanation,Integer choice,AlertDialog current){
         if(id==null||id.length()>80)return;
         final long epoch=a.commandEpoch;
@@ -90,13 +111,15 @@ public final class RovekinInboxDialog {
         content.setBackground(shape(a,0xff0a2b20,0xff4d8a64,16));
         scroll.addView(content);
         add(content,label(a,"✉  "+count+" waiting",20,LIME,true),0,a);
-        add(content,label(a,"RoveKin can ask about a task, an unfamiliar word or specific permission. A help request never starts a task or grants mining/building permission.",13,DIM,false),7,a);
+        add(content,label(a,"A question is a request for YOUR response. Answering a practice card never changes the Minecraft world.",13,DIM,false),7,a);
         final AlertDialog dialog=new AlertDialog.Builder(a)
             .setTitle("RoveKin • Questions & Permissions")
             .setView(scroll).setNegativeButton("Close",null).create();
+        add(content,button(a,"✉  SEND A SAFE TEST MESSAGE",false,()->sendSafeDemo(a,dialog)),11,a);
+        add(content,label(a,"Try this first: create a sample question, see the number appear, open it and answer. It requires only the local controller—not a Realm build permission.",12,DIM,false),5,a);
         if(count==0){
             add(content,label(a,"All caught up! RoveKin has no active questions right now.",16,PAPER,false),20,a);
-            add(content,label(a,"He will ask here when he needs a specific build clearance, a corrected word, or a choice between meanings.",13,DIM,false),9,a);
+            add(content,label(a,"Real permissions are short-lived for safety. If one expires, ask RoveKin to retry that exact step rather than approving an old code.",13,DIM,false),9,a);
         }
         for(int i=0;i<count;i++){
             JSONObject item=requests.optJSONObject(i);if(item==null)continue;
@@ -122,6 +145,14 @@ public final class RovekinInboxDialog {
                     add(card,button(a,(j+1)+". "+option,false,()->submit(a,id,"choose",null,index,dialog)),5,a);
                 }
                 add(card,button(a,"✕ No, none of these",false,()->submit(a,id,"deny",null,null,dialog)),7,a);
+            }else if("demo".equals(kind)){
+                LinearLayout row=new LinearLayout(a);row.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams yes=new LinearLayout.LayoutParams(0,dp(a,49),1);
+                yes.rightMargin=dp(a,7);
+                row.addView(button(a,"✓ Got it",true,()->submit(a,id,"approve",null,null,dialog)),yes);
+                row.addView(button(a,"✕ No",false,()->submit(a,id,"deny",null,null,dialog)),
+                    new LinearLayout.LayoutParams(0,dp(a,49),1));
+                add(card,row,11,a);
             }else if("guidance".equals(kind)){
                 // Help is not permission: these buttons only acknowledge
                 // or dismiss the question. A retry requires a new command.
@@ -158,6 +189,18 @@ public final class RovekinInboxDialog {
                 }
                 submit(a,id,"explain",note,null,dialog);
             }),7,a);
+        }
+        JSONArray recent=inbox==null?null:inbox.optJSONArray("recent");
+        if(recent!=null&&recent.length()>0){
+            add(content,label(a,"RECENTLY MISSED OR FINISHED",12,LIME,true),17,a);
+            for(int i=0;i<recent.length();i++){
+                JSONObject notice=recent.optJSONObject(i);if(notice==null)continue;
+                String status=notice.optString("status","no-longer-active");
+                String headline=notice.optString("title","Question")+
+                    ("expired".equals(status)?"  ·  Expired":"  ·  No longer active");
+                add(content,label(a,headline,13,PAPER,false),7,a);
+            }
+            add(content,label(a,"These are history only. They cannot grant permission. Ask RoveKin to repeat a specific question if needed.",12,DIM,false),8,a);
         }
         dialog.show();
         if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-2);
