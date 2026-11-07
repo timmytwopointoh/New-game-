@@ -120,6 +120,11 @@ export class Connection extends EventEmitter {
     movementLastWorkMs:Math.max(0,Math.min(60000,n.lastWorkDurationMs||0)),
     movementPeakWorkMs:Math.max(0,Math.min(60000,n.maxWorkDurationMs||0)),
     movementScheduleGapMs:Math.max(0,Math.min(60000,n.lastSchedulingGapMs||0)),
+    // Safe timing only, never player identity or private coordinates.
+    movementLandingPending:!!n.pendingServerLanding,
+    movementLandingAgeMs:n.pendingServerLanding?Math.max(0,Math.min(60000,Date.now()-n.pendingServerLanding.started)):0,
+    movementLastJumpAgeMs:n.lastJumpAt?Math.max(0,Math.min(60000,Date.now()-n.lastJumpAt)):null,
+    movementServerPoseAgeMs:n.lastPoseAt?Math.max(0,Math.min(60000,Date.now()-n.lastPoseAt)):null,
     homeWorkState:['running','paused','restoring','furnishing','owner-paused'].includes(this.survival?.companion?.homeProject?.state)?
       this.survival.companion.homeProject.state:'other'}
   }
