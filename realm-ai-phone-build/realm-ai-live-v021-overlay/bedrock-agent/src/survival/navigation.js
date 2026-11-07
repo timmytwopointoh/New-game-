@@ -483,7 +483,7 @@ export class Navigation{
   this.pendingServerLanding=null
   const goal=hold.goal,start=w.standPosition?.()
   if(!goal||!start){this.route=null;this.state='blocked';this.reason='Landing confirmed, but route must be reobserved.';return}
-  const plan=this.routeTo(goal,start,{allowSteps:true,allowDirt:this.job?.kind==='follow'})
+  const plan=this.routeTo(goal,start,{allowSteps:true,allowDirt:true})
   if(plan.ok){this.progress.reset();this.assignRoute(plan);this.state='walking';this.reason='Server confirmed stable landing; resuming observed dry route.'}
   else{this.route=null;this.state='blocked';this.reason='Landing confirmed but route is not safe: '+String(plan.reason||'unobserved');this.report(this.reason)}
  }
