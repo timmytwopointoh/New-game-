@@ -102,7 +102,7 @@ export class CompanionCommands {
   }
   if(isHomeFieldTestCommand(s))return this.homeMemory.hasHome?
    {accepted:true,queued:false,message:'My home is already permanently assigned at '+Object.values(this.plot.center).join(', ')+'. I will not move it.'}:
-   this.fieldTrial.start()
+   this.fieldTrial.start(Date.now(),{ownerPositionHome:! /^(?:start|run|try) (?:the |a )?(?:home )?field (?:test|trial)$/.test(s)})
   if(this.edits.pending&&/^(?:yes|no|cancel edit|confirm edit \d{6})$/.test(s))
    return this.edits.confirm(s,this.editScope(),this.c.world)
   if(/^confirm home proximity \d{6}$/.test(s)||s==='cancel home proximity')
@@ -147,7 +147,8 @@ export class CompanionCommands {
    let plot,decision
    try{
     plot=grantPlot(this.c.world,connection.config?.ownerPlayerNames||[],undefined,
-     this.fieldTrial.state==='granting-home'?{centerOverride:this.fieldTrial.homeAnchor}:{} )
+     this.fieldTrial.state==='granting-home'&&!this.fieldTrial.ownerPositionHome?
+      {centerOverride:this.fieldTrial.homeAnchor}:{} )
     decision=decideFirstHome(this.c.world,plot,{
      serverTime:this.homeRoutine.serverTime,serverTimeAt:this.homeRoutine.serverTimeAt,mind:this.c.mind||null
     })
