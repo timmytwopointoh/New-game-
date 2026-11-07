@@ -484,6 +484,13 @@ export function createApi(config,connection,log=console.log){
        return send(200,{...plans.activateSubset(ids),research:{planned:result.commands.length,warnings:result.warnings}})
      }catch(e){return send(400,{accepted:false,message:'Research plan not executed: '+String(e.message||e).slice(0,220)})}
    }
+   // Safe local inbox walkthrough. Creates a visual question only and never
+   // calls the movement/edit interpreter, even when the Realm is not ready.
+   if(req.method==='POST'&&pathname==='/inbox/demo'){
+    let size=0
+    for await(const part of req){size+=part.length;if(size>256)return send(413,{accepted:false,message:'Request too long.'})}
+    return send(200,inbox.createDemo())
+   }
    if(req.method==='POST'&&pathname==='/inbox/respond'){
      let body=''
      try{
