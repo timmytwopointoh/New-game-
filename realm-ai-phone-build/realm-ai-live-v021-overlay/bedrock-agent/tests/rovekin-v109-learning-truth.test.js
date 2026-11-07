@@ -104,6 +104,19 @@ test('repeated harvest of one trunk does not count as multiple tree checkpoints'
  assert.equal(r.agent.snapshot().checkpointAt.length,1)
  assert.equal(r.agent.snapshot().checkpointAt[0].confirmed,false)
 })
+test('new Realm persona survives reconnect even before the first trained action',t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'rovekin-new-persona-'))
+ t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
+ const first=new CompanionMind({directory:dir,scope:'my-realm'})
+ const persona=first.snapshot().independentPersona
+ assert.equal(first.snapshot().decisions,0)
+ assert(fs.readdirSync(dir).length>0,'new Realm profile is saved immediately')
+ const second=new CompanionMind({directory:dir,scope:'my-realm'})
+ assert.equal(second.snapshot().independentPersona,persona)
+ first.setScope('my-realm')
+ assert.equal(first.snapshot().independentPersona,persona)
+})
+
 test('adaptive experience persists privately per Realm after actual evidence, and helps choose later',t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'rovekin-v109-'))
  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
