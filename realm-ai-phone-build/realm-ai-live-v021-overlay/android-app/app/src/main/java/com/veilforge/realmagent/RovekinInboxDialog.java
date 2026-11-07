@@ -121,6 +121,7 @@ public final class RovekinInboxDialog {
                     String option=choices.optString(j,"Option "+(j+1));
                     add(card,button(a,(j+1)+". "+option,false,()->submit(a,id,"choose",null,index,dialog)),5,a);
                 }
+                add(card,button(a,"✕ No, none of these",false,()->submit(a,id,"deny",null,null,dialog)),7,a);
             }else if(!"clarification".equals(kind)||item.optBoolean("approvalRequired",false)){
                 LinearLayout row=new LinearLayout(a);row.setGravity(Gravity.CENTER_VERTICAL);
                 LinearLayout.LayoutParams yes=new LinearLayout.LayoutParams(0,dp(a,49),1);
