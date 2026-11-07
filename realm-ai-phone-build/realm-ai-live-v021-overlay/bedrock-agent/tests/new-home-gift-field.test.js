@@ -152,3 +152,24 @@ test('six digit home proximity confirmation reaches real guarded builder',()=>{
  assert.equal(p.proximityApproval.stage,p.stage)
  assert.equal(f.companion.handle('confirm home proximity 737015').accepted,false,'approval is one-shot')
 })
+
+
+test('natural home questions and go-home command never move the first saved home or resume a STOP',()=>{
+ const f=fixture()
+ assert.equal(f.companion.handle('go home').accepted,false)
+ assert.equal(f.companion.handle('this is your new home spot').accepted,true)
+ const center={...f.companion.plot.center}
+ f.companion.manualStop()
+ assert.equal(f.companion.homeMemory.record.autoResume,false)
+ const status=f.companion.handle('where is your home')
+ assert.equal(status.accepted,true)
+ assert.deepEqual(status.permanentHome.center,center)
+ const result=f.companion.handle('go home')
+ assert.equal(result.accepted,true,result.message)
+ assert.equal(f.companion.homeProject.returnHomeOnly,true)
+ assert.equal(f.companion.homeProject.state,'paused')
+ assert.equal(f.companion.homeMemory.record.autoResume,false)
+ f.companion.manualStop()
+ assert.equal(f.companion.homeProject.returnHomeOnly,false)
+ assert.deepEqual(f.companion.plot.center,center)
+})
