@@ -125,7 +125,21 @@ export class SurvivalController{
   if(m){const pos={x:Number(m[1]),y:Number(m[2]),z:Number(m[3])};return this.companion.mine(pos,()=>this.navigation.mine(pos))}
   m=s.match(/^clear path to (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
   if(m)return this.navigation.walk({x:Number(m[1]),y:Number(m[2]),z:Number(m[3])},{allowMining:true})
-  if(s==='movement status'||s==='why are you stuck'){const n=this.navigation.snapshot(),f=n.physics,a=this.world.abilityState;return answer(`${n.mode}: ${n.state}. ${n.reason} Ground contact: ${f.grounded}; terrain known: ${f.terrainKnown}; server grounded: ${f.serverGrounded??'unreported'}; active flight: ${a?.known?!!a.effective.flying:'unverified'}; loading: ${f.loading}; flight recovery: ${this.verification.flightRecovery.state}. ${this.navigation.movementBlock()||'Ready to walk.'} Server feedback: ${n.progress.feedback}.`,{navigation:n,verification:this.verification.snapshot()})}
+   if(s==='movement status'||s==='why are you stuck'){
+    const n=this.navigation.snapshot(),f=n.physics,a=this.world.abilityState
+    const diagnostic=this.connection.movementProbe?.()||{}
+    const status=diagnostic.movementGate||'unknown',ability=diagnostic.movementAbilityStatus||'unknown'
+    const explanation=status==='abilities-unknown'?
+      ability==='no-own-ability-packet'?'The Realm has not delivered this player’s own ability update. I must not guess permission to move. Rejoining may prompt a fresh authenticated ability update.':
+      ability==='other-player-only'?'Ability updates reached the phone, but none verified this bot player. Other players’ rights do not authorize my movement.':
+      'The server ability update did not include a recognized base layer; movement stays paused.':
+      status==='navigation-loop-not-running'?'The movement loop is detached. A new Follow command can attempt a safe reattachment if server movement checks pass.':
+      status==='probe-error'?'The readiness diagnostic failed while checking '+(diagnostic.movementProbeStage||'unknown')+'. Please export a new one-ZIP report.':
+      status==='ready'&&!this.navigation.job&&!this.navigation.pendingFollow?'I am physically ready but have no active movement job. Give Follow me or a destination; I will not silently replay old commands.':''
+    return answer(`Movement: ${n.mode}, ${n.state}. ${n.reason} Gate: ${status}; ability evidence: ${ability}; terrain: ${f.terrainKnown}; grounded: ${f.grounded}; navigation timer: ${diagnostic.movementLoopRunning===true?'active':'inactive'}. ${explanation} ${this.navigation.movementBlock()||'Physical movement checks passed.'}`,
+     {movementReadiness:{gate:status,abilityStatus:ability,probeStage:diagnostic.movementProbeStage,
+      ownAbilityReports:diagnostic.movementOwnAbilityReportsSeen||0},navigation:n,verification:this.verification.snapshot()})
+   }
   m=s.match(/^(?:route|walk|go|move|head) to (-?\d+)[, ]+(-?\d+)[, ]+(-?\d+)$/)
   if(m){const goal={x:Number(m[1]),y:Number(m[2]),z:Number(m[3])};if(s.startsWith('route')){const p=this.navigation.routeTo(goal);return answer(p.ok?`Route found: ${p.path.length-1} walking/jumping steps. Say “walk to ${goal.x} ${goal.y} ${goal.z}” to move.`:p.reason,{route:p.ok?p.path:[]})}return this.navigation.walk(goal)}
   m=s.match(/^(?:find|locate|look for) (.+)$/)
