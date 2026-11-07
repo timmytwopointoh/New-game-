@@ -39,6 +39,6 @@ app.listen(config.localAPI.port,'127.0.0.1',()=>{
   log('Device-only controller started. The Microsoft sign-in code is shown inside the app if needed.')
   try{bot.start();save()}catch(e){bot.lastError=String(e.message||e);bot.lastFailure=classifyConnectionFailure(e,bot.lastPhase);save();log('Realm client start failed: '+bot.lastError)}
 })
-function shutdown(){followPatchStream.stop();clearInterval(diagnosticTimer);save();controller.stop();bot.close();app.close()}
+function shutdown(){followPatchStream.stop();clearInterval(diagnosticTimer);save();app.controller?.brain?.stop();controller.stop();bot.close();app.close()}
 process.on('SIGTERM',shutdown)
 process.on('SIGINT',shutdown)
