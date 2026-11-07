@@ -336,7 +336,7 @@ export class Navigation{
   if(survey.step>=12){
    this.yaw=survey.startYaw;const names=[...survey.counts].sort((a,b)=>b[1]-a[1]).slice(0,8)
    this.report('360-degree scan finished: '+(names.map(([name,count])=>name+' x'+count).join(', ')||'no exposed blocks were verifiable')+'. Hidden blocks were excluded; this is observed terrain, not an x-ray.')
-   this.survey=null;this.onSurveyFinished?.();return
+   this.lastSurveyConfirmedAt=now;this.survey=null;this.onSurveyFinished?.();return
   }
   this.yaw=(survey.startYaw+survey.step*30)%360
   const sector=this.world.scan(null,{yaw:this.yaw,fov:34,range:8})
