@@ -3,7 +3,7 @@
 // Strict owner allowlist; no automatic action from other players or echoed bot messages.
 import {interpretNameUtterance} from './name-intent.js'
 const PREFIX = /^(?:!ai|@veilforge)(?:\s+|$)/i
-const LOCAL_PING = /^(?:ping|are you there|connection|connection status|are you connected|hello)$/i
+const LOCAL_PING = /^(?:ping|connection|connection status|are you connected)$/i
 const normalizedName = value => String(value||'').trim().toLocaleLowerCase('en-US')
 
 export class RealmChat {
