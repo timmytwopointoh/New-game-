@@ -1,0 +1,41 @@
+name: Rovekin v1.0.12 genuine offline ARM64 neural brain regression tests
+on:
+  push:
+    branches: [feat/rovekin-v112-native-offline-llm-20261107]
+    paths:
+      - .github/workflows/rovekin-v112-native-offline-brain-tests.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/local-llm.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/brain-context.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/mobile.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v112-neural-brain.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Install exact production dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify model authenticity, read-only conversation and regression safety
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          for f in src/{local-llm,brain-context,api,mobile}.js; do node --check "$f"; done
+          node --test \
+            tests/rovekin-v112-neural-brain.test.js \
+            tests/rovekin-v111-dialogue.test.js \
+            tests/rovekin-v110-movement-readiness.test.js \
+            tests/rovekin-v109-learning-truth.test.js \
+            tests/rovekin-v109-plan-restart.test.js \
+            tests/rovekin-v108-inbox-visible.test.js \
+            tests/rovekin-inbox-conversation.test.js \
+            tests/owner-chat-action-handoff.test.js \
+            tests/adaptive-companion-language-memory.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js
