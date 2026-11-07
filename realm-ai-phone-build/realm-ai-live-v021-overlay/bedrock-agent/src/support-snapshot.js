@@ -21,6 +21,11 @@ export function makeSupportSnapshot(connection,now=()=>Date.now()){
  const world=survival?.world
  const work=survival?.miningJobs?.snapshot?.()||{}
  const q=plan?.snapshot?.()||{}
+ const goal=connection?.companionGoalJournal?.latest?.()||null
+ const closeKind=choice(connection?.transportCloseKind,['none','transport-close','transport-end','server-disconnect','protocol-error'])
+ const closeOrigin=choice(connection?.transportCloseOrigin,['unknown','remote-transport','network-error','server-kick','app-stop','owner-rejoin','local-close'])
+ const heldLanding=nav?.pendingServerLanding
+ const ageMs=value=>Number.isFinite(value)&&value>0?int(Math.max(0,now()-value)):0
  const health=world?.attributes?.['minecraft:health']
  const position=world?.position
  const safePos=position&&['x','y','z'].every(k=>Number.isFinite(position[k])&&Math.abs(position[k])<30000000)
@@ -40,6 +45,12 @@ export function makeSupportSnapshot(connection,now=()=>Date.now()){
   task:{navigation:choice(nav?.state,stateList),kind:choice(nav?.job?.kind,jobList),remainingRoute:int(nav?.route?.length),queuePending:int(q.pending),queueTotal:int(q.batch?.total),queueRemaining:int(q.batch?.remaining),cards:int(q.cards?.length),miningActive:!!work?.active},
   learning:{confirmed:int(learning.confirmed),blocked:int(learning.blocked),interrupted:int(learning.interrupted),
     learnedMappings:int(lex.count),offlineWordCount:int(survival?.snapshot?.().language?.bundledWords)},
-  diagnostic:{savedAuthentication:'kept',remoteAccess:false}
+  diagnostic:{savedAuthentication:'kept',remoteAccess:false,
+    goalCategory:choice(goal?.category,['home','follow','movement','materials','build','craft','explore','other']),
+    goalStatus:choice(goal?.status,['requested','working','blocked','waiting-owner','interrupted','shell-verified','completed','cancelled']),
+    goalHistoryCount:int(connection?.companionGoalJournal?.goals?.length),
+    landingAwaitingServer:!!heldLanding,landingAgeMs:heldLanding?ageMs(heldLanding.started):0,
+    lastJumpAgeMs:ageMs(nav?.lastJumpAt),lastServerPoseAgeMs:ageMs(nav?.lastPoseAt),
+    previousTransportCloseKind:closeKind,previousTransportCloseOrigin:closeOrigin}
  }
 }
