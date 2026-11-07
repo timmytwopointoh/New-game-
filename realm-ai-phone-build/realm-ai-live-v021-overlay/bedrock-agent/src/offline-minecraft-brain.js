@@ -62,7 +62,7 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
  let table=s.match(/^mining table\s+([a-z0-9_ ]+?)(?:\?)?$/)
  if(table){const name=material(table[1]);if(!name)return null;const tools=blockAllTools(name,{world});if(!tools.length)return result('No mining table in this Bedrock version.');return result(`${name}: `+tools.slice(0,14).map(t=>`${t.tool} ${t.seconds===null?'∞':t.seconds+'s'}`).join(', ')+'. Remaining tools and statuses are available through the local knowledge endpoint.',{knowledge:{kind:'mining-table',name,tools}})}
  let mob=s.match(/^(?:mob (?:stats|info)|how much health does|hp of|attack of|mob behavior)\s+([a-z0-9_ ]+?)(?:\?)?$/)
- if(mob){const info=mobReference(mob[1]);if(!info)return null;return result(`${info.name}: HP ${info.health??'unknown'}; attack damage ${info.normalDamage??'not independently verified'}. ${info.behavior} ${info.response}`,{knowledge:{kind:'mob',...info}})}
+ if(mob){const info=mobReference(mob[1]);if(info)return result(`${info.name}: HP ${info.health??'unknown'}; attack damage ${info.normalDamage??'not independently verified'}. ${info.behavior} ${info.response}`,{knowledge:{kind:'mob',...info}})}
   let m=s.match(/^(?:what (?:is|are)|what do you know about|tell me about|explain|about|define)\s+(.+?)(?:\?)?$/)
  if(m){const subject=m[1].replace(/\?$/,'');const n=material(subject),e=entity(subject),b=biome(subject),v=learnVerbs[subject];
   if(n)return result(itemFacts(n),{knowledge:{kind:'material',name:n}})
