@@ -6,8 +6,8 @@ android {
         applicationId 'com.rovekin.companion'
         minSdk 28
         targetSdk 35
-        versionCode 200083
-        versionName '1.0.5-rovekin-owner-inbox'
+        versionCode 200084
+        versionName '1.0.6-rovekin-companion-goals'
         ndk { abiFilters 'arm64-v8a' }
     }
     sourceSets.main.assets.srcDir "$buildDir/generated/node-assets"
