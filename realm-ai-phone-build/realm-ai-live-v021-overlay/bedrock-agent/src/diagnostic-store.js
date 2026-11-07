@@ -46,6 +46,23 @@ export function sanitizeDiagnosticReport(input={}){
   report.loadingActive=input.loadingActive===true;report.loadingRecoveryScheduled=input.loadingRecoveryScheduled===true
   report.loadingStage=['connecting','pack-request','pack-storage','pack-retry','downloading-packs','pack-cached','packs-ready','world-started','world-data','bedrock-login-accepted'].includes(input.loadingStage)?input.loadingStage:'unknown'
   report.loadingLastSignal=['none','resource_packs_info','resource_pack_data_info','resource_pack_chunk_data','resource_pack_stack','start_game','level_chunk','sub_chunk','play_status'].includes(input.loadingLastSignal)?input.loadingLastSignal:'none'
+  // Bounded movement facts are safe to export. The API never stores actor
+  // IDs, coordinates, commands or raw packet payloads in this section.
+  for(const name of ['movementVerified','movementTerrainKnown','movementAbilityKnown','movementGrounded',
+    'movementNavSpawned','movementLoopRunning','movementWorldEnabled','movementOwnBaseLayerSeen',
+    'followPending','followActive','movementLandingPending'])report[name]=input[name]===true
+  for(const name of ['movementAbilityReportsSeen','movementOwnAbilityReportsSeen','movementLastWorkMs',
+    'movementPeakWorkMs','movementScheduleGapMs','movementLandingAgeMs','movementLastJumpAgeMs',
+    'movementServerPoseAgeMs'])report[name]=Math.min(60000,number(input[name]))
+  const gates=['unavailable','probe-error','unknown','not-spawned','awaiting-respawn','input-locked',
+    'flight-active','mode-unknown','abilities-unknown','abilities-loading','abilities-incompatible',
+    'terrain-unknown','body-obstructed','not-grounded','navigation-loop-not-running','ready']
+  report.movementGate=gates.includes(input.movementGate)?input.movementGate:'unknown'
+  report.movementProbeStage=['controller-not-attached','terrain','ground','ability','gate','timing','complete'].includes(input.movementProbeStage)?input.movementProbeStage:'unknown'
+  report.movementAbilityStatus=['no-own-ability-packet','other-player-only','own-base-missing',
+    'loading','incompatible','confirmed'].includes(input.movementAbilityStatus)?input.movementAbilityStatus:'unknown'
+  report.movementState=['idle','stopped','following','walking','waiting-for-player','waiting-for-terrain',
+    'waiting-for-readiness','blocked','arrived-predicted','loading','landing','landing-for-server','other'].includes(input.movementState)?input.movementState:'other'
   report.failure=failure(input.failure);report.lastFailure=failure(input.lastFailure)
   report.processState=['running','stopped','crashed'].includes(input.processState)?input.processState:'unknown'
   const identity=input.clientIdentity
