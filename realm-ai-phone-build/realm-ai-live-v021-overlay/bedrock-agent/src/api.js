@@ -359,8 +359,24 @@ export function createApi(config,connection,log=console.log){
  // resume silently after a saved-session reconnect.
  connection.on('survival-update',u=>journal.noteVerifiedProgress(u?.message||''))
  connection.on('session-end',()=>journal.interrupt('Realm session disconnected.'))
+ // Native Commands cards bypass chat, so follow an actual started card into
+ // the same goal journal. Never treat a Play tap as server confirmation.
+ let seenPlanLaunch=''
+ const syncPlanGoal=()=>{
+  const survival=connection.survival,plan=survival?.commandPlans
+  const active=plan?.running&&plan.cards?.find(c=>c.id===plan.running)
+  if(!active){seenPlanLaunch='';return}
+  const key=String(plan.scope||'')+'|'+String(plan.running)+'|'+String(plan.activeStartedAt||'')
+  if(key===seenPlanLaunch)return
+  seenPlanLaunch=key
+  journal.setScope(survival?.commandVocabulary?.scope||null)
+  journal.recordRequest(renderDescriptor(active.descriptor),{
+   accepted:true,queued:true,message:'Command started; waiting for actual server confirmation.'
+  })
+ }
  const journalStatus=()=>{
   journal.setScope(connection.survival?.commandVocabulary?.scope||null)
+  syncPlanGoal()
   journal.observe({survival:connection.survival,spawned:connection.spawned})
   return journal.snapshot()
  }
@@ -532,6 +548,7 @@ export function createApi(config,connection,log=console.log){
          else if(pathname==='/plans/activate-queue')result=p.activateQueue()
          else if(pathname==='/plans/retry')result=p.retryBlocked(Number.isSafeInteger(data.id)?data.id:null)
          else return send(404,{error:'Unknown plan action'})
+         if(result?.queued)syncPlanGoal()
          return send(200,result)
         }catch(e){return send(200,{accepted:false,queued:false,message:e.message,plans:p.snapshot()})}
        }
