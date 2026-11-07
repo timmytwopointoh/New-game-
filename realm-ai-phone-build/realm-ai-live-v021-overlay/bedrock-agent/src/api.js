@@ -346,6 +346,9 @@ export function createApi(config,connection,log=console.log){
   directory:path.join(root,'private','companion-goals'),
   scope:connection.survival?.commandVocabulary?.scope||null
  })
+ // Support snapshots may read the journal's SAFE category/state only;
+ // private command text is never emitted in a diagnostics export.
+ connection.companionGoalJournal=journal
  const inbox=new OwnerInbox(connection,{
   interpretation:()=>pendingInterpretation,
   dispatch:raw=>message(raw),
@@ -379,7 +382,7 @@ export function createApi(config,connection,log=console.log){
   // Arbitrary prose or ambiguous multiple prompts never becomes consent.
   const selected=inbox.confirmSingleFromChat(raw)
   const result=selected||message(raw,options)
-  const isStop=/^(?:stop|stop everything|cancel job|stop following|stop mining|stop walking)$/i.test(String(raw||'').trim())
+  const isStop=/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following(?: me)?|stop mining|stop walking|stay|wait here)$/i.test(String(raw||'').trim().replace(/^command\s+/i,''))
   if(isStop&&result?.accepted!==false)journal.transition('cancelled','Owner stopped the task. The record is saved, but no work continues.')
   else{
    journal.recordRequest(raw,result)
