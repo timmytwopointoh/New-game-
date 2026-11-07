@@ -20,6 +20,7 @@ import {ResourceRecall} from './resource-recall.js'
 import {understandMinecraftGoal} from './minecraft-goal-knowledge.js'
 import {RealmRules} from './realm-rules.js'
 import {StorageIncidents} from './storage-incidents.js'
+import {minecraftMobExplanation} from './minecraft-mob-knowledge.js'
 import {CompanionMind} from './companion-mind.js'
 import {CompanionVoice} from './companion-voice.js'
 import {KnowledgeMemory} from './knowledge-memory.js'
@@ -91,6 +92,8 @@ export class SurvivalController{
   if(/^(?:surroundings|biome|what biome|situation)$/.test(s)){this.situation.lastAt=0;this.situation.tick(Date.now());const v=this.situation.snapshot();return answer(`Health: ${v.healthState} (${v.health??'unknown'}). Biome: ${v.biome?.name||'unknown; no biome palette received'}. Medium: ${v.medium.kind}. Nearby mobs: ${v.nearbyMobs.map(m=>m.type+' '+m.distance+'m').join(', ')||'none observed'}. Position ${v.position?Object.values(v.position).join(','):'unknown'}.`,{situation:v})}
   if(/^(?:status|position|where are you|health|survival status)$/.test(s)){const x=this.world.snapshot(),source=x.gameModeSource?.includes('fallback')?' (inherited from server-reported player default)':'';return answer(`Mode ${x.gameMode||'unknown'}${source}; Survival verified: ${x.survivalVerified}. Realm ${this.connection.spawned?'joined':'disconnected/not spawned'}. Position ${x.position?Object.values(x.position).join(','):'unknown'}. Health ${x.health??'unknown'}, hunger ${x.hunger??'unknown'}. Navigation ${this.navigation.state}. View sections ${x.sections}.`,{survival:this.snapshot()})}
   if(/^(?:help|commands|what can you do|help survival|help movement|show jobs)$/.test(s))return answer('No add-on needed: “roam” or “explore north” (30-block safe observed trip with remembered tree locations), “look around”, “inventory”, “find oak log”, “remembered biomes”, “where did you find oak log?”, “return to remembered forest biome”, “route to X Y Z”, “walk to X Y Z”, “stop”, “rejoin realm”, “materials stone”, “recipe stone pickaxe”, “plan get 8 torches”. Walking/following can jump one-block steps with headroom and use short server-confirmed dirt staircases when required. Put dirt in the hotbar. “collect drops”, “movement status”, “follow me”, “clear path to X Y Z”, “select slot 1”, “dig X Y Z”. Clear-path mining is limited to easy natural-looking blocks; containers/build-looking blocks are protected. Recipe/supply commands are previews; Craft uses a received recipe and actual server-confirmed ingredients/output. Building uses explicitly positioned block/wall/floor/shelter jobs with actual hotbar supplies.')
+  const mobKnowledge=minecraftMobExplanation(s,{world:this.world,realmSpawned:!!this.connection.spawned})
+  if(mobKnowledge)return answer(mobKnowledge.message,{mobKnowledge})
   m=s.match(/^follow(?: (.+))?$/)
   if(m){
    let name=m[1]
