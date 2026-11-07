@@ -26,8 +26,76 @@ export function classifyConversation(raw){
 }
 
 export function isConversationQuestion(raw){return !/^command(?:\s|$)/i.test(String(raw).trim())&&['question','about','recipe','status','inventory','movement','capabilities','identity'].includes(classifyConversation(raw).kind)}
-export function respondToConversation(raw,{vocabulary=null,world=null,navigation=null}={}){
+/**
+ * The phone chat bar and owner-only Realm chat are conversational interfaces,
+ * not exclusively code/command input boxes. Do not make a user ask a question
+ * twice just because the first sentence is a greeting or an observation.
+ *
+ * Direct imperatives ("walk to", "follow me", "mine", ...) still go through
+ * the independent, permission-checked action dispatcher. No conversational
+ * answer may trigger a game transaction.
+ */
+export function isConversationUtterance(raw){
+ const s=clean(raw)
+ if(!s||/^command(?:\\s|$)/.test(s))return false
+ const kind=classifyConversation(raw).kind
+ if(kind!=='chat')return true
+ return /^(?:(?:i am|i'm|im|i feel|i felt|i think|i thought|i wonder|i like|i love|i hate|i don't|i dont|i wish|i just|i was|we are|we're|we should|we could|we have|you are|you're|you keep|you seem|you sound|you never|you always|you don't|you dont|that is|that's|this is|it's|its|today |yesterday |remember when |let's talk|lets talk|let's chat|lets chat|tell me something|talk to me|say something|tell me a story|talk about|i want to talk|i need to talk)\\b)/i.test(s)
+}
+const MAX_RESPONSE=390
+const short=s=>String(s||'').replace(/[\\r\\n\\x00-\\x1f\\x7f]/g,' ').trim().slice(0,MAX_RESPONSE)
+function conversationalContext(raw,{world=null,navigation=null,memory=null}={}){
+ const s=clean(raw)
+ const state=String(navigation?.state||'idle').replace(/[^a-z-]/gi,'').slice(0,35)
+ const reason=short(navigation?.reason||'')
+ const health=world?.attributes?.['minecraft:health']
+ const healthNote=Number.isFinite(health)?' Health is '+health+'.':' Health has not been confirmed yet.'
+ const remembered=memory?.recent?.(8)||[]
+ const lastOwner=[...remembered].reverse().find(m=>m.role==='owner'&&!/^(?:yes|no|ok|okay|thanks|thank you|hi|hello|hey)$/i.test(String(m.text||'').trim()))
+ if(/^(?:are you (?:okay|ok|alright|all right|fine|safe)|are you hurt|how(?:'s| is) your health)[?.!]*$/.test(s))
+  return 'I am '+(Number.isFinite(health)&&health>0&&health<=6?'low on health and prioritizing safety':'still here and monitoring the Realm')+'.'+healthNote+' I will not claim a fight is over until the server confirms it.'
+ if(/^(?:what are you (?:doing|working on|trying to do|up to)|what's happening|whats happening|progress|how(?:'s| is) it going|what's your plan|whats your plan)[?.!]*$/.test(s)){
+  if(navigation?.job||navigation?.pendingFollow)return 'My movement task is '+state+'. '+(reason||'I am checking server updates before claiming progress.')
+  return 'I do not have an active walking or follow route right now. '+(reason||'I can talk with you, or start a supported task when you explicitly ask.')
+ }
+ if(/(?:you (?:keep|always) (?:getting )?stuck|you(?:'re| are) stuck|you (?:won't|dont|don't) move|you keep stopping|why(?: won't| aren't| dont| don't) you (?:move|walk|answer|respond)|you never answer|you(?:'re| are) not answering)/.test(s)){
+  if(/answ|respond/.test(s))return 'I was giving generic acknowledgments instead of answering your question. I can now discuss what you said, answer grounded Realm and Minecraft questions, or say specifically what I cannot verify. Which question did I miss?'
+  return 'I hear you. My navigation reports '+state+'. '+(reason||'There is no verified active route at the moment.')+' I will not fake a walk; ask "why are you stuck?" for the exact movement gate.'
+ }
+ if(/^(?:can you (?:hear|read|understand) me|do you understand me|can we talk|can you talk|are you listening|do you actually understand|why do you sound like a robot)[?.!]*$/.test(s))
+  return 'Yes, I received your text. I can have a limited offline conversation, remember recent Realm messages, and answer questions from actual Minecraft data. I am not a full neural language model, so I will ask when I cannot work out a meaning.'
+ if(/^(?:what (?:do you think|are your thoughts)(?: about| of)?|how do you feel about) (.{2,90})[?.!]*$/.test(s)){
+  const topic=s.match(/^(?:what (?:do you think|are your thoughts)(?: about| of)?|how do you feel about) (.{2,90})[?.!]*$/)?.[1]
+  if(!topic)return null
+  return 'About '+short(topic)+': I can discuss it with you, but I do not want to invent experiences or facts. What part interests you most—how it works, what to try next, or what we have seen in the Realm?'
+ }
+ if(/^(?:i(?:'m| am|m) (?:bored|lonely|sad|upset|angry|frustrated|tired)|this is (?:boring|frustrating)|this (?:game|bot|app) is (?:frustrating|annoying)|you (?:annoy|frustrate) me)[?.!]*$/.test(s))
+  return 'I hear that this has been frustrating. I can keep talking with you without running anything, or we can focus on one small Realm task and check what actually happens.'
+ if(/^(?:tell me (?:something|about yourself)|say something|talk to me|let's (?:talk|chat)|lets (?:talk|chat)|i (?:want|need) to talk)[?.!]*$/.test(s))
+  return 'I would like to get better at exploring with you. The part I can verify is what the Realm sends me—terrain, inventory, health and task results. What would you like to talk about today?'
+ if(/^(?:what (?:should|could) we do|any ideas|what do you want to do|what do you suggest|what next|what should we try)[?.!]*$/.test(s))
+  return 'We could test one short Follow route, scout a nearby safe area, or work on my permanent home. I would start with a short walk and wait for an actual server-confirmed position change before attempting anything bigger. Which sounds good?'
+ if(/^(?:do you remember (?:me|us|anything)|do you have memory|can you remember (?:our|this) conversation)[?.!]*$/.test(s))
+  return remembered.length?'I can remember recent messages within this Realm and my permanently assigned home separately. Ask "what did we talk about" to hear the recent context.':'I can save recent conversations for this Realm once its identity is known. I do not pretend to remember things that have not been saved.'
+ if(/^(?:what(?:'s| is) (?:your )?(?:favorite|favourite) (?:thing|block|mob|biome|game|food)|do you have (?:a )?(?:favorite|favourite) (?:block|mob|biome|game))[?.!]*$/.test(s))
+  return 'I like the idea of building useful homes and discovering new places, though I do not have human tastes. Which block or biome do you enjoy most?'
+ if(/^(?:i(?:'m| am|m) (?:happy|excited|glad)|i (?:like|love|enjoy) (?:this|that|the game)|this (?:looks|is) (?:great|nice|cool|awesome))[?.!]*$/.test(s))
+  return 'That sounds good! What part should we explore next? I can talk about it first, and I will only start a task when you ask.'
+ if(/^(?:i (?:think|wonder|wish|feel|believe)|i(?:'m| am|m) trying to|we (?:could|should|might)|you (?:seem|sound|keep|never|always)|that(?:'s| is)|this is)\b/.test(s)){
+  // One focused follow-up is better than the old generic "Got it" message.
+  const topic=s.replace(/^(?:i (?:think|wonder|wish|feel|believe)|i(?:'m| am|m) trying to|we (?:could|should|might)|you (?:seem|sound|keep|never|always)|that(?:'s| is)|this is)\s*/,'').replace(/[.!?]+$/,'').trim()
+  if(topic)return 'You mentioned '+short(topic)+'. What would you like me to understand or help you figure out about that? I have not run a game command.'
+ }
+ if(/^(?:what about (?:that|it)|and (?:then|what about that)|can you explain more)[?.!]*$/.test(s)){
+  if(lastOwner)return 'We were talking about '+short(lastOwner.text)+'. Which detail do you want me to explain? I will not assume a new Minecraft instruction.'
+  return 'Which topic should I expand on? I do not have an earlier topic in the current Realm conversation.'
+ }
+ return null
+}
+export function respondToConversation(raw,{vocabulary=null,world=null,navigation=null,memory=null}={}){
  const text=clean(raw)
+ const grounded=conversationalContext(raw,{world,navigation,memory})
+ if(grounded)return grounded
  if(/^(?:why|what).*(?:stuck|not moving|not walking|aren't you moving|won't you move)/.test(text))return navigation?.reason||navigation?.movementBlock?.()||'No movement task is active. Select Follow or a walking destination to start one.'
  if(/^(?:what|which).*(?:holding|in your hand|tool are you using)/.test(text)){
   const item=world?.inventory?.get(world?.selectedSlot),name=world?.registry?.items?.[item?.network_id]?.name
@@ -49,13 +117,13 @@ export function respondToConversation(raw,{vocabulary=null,world=null,navigation
  }
  const intent=classifyConversation(raw)
  switch(intent.kind){
-  case 'greeting':return "Hey! I’m here. Ask me about the Realm or Minecraft, or tell me a supported action directly."
+  case 'greeting':return "Hey! I'm here and reading your messages. How's your day going? We can talk, or explore the Realm when you ask me to."
   case 'thanks':return "You’re welcome! I can execute supported direct instructions; the saved-plan queue still has its own Activate control."
   case 'joke':return "Why did the Creeper bring a map? It kept losing its friends in a blast!"
   case 'teasing':return "I’m still here to help. Want a status check, a Minecraft lookup, or to prepare a command?"
   case 'identity':return 'I’m the Realm assistant running in this app. I can chat and answer Realm or Minecraft questions; I can start recognized, supported instructions directly. Saved command cards still wait for Activate.'
   case 'capabilities':return "I can check Realm status, look at nearby blocks and inventory, answer Minecraft material or recipe questions, and prepare supported movement, mining, and building actions. Tell me a recognized action directly, or use command cards and Activate for a manual queue."
-  case 'movement':return 'movement status'
+  case 'movement':return navigation?.job?'My current navigation state is '+String(navigation.state||'active')+'. '+(navigation.reason||'Waiting for actual server movement feedback.'):'I am not running a movement job right now. We can talk, or you can ask me to follow you.'
   case 'status':return 'survival status'
   case 'inventory':return 'inventory'
   case 'about':{
@@ -70,7 +138,7 @@ export function respondToConversation(raw,{vocabulary=null,world=null,navigation
    return `I don't have a reliable offline definition for “${answer.query}”. What context did you see it in? Try “look up ${answer.query}” to check an online dictionary. I will not guess or start an unsupported action.`
   }
   case 'recipe':return `recipe ${intent.query}`
-  case 'question':return "I don’t have a reliable answer to that question yet. Tell me the specific Minecraft block, tool, mob, recipe, or bot status you’re asking about so I can check the available information."
-  default:return "Got it. I’ll treat that as chat, not an action. Ask me a question, or tell me a supported action directly."
+  case 'question':return "I want to answer that rather than pretend I understand. I don't have reliable offline facts for this particular question. Can you tell me what you mean or give me one specific detail? I won't turn your question into a game action."
+  default:return "I'm listening. Tell me a little more about what you mean. I won't turn ordinary conversation into a game command."
  }
 }
