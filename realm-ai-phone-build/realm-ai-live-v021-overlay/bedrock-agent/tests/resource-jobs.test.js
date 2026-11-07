@@ -63,3 +63,20 @@ test('quantity-first and quantity-last phrases start the same observed resource 
  assert.equal(parseResourceGoal('mine oak logs 99999'),null,'a five-digit unknown command is not dispatched as a job')
  assert.match(parseResourceGoal('mine oak logs 3000').error,/1–2304/)
 })
+
+
+test('plain-English small gathering goals are bounded and never treated as delivered items',()=>{
+ const stone=parseResourceGoal('mine some stone')
+ assert.equal(stone.kind,'mine-material')
+ assert.equal(stone.target,'stone')
+ assert.equal(stone.quantity,8)
+ assert.equal(stone.maxBlocks,48)
+ assert.equal(stone.needsPickup,true)
+ const dirt=parseResourceGoal('go gather 12 dirt')
+ assert.equal(dirt.target,'dirt')
+ assert.equal(dirt.quantity,12)
+ const oak=parseResourceGoal('chop 10 oak logs')
+ assert.equal(oak.target,'oak_log')
+ assert.equal(oak.quantity,10)
+ assert.match(parseResourceGoal('collect some unobtainium_zzz').error,/known Bedrock material/)
+})
