@@ -1,0 +1,28 @@
+name: Rovekin dirt staircase movement regression
+on:
+  push:
+    branches: [feature/rovekin-minecraft-goal-intelligence-20261107]
+    paths:
+      - .github/workflows/rovekin-dirt-staircase-movement-recovery.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/climbing.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/construction-guard.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/traversal-respawn.test.js
+permissions:
+  contents: read
+jobs:
+  movement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Restore exact Bedrock dependency tree
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify stairs, server-authoritative placement, refusal and respawn
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --test tests/traversal-respawn.test.js tests/companion-world-policy.test.js tests/home-clearance-field.test.js
