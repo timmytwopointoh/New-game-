@@ -41,7 +41,7 @@ public final class RovekinChatPanel {
         new RovekinFeatureContract.Runtime(false,false,false,false);
     private List<RovekinFeatureContract.Skill> catalog=Collections.emptyList();
     private EditText input;
-    private TextView statusText;
+    private TextView statusText,goalStatusText;
     private RovekinPixelCompanion buddy;
     private FrameLayout root;
     private Button start,stop,send;
@@ -182,6 +182,17 @@ public final class RovekinChatPanel {
         body.addView(top,below(0));
         RovekinDripBar drips=new RovekinDripBar(activity);
         body.addView(drips,new LinearLayout.LayoutParams(-1,dp(19)));
+        // One quiet, read-only goal strip, fed only by the phone-local
+        // controller. It is not a button and cannot trigger any action.
+        goalStatusText=label("",12,DIM,false);
+        goalStatusText.setSingleLine(true);
+        goalStatusText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        goalStatusText.setGravity(Gravity.CENTER_VERTICAL);
+        goalStatusText.setPadding(dp(11),0,dp(8),0);
+        goalStatusText.setBackground(grad(
+            new int[]{0xff10372a,0xff173b31},0xff397351,9));
+        goalStatusText.setVisibility(View.GONE);
+        body.addView(goalStatusText,new LinearLayout.LayoutParams(-1,dp(26)));
 
         FrameLayout transcriptHolder=new FrameLayout(activity);
         transcriptHolder.setBackground(grad(
@@ -265,6 +276,26 @@ public final class RovekinChatPanel {
         }
         if(start!=null)start.setAlpha(runtime.controllerConnected?.65f:1f);
         if(buddy!=null)buddy.setContentDescription(buddy.getContentDescription());
+    }
+    public void refreshGoal(JSONObject data,boolean realSpawned){
+        JSONObject goal=data==null?null:data.optJSONObject("latest");
+        if(goalStatusText==null)return;
+        if(goal==null){goalStatusText.setVisibility(View.GONE);return;}
+        String category=goal.optString("category","").trim();
+        String status=goal.optString("status","").trim();
+        // Never show untrusted raw command text, Realm coordinates or
+        // misleading 'working' status while disconnected from the server.
+        if(!category.matches("home|follow|movement|materials|build|craft|explore|other")||
+            !status.matches("requested|working|blocked|waiting-owner|interrupted|shell-verified|completed|cancelled")){
+            goalStatusText.setVisibility(View.GONE);return;
+        }
+        if(!realSpawned&&status.equals("working"))status="connection lost";
+        String line="GOAL  ·  "+category.toUpperCase(java.util.Locale.ROOT)+
+            "  ·  "+status.replace('-',' ');
+        goalStatusText.setText(line);
+        goalStatusText.setContentDescription("Last companion goal: "+category+", "+status);
+        goalStatusText.setTextColor(status.equals("blocked")||status.equals("interrupted")?VIOLET:DIM);
+        goalStatusText.setVisibility(View.VISIBLE);
     }
     public void refreshInbox(JSONObject data){
         int count=data==null?0:Math.max(0,Math.min(99,data.optInt("count",0)));
