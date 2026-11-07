@@ -1,14 +1,37 @@
 import crypto from 'node:crypto'
 const active=['flying','invulnerable','instant_build','no_clip','world_builder','privileged_builder']
-export function abilityEvidence(packet){
- const effective={},loading=[]
- const order={cache:0,base:1,spectator:2,commands:3,editor:4}
- for(const layer of [...(packet.abilities||[])].sort((a,b)=>(order[a.type]??9)-(order[b.type]??9))){
-  if(layer.type==='loading_screen'){if(active.some(k=>layer.allowed?.[k]&&layer.enabled?.[k]))loading.push('temporary loading abilities');continue}
-  if(layer.type==='cache')continue
-  for(const [key,allowed] of Object.entries(layer.allowed||{}))if(allowed)effective[key]=!!layer.enabled?.[key]
+// Bedrock serializes layer.type as uint16, but protocol libraries may
+// surface either a numeric value or the normalized enum label.
+const layerTypes=['cache','base','spectator','commands','editor','loading_screen']
+export const normalizedAbilityLayerType=value=>{
+ if(Number.isSafeInteger(value)&&value>=0&&value<layerTypes.length)return layerTypes[value]
+ if(typeof value==='string'){
+  const label=value.trim().toLowerCase().replace(/[- ]/g,'_')
+  if(layerTypes.includes(label))return label
+  if(/^[0-5]$/.test(label))return layerTypes[Number(label)]
  }
- return {known:(packet.abilities||[]).some(l=>l.type==='base'),effective,loading:loading.length>0,active:active.filter(k=>effective[k]),commandPermission:packet.command_permission}
+ return null
+}
+export function abilityEvidence(packet){
+ const layers=Array.isArray(packet?.abilities)?packet.abilities:[]
+ const effective={},loading=[]
+ const ordered=layers.map(layer=>({...layer,normalizedType:normalizedAbilityLayerType(layer?.type)}))
+  .sort((a,b)=>{
+   const i=layerTypes.indexOf(a.normalizedType),j=layerTypes.indexOf(b.normalizedType)
+   return (i<0?99:i)-(j<0?99:j)
+  })
+ for(const layer of ordered){
+  if(layer.normalizedType==='loading_screen'){
+   if(active.some(k=>layer.allowed?.[k]&&layer.enabled?.[k]))loading.push('temporary loading abilities')
+   continue
+  }
+  if(layer.normalizedType===null||layer.normalizedType==='cache')continue
+  for(const [key,allowed] of Object.entries(layer.allowed||{}))
+   if(allowed)effective[key]=!!layer.enabled?.[key]
+ }
+ return {known:layers.some(l=>normalizedAbilityLayerType(l?.type)==='base'),
+  effective,loading:loading.length>0,active:active.filter(k=>effective[k]),
+  commandPermission:packet?.command_permission}
 }
 export class SurvivalVerification{
  constructor(world,navigation,report=()=>{}){this.world=world;this.navigation=navigation;this.report=report;this.reset()}
