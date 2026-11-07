@@ -15,7 +15,7 @@ export class OwnerInbox{
   const items=[]
   const add=(type,p,{title,prompt,detail='',options=[],kind='permission',category='Home',allowApproval=true}={})=>{
    if(!p||!Number.isFinite(p.expires)||now>p.expires)return
-   if(p.scope!==undefined&&String(p.scope)!==String(scope))return
+   if(p.scope!==undefined&&String(typeof p.scope==='object'?p.scope.realm:p.scope)!==String(scope))return
    if(p.dimension!==undefined&&p.dimension!==c.world.dimension)return
    if(p.stage!==undefined&&p.stage!==home?.stage)return
    if(!p.code||!/^\d{6}$/.test(String(p.code)))return
@@ -34,7 +34,8 @@ export class OwnerInbox{
    detail:'Only the listed coordinates and current Realm are eligible.'})
   const interp=this.interpretation()
   if(interp&&interp.scope===scope&&now-(interp.createdAt||0)<=120000){
-   const options=Array.isArray(interp.choices)?interp.choices.map(x=>typeof x==='string'?x:
+   const options=interp.kind==='unknown-action'?['dig','walk','find','follow','look','gather','craft','build','status']:
+    Array.isArray(interp.choices)?interp.choices.map(x=>typeof x==='string'?x:
     typeof x?.definition==='string'?x.definition:'').filter(Boolean).slice(0,4):[]
    const code=String(interp.createdAt||0)+':'+String(interp.word||'')
    items.push({id:idFor('clarification',scope,code),kind:'clarification',category:'Understanding',
@@ -70,7 +71,7 @@ export class OwnerInbox{
     // Word-sense support uses the exact original displayed definition;
     // material suggestions use a 1-based choice. Never send arbitrary input.
     const interp=this.interpretation()
-    if(interp?.kind==='word-sense')result=this.dispatch(active.options[choice])
+    if(interp?.kind==='word-sense'||interp?.kind==='unknown-action')result=this.dispatch(active.options[choice])
     else result=this.dispatch(String(choice+1))
    }else if(decision==='approve'){
     if(active.options.length)return {accepted:false,queued:false,message:'Choose a specific meaning before learning it; no action was executed.'}
