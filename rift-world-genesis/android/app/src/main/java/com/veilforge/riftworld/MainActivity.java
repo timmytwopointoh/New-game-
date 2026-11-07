@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.WebChromeClient;
+import android.webkit.ConsoleMessage;
+import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -27,7 +29,13 @@ public final class MainActivity extends Activity {
         s.setDatabaseEnabled(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         s.setMediaPlaybackRequiresUserGesture(false);
-        world.setWebChromeClient(new WebChromeClient());
+        world.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage msg) {
+                if (msg.messageLevel() == ConsoleMessage.MessageLevel.ERROR) Log.e("RIFTCORE", msg.message());
+                else Log.i("RIFTCORE", msg.message());
+                return true;
+            }
+        });
         world.setWebViewClient(new WebViewClient());
         setContentView(world);
         world.loadUrl("file:///android_asset/index.html");

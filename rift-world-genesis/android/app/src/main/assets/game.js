@@ -39,7 +39,7 @@ addEventListener('resize',resize);resize();
 function show(id){for(const n of ['menu','howto','hud','pause','mapScreen','death'])$(n).classList.add('hidden');$(id).classList.remove('hidden')}
 function toast(text){$('notifications').textContent=text;$('notifications').classList.add('active');noticeTime=2.7}
 function sound(freq=350,type='sine',length=.15,gain=.06,endFreq=null){try{let A=window.AudioContext||window.webkitAudioContext;if(!A)return;if(!sound.ctx)sound.ctx=new A();let a=sound.ctx;if(a.state==='suspended')a.resume();let o=a.createOscillator(),v=a.createGain();o.type=type;o.frequency.setValueAtTime(freq,a.currentTime);if(endFreq)o.frequency.exponentialRampToValueAtTime(Math.max(30,endFreq),a.currentTime+length);v.gain.setValueAtTime(gain,a.currentTime);v.gain.exponentialRampToValueAtTime(.001,a.currentTime+length);o.connect(v);v.connect(a.destination);o.start();o.stop(a.currentTime+length);}catch(_){}}
-function start(fresh){state=fresh?baseState():load()||baseState();scene='game';arena=null;enemies=[];projectiles=[];particles=[];rings=[];floaters=[];weather=[];state.p.hp=Math.max(20,state.p.hp);camera.x=state.p.x;camera.y=state.p.y;show('hud');toast('WELCOME TO THE SHATTERED ATLAS');sound(420,'triangle',.4,.035,800);spawnWorld(9);updateHUD()}
+function start(fresh){state=fresh?baseState():load()||baseState();scene='game';arena=null;enemies=[];projectiles=[];particles=[];rings=[];floaters=[];weather=[];state.p.hp=Math.max(20,state.p.hp);camera.x=state.p.x;camera.y=state.p.y;show('hud');toast('WELCOME TO THE SHATTERED ATLAS');sound(420,'triangle',.4,.035,800);spawnWorld(9);updateHUD();console.log('RIFTCORE_WORLD_STARTED')}
 function back(){if(scene==='game')pause();else if(scene==='pause'||scene==='map')resume();else if(scene==='help')mainMenu();else if(scene==='death')respawn()}
 function mainMenu(){if(scene==='game'||scene==='pause'||scene==='map')save();scene='menu';show('menu');$('continue').disabled=!load();$('continue').style.opacity=load()?1:.42;}
 function pause(){if(scene!=='game')return;scene='pause';save();$('pauseStats').innerHTML=`LEVEL ${state.p.level} WAYFINDER<br>STAR SHARDS ${state.p.shards}<br>RIFTS SEALED ${state.closed.length} / 5<br>CREATURES DEFEATED ${state.kills}<br>TIME EXPLORED ${Math.floor(state.playtime/60)} MIN`;show('pause')}
@@ -217,5 +217,5 @@ function drawMap(){let cv=$('miniMap'),k=cv.getContext('2d'),w=cv.width,h=cv.hei
 function frame(time){if(!last)last=time;let dt=Math.min(.045,(time-last)/1000);last=time;clock+=dt;try{update(dt);if(scene==='menu'||scene==='help'){drawMenuBackdrop()}else if(state){drawScene()}}catch(err){if(!frame.logged){frame.logged=true;console.error('RIFTCORE_RENDER_ERROR',err)}}requestAnimationFrame(frame)}
 addEventListener('pagehide',save);addEventListener('visibilitychange',()=>{if(document.hidden&&scene==='game')save()});
 window.RiftGame={back,save,version:'0.1.0-genesis-alpha',debug:()=>({scene,level:state?.p?.level,closed:state?.closed?.length,kills:state?.kills,enemies:enemies.length,arena:!!arena})};
-mainMenu();requestAnimationFrame(frame);
+mainMenu();console.log('RIFTCORE_MENU_READY');requestAnimationFrame(frame);
 })();
