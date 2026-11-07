@@ -89,3 +89,18 @@ test('unconfigured owner, unsafe active tasks and unspawned Realm reject the fie
  const c=fixture();c.navigation.job={kind:'mine'}
  assert.equal(c.field.start(100000).accepted,false)
 })
+
+// Natural phrases such as "find me then make your home here" cannot use
+// the historical 162/96/53 QA anchor. They require actual owner proximity.
+test('natural follow-and-home request uses live owner feet, not prior test XYZ',()=>{
+ const f=fixture(),now=100000
+ const started=f.field.start(now,{ownerPositionHome:true})
+ assert.equal(started.accepted,true)
+ assert.equal(f.navigation.followTargetHint,null)
+ assert.equal(f.field.snapshot().targetXYZ,null)
+ observation(f,now+1000,38)
+ f.field.tick(now+1000)
+ assert.equal(f.field.state,'building',f.field.reason)
+ assert.deepEqual(f.field.snapshot().targetXYZ,{x:40,y:64,z:40})
+ assert.equal(f.calls.filter(x=>x[0]==='home').length,1)
+})
