@@ -11,7 +11,7 @@ const key=p=>p.x+','+p.y+','+p.z
 const distance=(a,b)=>a&&b?Math.hypot(a.x-b.x-.5,a.y-b.y-1.62,a.z-b.z-.5):Infinity
 export class HomeProject {
  constructor(controller){this.c=controller;this.supply=new HomeSupply(controller);this.clear()}
- clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null;this.ownerPauseRequested=false;this.proximityReview=null;this.proximityApproval=null;this.lastHomeReturnAttempt=0;this.homeReturnGoal=null;this.lastHomeReturnReport=0}
+ clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null;this.ownerPauseRequested=false;this.proximityReview=null;this.proximityApproval=null;this.lastHomeReturnAttempt=0;this.homeReturnGoal=null;this.lastHomeReturnReport=0;this.returnHomeOnly=false}
  preview(plot,design){
   this.clear()
   this.plan=physicalHomePlan(plot,design);this.plot=plot;this.state='preview'
@@ -35,14 +35,29 @@ export class HomeProject {
  // Travel toward the immutable home through short, fully observed dry routes
  // before checking old construction blocks. Never teleport, cross unknown
  // terrain, silently end other owner tasks, or claim travel succeeded.
- approachSavedHome(now){
-  if(!this.restoreAutoResume||!this.plot)return false
+ approachSavedHome(now,{movementOnly=false}={}){
+  if((!this.restoreAutoResume&&!movementOnly)||!this.plot)return false
   const w=this.c.world,n=this.c.navigation,at=w.standPosition?.(),home=this.plot.center
   if(!at||!home||!w.movementVerified)return true
   const distanceHome=Math.hypot(at.x-home.x,at.z-home.z)
   if(distanceHome<=10){
-   // Let an in-flight segment finish before editing the home site.
-   return !!n.job
+   // Let the active segment finish and require fresh server position before
+   // claiming arrival. Predicted client position alone is not proof.
+   if(n.job)return true
+   if(movementOnly){
+    const p=w.serverPosition,age=now-(n.lastPoseAt||0)
+    const confirmed=p&&age>=0&&age<=10000&&
+      Math.hypot(p.x-home.x,p.z-home.z)<=10&&Math.abs((p.y-1.62)-home.y)<=6
+    if(!confirmed){
+     this.reason='Near saved home; waiting for fresh server position before claiming arrival.'
+     try{w.requestNearby?.(n.client)}catch{}
+     return true
+    }
+    this.returnHomeOnly=false
+    this.reason='Arrived near original permanent home at '+key(home)+' (server position verified).'
+    this.c.report?.(this.reason)
+   }
+   return false
   }
   if(n.job||n.pendingFollow||n.survey||this.c.resources?.active||
      this.c.miningJobs?.active||this.c.acquisition?.active||this.c.operations?.pending){
@@ -70,6 +85,20 @@ export class HomeProject {
    this.lastHomeReturnReport=now;this.c.report?.(this.reason)
   }
   return true
+ }
+ requestReturnHome(){
+  const c=this.c,w=c.world,n=c.navigation
+  if(!this.plot||!c.companion?.homeMemory?.hasHome)
+   return {accepted:false,queued:false,message:'No permanent home has been assigned in this Realm.'}
+  if(!c.connection?.spawned||w.dimension!==this.plot.dimension)
+   return {accepted:false,queued:false,message:'Join and spawn in the home Realm and dimension first. I will not guess a portal route.'}
+  if(c.miningJobs?.active||c.resources?.active||c.acquisition?.active||c.operations?.pending||
+     (n.job&&n.job.kind!=='follow'))
+   return {accepted:false,queued:false,message:'Finish or Stop the current resource or movement job before returning home.'}
+  if(n.job?.kind==='follow')n.stop('Owner requested return to permanent home.',false)
+  this.returnHomeOnly=true;this.lastHomeReturnAttempt=0
+  return {accepted:true,queued:true,message:'Returning to my original permanent home at '+
+   key(this.plot.center)+'. Using only observed dry ground; manual house-work pauses stay paused.'}
  }
  recheckSavedStages(now){
   const c=this.c,w=c.world,n=c.navigation
@@ -172,7 +201,7 @@ export class HomeProject {
  }
  stop(reason='Owner paused home construction.'){
   if(this.state==='running'||this.state==='restoring'){this.state='paused';if(this.plan)this.plan.status='paused';this.reason=reason}
-  this.pending=null;this.review=null;this.clearance=null;this.proximityReview=null;this.ownerPauseRequested=false
+  this.pending=null;this.review=null;this.clearance=null;this.proximityReview=null;this.ownerPauseRequested=false;this.returnHomeOnly=false
   if(this.supply.childStarted)this.c.acquisition?.cancel?.('Owner paused the parent home project.')
   this.supply.reset()
   this.c.world.editApproval=null
@@ -183,7 +212,7 @@ export class HomeProject {
   return inspectHomeCapacity({storage,roomCapacity,idleMs,plot:this.plot,design:{footprint:this.plan.footprint}})
  }
  snapshot(){
-  return {state:this.state,reason:this.reason,stage:this.stage,stages:this.plan?.stagesTotal||0,placementsVerified:this.plan?.placementsVerified||0,placementsPlanned:this.plan?.placementsPlanned||0,
+  return {state:this.state,reason:this.reason,returningHome:this.returnHomeOnly,stage:this.stage,stages:this.plan?.stagesTotal||0,placementsVerified:this.plan?.placementsVerified||0,placementsPlanned:this.plan?.placementsPlanned||0,
    ownerPauseRequested:this.ownerPauseRequested,proximityReview:this.proximityReview?{stage:this.stage,nearby:this.proximityReview.nearby,expires:this.proximityReview.expires}:null,
    furniture:this.plan?.furniture?.map(x=>({name:x.name,confirmed:x.confirmed}))||[],
    confirmationPending:!!this.pending,clearanceReview:this.review?{position:this.review.position,expires:this.review.expires,reason:this.review.reason}:null,supply:this.supply.snapshot(),completion:this.plan?.completion||'unverified'}
@@ -293,6 +322,7 @@ export class HomeProject {
   this.c.report?.('Home project paused: '+this.reason+'. No automatic block replacement or destructive retries.')
  }
  tick(now=Date.now()){
+  if(this.returnHomeOnly&&this.approachSavedHome(now,{movementOnly:true}))return
   if(this.state==='restoring'){this.recheckSavedStages(now);return}
   if(this.state!=='running'||!this.plan||!this.plot||now-(this.lastAttempt||0)<500)return
   this.lastAttempt=now
