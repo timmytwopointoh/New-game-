@@ -93,7 +93,7 @@ export class LocalBrain {
   const res=await this.fetch(this.model.url,{signal:abort.signal,redirect:'follow',
    headers:{'user-agent':'RoveKin-OnDevice-Brain/1.0'}})
   if(!res.ok||!res.body)throw Error('Model source unavailable (HTTP '+res.status+')')
-  if(!String(res.url||'').startsWith('https://'))throw Error('Unsafe model redirect')
+  if(!this.model.url.startsWith('https://')||(res.url&&!String(res.url).startsWith('https://')))throw Error('Unsafe model redirect')
   const announced=Number(res.headers?.get('content-length')||0)
   if(announced>this.model.maxBytes)throw Error('Model exceeds permitted size')
   const hash=crypto.createHash('sha256')
