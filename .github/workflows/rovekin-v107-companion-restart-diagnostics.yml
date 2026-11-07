@@ -1,0 +1,42 @@
+name: Rovekin v1.0.7 dependable companion and crash-recovery gate
+on:
+  push:
+    branches: [fix/rovekin-v107-reliable-companion-continuity-20261107]
+    paths:
+      - .github/workflows/rovekin-v107-companion-restart-diagnostics.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/support-snapshot.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/companion-goal-journal.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v107-goal-resume-and-support.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reliability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Install pinned on-phone dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run safe crash, memory, inbox and navigation regressions
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/api.js
+          node --check src/support-snapshot.js
+          node --check src/survival/companion-goal-journal.js
+          node --test \
+            tests/rovekin-v107-goal-resume-and-support.test.js \
+            tests/rovekin-companion-goals.test.js \
+            tests/rovekin-inbox-conversation.test.js \
+            tests/support-snapshot.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js \
+            tests/rovekin-session-retention.test.js \
+            tests/traversal-respawn.test.js \
+            tests/home-clearance-field.test.js \
+            tests/permanent-home-memory.test.js
