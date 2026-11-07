@@ -12,7 +12,7 @@ export function classifyConversation(raw){
  if(/^(?:thanks|thank you|thx|ty|appreciate it)(?:\b|$)/.test(s))return {kind:'thanks'}
  if(/^(?:tell me a joke|say something funny|make me laugh|joke)$/.test(s))return {kind:'joke'}
  if(/\b(?:idiot|stupid|dumb|useless|trash|moron|you suck|you're bad|you are bad|shut up|shut it)\b/.test(s)||/^(?:lol|lmao|haha+|hehe+|you're just a bot|you are just a bot|just kidding|i'm kidding|im kidding)$/.test(s))return {kind:'teasing'}
- if(/^(?:what is your name|what's your name|whats your name|are you a bot|are you real)$/.test(s))return {kind:'identity'}
+ if(/^(?:what is your name|what's your name|whats your name|who are you|are you a bot|are you real|are you alive)$/.test(s))return {kind:'identity'}
  if(/^(?:what can you do|help|what commands do you know)$/.test(s))return {kind:'capabilities'}
  if(/^(?:what are you doing|what's happening|whats happening|progress|how is it going)$/.test(s))return {kind:'movement'}
  if(/^(?:where are you|what is your position|what's your position|whats your position|are you in the realm|are you connected)$/.test(s))return {kind:'status'}
@@ -40,7 +40,7 @@ export function isConversationUtterance(raw){
  if(!s||/^command(?:\s|$)/.test(s))return false
  const kind=classifyConversation(raw).kind
  if(kind!=='chat')return true
- return /^(?:(?:i am|i'm|im|i feel|i felt|i think|i thought|i wonder|i like|i love|i hate|i don't|i dont|i wish|i just|i was|we are|we're|we should|we could|we have|you are|you're|you keep|you seem|you sound|you never|you always|you don't|you dont|that is|that's|this is|it's|its|today |yesterday |remember when |let's talk|lets talk|let's chat|lets chat|tell me something|talk to me|say something|tell me a story|talk about|i want to talk|i need to talk)\b)/i.test(s)
+ return /^(?:(?:i am|i'm|im|i feel|i felt|i think|i thought|i wonder|i like|i love|i hate|i don't|i dont|i wish|i just|i was|we are|we're|we should|we could|we have|you are|you're|you keep|you seem|you sound|you never|you always|you don't|you dont|that is|that's|this is|it's|its|today |yesterday |remember when |let's talk|lets talk|let's chat|lets chat|tell me something|talk to me|say something|tell me a story|talk about|i want to talk|i need to talk|i need help|i found|i saw|i got|i collected)\b)/i.test(s)
 }
 const MAX_RESPONSE=390
 const short=s=>String(s||'').replace(/[\r\n\x00-\x1f\x7f]/g,' ').trim().slice(0,MAX_RESPONSE)
@@ -71,6 +71,16 @@ function conversationalContext(raw,{world=null,navigation=null,memory=null}={}){
  }
  if(/^(?:i(?:'m| am|m) (?:bored|lonely|sad|upset|angry|frustrated|tired)|this is (?:boring|frustrating)|this (?:game|bot|app) is (?:frustrating|annoying)|you (?:annoy|frustrate) me)[?.!]*$/.test(s))
   return 'I hear that this has been frustrating. I can keep talking with you without running anything, or we can focus on one small Realm task and check what actually happens.'
+ if(/^(?:can we be friends|will you be my friend|are we friends|do you have friends|how was your day|how are you feeling)[?.!]*$/.test(s))
+  return 'I can be a companion for conversation and Minecraft adventures, even though I do not have human experiences or feelings. What was the best part of your day?'
+ if(/^(?:tell me a story|make up a story)[?.!]*$/.test(s))
+  return 'Here is a little Minecraft story I made up: A traveler found a lantern glowing inside an empty mountain. A small cave opened behind it, revealing a garden that had never seen the sun. The traveler planted one more seed, then left the light for whoever explored the mountain next. What do you think happened to the garden?'
+ if(/^(?:i need help|can you help me|i need someone to talk to)[?.!]*$/.test(s))
+  return 'I can help with a supported Realm task or talk it through with you. What are you trying to accomplish? I will not start mining or building just because we are talking.'
+ if(/^(?:i (?:found|saw|spotted|collected|got) )(.{3,90})[?.!]*$/.test(s)){
+  const what=s.match(/^i (?:found|saw|spotted|collected|got) (.{3,90})[?.!]*$/)?.[1]
+  return 'You mentioned finding '+short(what)+'. That sounds worth exploring. Want to tell me where it was or decide what we should do with it? I have not assumed it is in my inventory.'
+ }
  if(/^(?:tell me (?:something|about yourself)|say something|talk to me|let's (?:talk|chat)|lets (?:talk|chat)|i (?:want|need) to talk)[?.!]*$/.test(s))
   return 'I would like to get better at exploring with you. The part I can verify is what the Realm sends me—terrain, inventory, health and task results. What would you like to talk about today?'
  if(/^(?:what (?:should|could) we do|any ideas|what do you want to do|what do you suggest|what next|what should we try)[?.!]*$/.test(s))
@@ -123,7 +133,7 @@ export function respondToConversation(raw,{vocabulary=null,world=null,navigation
   case 'thanks':return "You’re welcome! I can execute supported direct instructions; the saved-plan queue still has its own Activate control."
   case 'joke':return "Why did the Creeper bring a map? It kept losing its friends in a blast!"
   case 'teasing':return "I’m still here to help. Want a status check, a Minecraft lookup, or to prepare a command?"
-  case 'identity':return 'I’m the Realm assistant running in this app. I can chat and answer Realm or Minecraft questions; I can start recognized, supported instructions directly. Saved command cards still wait for Activate.'
+  case 'identity':return 'I’m RoveKin, the Minecraft Realm companion running on your phone. I can chat and answer Realm or Minecraft questions; I can start recognized, supported instructions directly. Saved command cards still wait for Activate.'
   case 'capabilities':return "I can check Realm status, look at nearby blocks and inventory, answer Minecraft material or recipe questions, and prepare supported movement, mining, and building actions. Tell me a recognized action directly, or use command cards and Activate for a manual queue."
   case 'movement':return navigation?.job?'My current navigation state is '+String(navigation.state||'active')+'. '+(navigation.reason||'Waiting for actual server movement feedback.'):'I am not running a movement job right now. We can talk, or you can ask me to follow you.'
   case 'status':return 'survival status'
