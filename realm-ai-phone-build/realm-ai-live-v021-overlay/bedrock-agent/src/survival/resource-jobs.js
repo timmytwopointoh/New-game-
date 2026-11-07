@@ -1,4 +1,4 @@
-import {parseResourceGoal,internalResourcePlan,selectKnownResource,treeTrunkAtPosition} from './internal-skills.js'
+import {parseResourceGoal,internalResourcePlan,visibleResourceCandidates,treeTrunkAtPosition} from './internal-skills.js'
 import {miningAssessment} from './obstacles.js'
 import {bestAxeSlot,axeDurability,chestCheckpoint,storageForTree,trunkIdentity,provisioningPlan} from './forestry-cycle.js'
 import {makeForestryReturnPlan,returnRouteHints} from './forestry-return.js'
@@ -214,12 +214,21 @@ export class ResourceJobs {
   if(['returning-home','return-walking','return-paused'].includes(a.state)){this.tickHomeward(now);return}
   const w=this.world,n=this.navigation
   if(a.state==='search'){
-   if(a.goal.requiredTrees&&a.trunks.length>=a.goal.requiredTrees){this.finish(`Confirmed log collection at ${a.trunks.length} distinct tree sites.`,'completed');return}
+   if(a.goal.requiredTrees&&a.trunks.length>=a.goal.requiredTrees&&a.pickups>=a.goal.requiredTrees){
+    this.finish(`Server inventory confirms pickup after ${a.pickups} trunk breaks at ${a.trunks.length} distinct tree sites.`,'completed');return
+   }
    if(a.goal.quantity){const amount=a.goal.sourceFamily==='logs'?Object.entries(w.items()).reduce((n,[name,count])=>n+(/_(?:log|wood|stem|hyphae)$/.test(name)?count:0),0):(w.items()[a.goal.target]||0);if(amount>=a.goal.quantity){this.finish(`Server inventory confirms ${amount} ${a.goal.sourceFamily==='logs'?'logs':a.goal.target}.`,'completed');return}}
    if(a.goal.kind!=='tree-harvest'&&a.breaks>=a.goal.maxBlocks){this.finish('Finished bounded resource pass: '+a.breaks+' server-confirmed breaks; '+a.pickups+' inventory-confirmed pickups.',a.goal.quantity?'partial':'completed');return}
    if(n.job||n.mining.job)return
    if(this.chooseTools(now))return
-   const target=selectKnownResource(w,a.goal,a.visited)
+   const visible=visibleResourceCandidates(w,a.goal,a.visited)
+   const nearest=visible[0]||null
+   // The adaptive learner may choose only from genuinely visible targets:
+   // within two blocks of the closest and never bypassing safe mining checks.
+   const options=nearest?visible.filter(p=>p.distance<=nearest.distance+2).slice(0,4):[]
+   const chosen=options.length>1?this.controller.mind?.choose('mine',
+    options.map(p=>({material:p.name,weight:1/(1+Math.max(0,p.distance-nearest.distance)),target:p})))?.target:null
+   const target=chosen&&options.includes(chosen)?chosen:nearest
    if(!target){
     // Consult *remembered observations*, not fabricated live blocks. Revisit a
     // safe known waypoint near a previously observed tree and scan it again.
@@ -288,8 +297,15 @@ export class ResourceJobs {
     this.finish('Mining was not server-confirmed: '+(n.mining.reason||'unknown result'));return
    }
    const target=a.target;a.visited.add(id(target));a.breaks++
-   if(a.goal.sourceFamily==='logs'){const site=trunkIdentity(target,a.trunks);if(!a.trunks.includes(site))a.trunks.push(site);this.controller.workshop?.rememberTree(target)}
-   if(a.goal.kind==='tree-harvest'){this.controller.workshop?.rememberTree(target);a.trees.add(treeTrunkAtPosition(target));this.noteTree(target,now)}
+   if(a.goal.kind==='tree-harvest'){
+    // noteTree registers this site and schedules chest checkpoints.
+    // Previously sourceFamily=logs inserted it first, so noteTree skipped!
+    a.trees.add(treeTrunkAtPosition(target));this.noteTree(target,now)
+   }else if(a.goal.sourceFamily==='logs'){
+    const site=trunkIdentity(target,a.trunks);if(!a.trunks.includes(site))a.trunks.push(site)
+   }
+   if(a.goal.sourceFamily==='logs'||a.goal.kind==='tree-harvest')this.controller.workshop?.rememberTree(target)
+   this.controller.mind?.record('mine',target.name,{outcome:'confirmed',evidence:'server-block-update'})
    a.pickupStarted=now;a.state='pickup-wait'
    a.reason='Server confirmed '+target.name+' broken. Waiting for an observed item drop; inventory not yet confirmed.'
    return
@@ -300,14 +316,14 @@ export class ResourceJobs {
    if(n.job)return
    const before=a.inventoryBefore,after=w.items()
    const expected=expectedResourceDrops(w,a.target);const growth=expected.some(name=>(after[name]||0)>(before[name]||0))
-   if(growth){a.pickups++;a.state='search';a.reason='Inventory increased after a confirmed break; looking for the next target.';return}
+   if(growth){a.pickups++;this.controller.mind?.record('collect',a.target.name,{outcome:'confirmed',evidence:'server-inventory-increase'});a.state='search';a.reason='Inventory increased after a confirmed break; looking for the next target.';return}
    const drop=[...(w.drops?.values?.()||[])].filter(d=>expected.includes(d.name)&&distance(d.position,w.position)<8).sort((x,y)=>distance(x.position,w.position)-distance(y.position,w.position))[0]
    if(drop){const result=n.collectNearby({names:expected});if(result?.accepted){a.state='pickup-active';a.reason='Collecting server-observed drop and waiting for inventory confirmation.';return}}
    if(now-a.pickupStarted>2500){a.state='search';a.reason='Break confirmed; no item received. Never counted as collected.'}
   }
   if(a.state==='pickup-active'){
    if(n.pickup.target||n.job)return
-   if(n.pickup.state==='confirmed')a.pickups++
+   if(n.pickup.state==='confirmed'){a.pickups++;this.controller.mind?.record('collect',a.target.name,{outcome:'confirmed',evidence:'server-inventory-increase'})}
    else a.reason='Pickup was not confirmed; no supplies credited.'
    a.state='search'
   }
