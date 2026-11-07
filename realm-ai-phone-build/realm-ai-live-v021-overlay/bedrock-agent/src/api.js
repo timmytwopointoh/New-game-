@@ -10,6 +10,7 @@ import path from 'node:path'
 import {root} from '../tools/config.js'
 import {OwnerInbox} from './survival/owner-inbox.js'
 import {ConversationMemory} from './survival/conversation-memory.js'
+import {CompanionGoalJournal} from './survival/companion-goal-journal.js'
 import crypto from 'node:crypto'
 import {parseCommand} from '../pack-template/scripts/commands.js'
 import {interpretMessage} from './chat.js'
@@ -341,7 +342,25 @@ export function createApi(config,connection,log=console.log){
  }
  // One phone-local inbox for every live, scope-bound approval or clarification.
  // A language correction never carries mining/building permission.
- const inbox=new OwnerInbox(connection,{interpretation:()=>pendingInterpretation,dispatch:raw=>message(raw)})
+ const journal=new CompanionGoalJournal({
+  directory:path.join(root,'private','companion-goals'),
+  scope:connection.survival?.commandVocabulary?.scope||null
+ })
+ const inbox=new OwnerInbox(connection,{
+  interpretation:()=>pendingInterpretation,
+  dispatch:raw=>message(raw),
+  guidance:()=>journal.helpPrompt({spawned:connection.spawned}),
+  respondGuidance:(id,decision,explanation,now)=>journal.respondToHelp(id,decision,explanation,now)
+ })
+ // Only server-confirmed events count as progress; interrupted tasks never
+ // resume silently after a saved-session reconnect.
+ connection.on('survival-update',u=>journal.noteVerifiedProgress(u?.message||''))
+ connection.on('session-end',()=>journal.interrupt('Realm session disconnected.'))
+ const journalStatus=()=>{
+  journal.setScope(connection.survival?.commandVocabulary?.scope||null)
+  journal.observe({survival:connection.survival,spawned:connection.spawned})
+  return journal.snapshot()
+ }
  const conversation=new ConversationMemory({
   directory:path.join(root,'private','conversation-memory'),
   scope:connection.survival?.commandVocabulary?.scope||null
@@ -349,17 +368,28 @@ export function createApi(config,connection,log=console.log){
  const routedMessage=(raw,options={})=>{
   const scope=connection.survival?.commandVocabulary?.scope||null
   conversation.setScope(scope)
+  journal.setScope(scope)
+  journal.observe({survival:connection.survival,spawned:connection.spawned})
+  // Task questions should describe verified work, not merely quote chat.
+  const goalRecall=journal.answer(raw,{survival:connection.survival,spawned:connection.spawned})
+  if(goalRecall)return goalRecall
   const recall=conversation.respondToRecall(raw)
   if(recall)return recall
   // A bare "confirm" only acts when there is exactly one CURRENT permission.
   // Arbitrary prose or ambiguous multiple prompts never becomes consent.
   const selected=inbox.confirmSingleFromChat(raw)
   const result=selected||message(raw,options)
+  const isStop=/^(?:stop|stop everything|cancel job|stop following|stop mining|stop walking)$/i.test(String(raw||'').trim())
+  if(isStop&&result?.accepted!==false)journal.transition('cancelled','Owner stopped the task. The record is saved, but no work continues.')
+  else{
+   journal.recordRequest(raw,result)
+   journal.observe({survival:connection.survival,spawned:connection.spawned})
+  }
   conversation.remember('owner',raw)
   if(result?.message)conversation.remember('rovekin',result.message)
   return result
  }
- const controller={planner,message:routedMessage,inbox,conversation}
+ const controller={planner,message:routedMessage,inbox,conversation,journal}
  let stopEpoch=0
  const token=config.localAPI.token
  const server=http.createServer(async(req,res)=>{
@@ -391,7 +421,7 @@ export function createApi(config,connection,log=console.log){
       return send(200,connection.reconnect())
    }
    if(req.method==='POST'&&pathname==='/navigation/retry'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch<stopEpoch)return send(200,{accepted:false,message:'Stop cancelled this retry.'});const nav=connection.survival?.navigation;return send(200,nav?nav.retryBlockedFollow():{accepted:false,message:'Join the Realm first.'})}
-    if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,message('stop'))}
+    if(req.method==='POST'&&pathname==='/stop'){const epoch=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('epoch'));if(Number.isSafeInteger(epoch)&&epoch>stopEpoch)stopEpoch=epoch;return send(200,routedMessage('stop'))}
    if(req.method==='GET'&&(pathname==='/knowledge/blocks'||pathname==='/knowledge/entities')){
      const q=new URL(req.url,'http://127.0.0.1').searchParams
      const offset=Number(q.get('offset')||0),limit=Number(q.get('limit')||20)
@@ -423,15 +453,16 @@ export function createApi(config,connection,log=console.log){
    if(req.method==='GET'&&pathname==='/support')return send(200,{support:connection.trace?.summary()||null})
    if(req.method==='GET'&&pathname==='/support/snapshot')return send(200,makeSupportSnapshot(connection))
    if(req.method==='GET'&&pathname==='/diagnostics')return send(200,connection.diagnostics?.()||{phase:'unavailable',savedAuthentication:'kept'})
-   if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot()})
-   if(req.method==='GET'&&pathname==='/inbox')return send(200,{inbox:inbox.snapshot(),conversation:conversation.snapshot()})
+   if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot(),goals:journalStatus()})
+   if(req.method==='GET'&&pathname==='/inbox')return send(200,{inbox:inbox.snapshot(),conversation:conversation.snapshot(),goals:journalStatus()})
    if(req.method==='GET'&&pathname==='/catalog')return send(200,{catalog:commandCatalog,options:connection.survival?{...formOptions(connection.survival.world,new URL(req.url,'http://127.0.0.1').searchParams.get('q')||''),owners:config.ownerPlayerNames||[]}:null})
+   if(req.method==='GET'&&pathname==='/goals')return send(200,{goals:journalStatus()})
    if(req.method==='GET'&&pathname==='/plans')return send(200,{plans:connection.survival?.commandPlans.snapshot()})
    if(req.method==='GET'&&pathname==='/planner')return send(200,{planner:planner.snapshot()})
    if(req.method==='GET'&&pathname==='/updates'){
      const n=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('after')||0)
      if(!Number.isSafeInteger(n)||n<0)return send(400,{error:'invalid cursor'})
-     return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot(),updates:(connection.events||[]).filter(e=>e.id>n).slice(-32),cursor:connection.nextEventId||0})
+     return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot(),goals:journalStatus(),updates:(connection.events||[]).filter(e=>e.id>n).slice(-32),cursor:connection.nextEventId||0})
    }
    if(req.method==='POST'&&(pathname==='/research/preview'||pathname==='/research/run')){
      let body='';try{for await(const part of req){body+=part.toString('utf8');if(Buffer.byteLength(body)>12000)return send(413,{accepted:false,message:'Research answer exceeds size limit.'})}
