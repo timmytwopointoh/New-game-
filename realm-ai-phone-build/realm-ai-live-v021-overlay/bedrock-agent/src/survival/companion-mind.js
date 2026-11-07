@@ -28,13 +28,20 @@ export class CompanionMind{
  setScope(scope){
   this.scope=scope?String(scope):null;this.file=this.fileForScope(this.scope)
   this.state=this.blank();this.readOnly=false;this.error=''
-  if(!this.file||!fs.existsSync(this.file))return
+  if(!this.file)return
+  // Lock in the initial persona as soon as the Realm identity exists.
+  // Without this, a character that has not yet learned a task is randomly
+  // recreated on every reconnect despite claiming a persistent personality.
+  if(!fs.existsSync(this.file)){this.persist();return}
   try{
    const x=JSON.parse(fs.readFileSync(this.file,'utf8'))
    if(x?.schema!==1||typeof x.persona!=='string'||!/^([a-f0-9]{12})$/.test(x.persona)||
      !validRecord(x.temperament)||!validRecord(x.experiences)||Object.keys(x.experiences).length>192||
      !safeCount(x.decisions)||!safeCount(x.verifiedSuccesses)||!safeCount(x.verifiedFailures))throw Error('Invalid profile')
-   for(const v of Object.values(x.temperament))if(!Number.isFinite(v)||v<0||v>1)throw Error('Invalid temperament')
+   for(const property of ['curiosity','boldness','craftsmanship','sociability']){
+    const v=x.temperament[property]
+    if(!Number.isFinite(v)||v<0||v>1)throw Error('Invalid temperament')
+   }
    for(const [id,xp] of Object.entries(x.experiences))
     if(!/^[-a-z0-9_:]{1,96}$/.test(id)||!validRecord(xp)||!safeCount(xp.successes)||!safeCount(xp.failures))throw Error('Invalid learning')
    this.state=x
