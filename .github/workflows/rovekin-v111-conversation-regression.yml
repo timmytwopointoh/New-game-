@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/rovekin-v111-conversation-regression.yml
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/conversation.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/offline-minecraft-brain.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/realm-chat.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v111-dialogue.test.js
@@ -29,6 +30,7 @@ jobs:
           set -euo pipefail
           node --check src/conversation.js
           node --check src/api.js
+          node --check src/offline-minecraft-brain.js
           node --test \
             tests/rovekin-v111-dialogue.test.js \
             tests/owner-chat-action-handoff.test.js \
