@@ -29,6 +29,8 @@ export class ConversationMemory{
  }
  remember(role,text,at=Date.now()){
   if(!this.scope||this.readOnly||!['owner','rovekin'].includes(role))return false
+  // Do not persist a credential-bearing utterance, even in redacted form.
+  if(/\b(?:password|passcode|auth token|access token|device code|microsoft code|login code)\b/i.test(String(text||'')))return false
   const safe=mask(text)
   if(!safe||/\b(?:password|sign.?in code|microsoft\.com\/link|device code)\b/i.test(safe))return false
   if(role==='rovekin'&&safe===this.entries.at(-1)?.text)return false
