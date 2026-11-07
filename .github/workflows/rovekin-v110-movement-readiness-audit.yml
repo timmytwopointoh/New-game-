@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/rovekin-v110-movement-readiness-audit.yml
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/connection.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/controller.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/diagnostic-store.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/support-snapshot.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/world.js
@@ -29,7 +30,7 @@ jobs:
         working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
         run: |
           set -euo pipefail
-          for f in src/connection.js src/diagnostic-store.js src/support-snapshot.js src/survival/{world,verification,navigation}.js; do node --check "$f"; done
+          for f in src/connection.js src/diagnostic-store.js src/support-snapshot.js src/survival/{world,verification,navigation,controller}.js; do node --check "$f"; done
           node --test \
             tests/rovekin-v110-movement-readiness.test.js \
             tests/rovekin-v109-learning-truth.test.js \
