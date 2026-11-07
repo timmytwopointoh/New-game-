@@ -67,6 +67,11 @@ export class LocalBrain {
  install(){
   if(this.downloading)return {accepted:true,queued:true,message:'The model download is already running.',brain:this.status()}
   if(this.verified)return {accepted:true,queued:false,message:'The offline model is already installed.',brain:this.status()}
+  if(fs.existsSync(this.modelFile)){
+   this.phase='checking-model'
+   void this.verifyModel()
+   return {accepted:true,queued:true,message:'Verifying the existing model on this phone. Refresh AI Brain status shortly; it will not re-download verified bytes.',brain:this.status()}
+  }
   if(!this.config())return {accepted:false,queued:false,message:'The APK is missing its ARM64 neural inference runtime. No model download was started.',brain:this.status()}
   try{
    fs.mkdirSync(this.directory,{recursive:true,mode:0o700})
@@ -133,7 +138,7 @@ export class LocalBrain {
    const child=this.spawn(cfg.executable,args,{env,stdio:['ignore','ignore','pipe'],windowsHide:true})
    this.child=child;this.port=port;this.key=key
    child.stderr?.on('data',()=>{}) // never persist prompt, model logs or private message
-   child.on('error',e=>{this.error='Native inference could not launch: '+safeError(e);this.phase='runtime-unavailable';this.ready=false})
+   child.on('error',e=>{this.error='Native inference could not launch: '+safeError(e);this.phase='runtime-unavailable';this.ready=false;if(this.child===child)this.child=null})
    child.on('exit',()=>{if(this.child===child){this.ready=false;this.child=null;if(this.phase!=='stopped')this.phase='runtime-exited'}})
    for(let i=0;i<70;i++){
     if(child.exitCode!==null||this.child!==child)break
@@ -171,7 +176,7 @@ export class LocalBrain {
     for(const entry of recent.slice(-4))
      if(['user','assistant'].includes(entry?.role))
       messages.push({role:entry.role,content:bounded(entry.content,190)})
-    messages.push({role:'user',content:question+'/no_think'})
+    messages.push({role:'user',content:'/no_think\n'+question})
     const reply=await this.fetch('http://127.0.0.1:'+this.port+'/v1/chat/completions',{
      method:'POST',signal:abort.signal,
      headers:{authorization:'Bearer '+this.key,'content-type':'application/json'},
