@@ -82,9 +82,40 @@ export class CommandPlans{
  setScope(scope){
   this.interrupt('Realm changed; no automatic resume.');this.scope=scope||null;this.cards=[];this.selected=null;this.readOnly=false;this.loadError=''
   this.file=this.directory&&scope?path.join(this.directory,crypto.createHash('sha256').update(scope).digest('hex')+'.json'):null
-  if(this.file&&fs.existsSync(this.file)){try{const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(!Array.isArray(data.cards)||data.cards.length>5)throw Error();this.cards=data.cards.map((c,i)=>({id:i+1,descriptor:validateDescriptor(c.descriptor),state:'waiting',result:'',activationLocked:false}));this.sequence=this.cards.length;const selected=Number.isSafeInteger(data.selected)?data.selected:null;this.selected=this.cards.some(c=>c.id===selected)?selected:null}catch{this.loadError='Saved plans could not be read; original file preserved.';this.readOnly=true}}
+  if(this.file&&fs.existsSync(this.file))try{
+   const data=JSON.parse(fs.readFileSync(this.file,'utf8'))
+   if(!Array.isArray(data.cards)||data.cards.length>5||
+      !(data.schema===undefined||data.schema===2))throw Error('Invalid saved plans')
+   // Legacy cards stored only command descriptors, not whether any action
+   // executed. Never bring them back as fresh queued world edits.
+   const legacy=data.schema!==2
+   const allowed=new Set(['waiting','running','completed','blocked','failed','finished-unverified','interrupted'])
+   this.cards=data.cards.map((c,i)=>{
+    const descriptor=validateDescriptor(c.descriptor)
+    if(!legacy&&!allowed.has(c.state))throw Error('Invalid stored status')
+    const state=legacy||c.state==='running'?'interrupted':c.state
+    return {id:i+1,descriptor,state,
+      result:legacy?'Older saved plan has unknown execution history; review or create a new command.':
+        c.state==='running'?'Android process restarted mid-task; no action was replayed.':'',
+      activationLocked:state!=='waiting'||c.activationLocked===true}
+   })
+   this.sequence=this.cards.length
+   const selected=Number.isSafeInteger(data.selected)?data.selected:null
+   this.selected=this.cards.some(c=>c.id===selected)?selected:null
+  }catch{
+   this.loadError='Saved plans could not be read; original file preserved.'
+   this.readOnly=true
+  }
  }
- persist(){if(this.readOnly)throw Error(this.loadError);if(!this.file)return;fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});fs.writeFileSync(this.file+'.tmp',JSON.stringify({cards:this.cards.map(c=>({descriptor:c.descriptor})),selected:this.selected}),{mode:0o600});fs.renameSync(this.file+'.tmp',this.file)}
+ persist(){
+  if(this.readOnly)throw Error(this.loadError)
+  if(!this.file)return
+  fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700})
+  fs.writeFileSync(this.file+'.tmp',JSON.stringify({schema:2,
+   cards:this.cards.map(c=>({descriptor:c.descriptor,state:c.state,activationLocked:c.activationLocked===true})),
+   selected:this.selected}),{mode:0o600})
+  fs.renameSync(this.file+'.tmp',this.file)
+ }
  snapshot(){this.reconcile();return {retryable:this.running===null&&!this.batch&&this.cards.some(c=>['blocked','failed'].includes(c.state)&&['walk','clear'].includes(c.descriptor.id)),scopeKnown:!!this.scope,cards:this.cards.map(c=>({...copy(c),command:renderDescriptor(c.descriptor),label:commandCatalog.find(d=>d.id===c.descriptor.id)?.label,note:commandCatalog.find(d=>d.id===c.descriptor.id)?.note})),selected:this.selected,running:this.running,batch:this.batch?{remaining:this.batch.ids.length-this.batch.index,total:this.batch.ids.length}:null,pending:this.cards.filter(c=>c.state==='waiting').length,error:this.loadError||'',capacity:5}}
  prepare(descriptor){
   if(this.directory&&!this.scope)throw Error('Join and identify the Realm before saving a Realm-scoped plan.')
@@ -98,7 +129,7 @@ export class CommandPlans{
   if(d.id==='follow'&&d.values.player!=='me'&&![...w.players.values()].some(p=>p.name.toLowerCase()===d.values.player.toLowerCase())&&!this.controller.connection.config?.ownerPlayerNames?.some(p=>p.toLowerCase()===d.values.player.toLowerCase()))throw Error('Choose an observed player or configured owner.')
   if(d.id==='hotbar'&&!w.inventory.has(d.values.slot-1))throw Error('That hotbar slot has not been received from the server.')
  }
- select(id){this.reconcile();if(this.running||this.batch)throw Error('Stop the running plan batch before changing selection.');if(!this.cards.some(c=>c.id===id))throw Error('Choose a saved card.');const previous=this.selected,card=this.cards.find(c=>c.id===id),old={locked:card.activationLocked,state:card.state};this.selected=id;if(card.activationLocked){card.activationLocked=false;card.state='waiting';card.result='Reused; waiting for Activate.'}try{this.persist()}catch(e){this.selected=previous;card.activationLocked=old.locked;card.state=old.state;throw e}return this.snapshot()}
+ select(id){this.reconcile();if(this.running||this.batch)throw Error('Stop the running plan batch before changing selection.');if(!this.cards.some(c=>c.id===id))throw Error('Choose a saved card.');const previous=this.selected;this.selected=id;try{this.persist()}catch(e){this.selected=previous;throw e}return this.snapshot()}
  delete(id){if(this.batch)throw Error('Stop the running plan batch before deleting a card.');if(this.running===id)throw Error('Stop this plan before deleting it.');const before=this.cards,selected=this.selected;this.cards=this.cards.filter(c=>c.id!==id);if(this.selected===id)this.selected=null;try{this.persist()}catch(e){this.cards=before;this.selected=selected;throw e}return this.snapshot()}
  activate(id){
   this.reconcile();if(this.running!==null||this.batch)throw Error('A plan batch is already running.')
@@ -106,6 +137,9 @@ export class CommandPlans{
   // Pressing Play on any saved card reuses it, without a separate Reuse step.
   // Revalidate BEFORE rearming: a completed build must never restart blindly.
   const d=validateDescriptor(card.descriptor);this.validateChoices(d)
+  if(card.state!=='waiting'&&
+      ['dig','place','build_wall','build_floor','build_shelter','quarry','strip_mine','gather','craft','collect'].includes(d.id))
+   throw Error('That world-edit card was already attempted. Inspect the Realm and prepare a NEW card before another edit.')
   const old={selected:this.selected,state:card.state,result:card.result,activationLocked:card.activationLocked}
   this.selected=id;card.state='waiting';card.result='';card.activationLocked=false
   try{this.persist()}catch(e){this.selected=old.selected;card.state=old.state;card.result=old.result;card.activationLocked=old.activationLocked;throw e}
@@ -144,6 +178,9 @@ export class CommandPlans{
   const card=this.cards.find(c=>c.id===this.batch.ids[this.batch.index]);if(!card||card.state!=='waiting'||card.activationLocked){this.finishBatch('Queue stopped because a command is no longer waiting.');return {accepted:false,queued:false,message:'Queue stopped because a command is no longer waiting.'}}
   try{
    const d=validateDescriptor(card.descriptor);this.validateChoices(d);card.activationLocked=true;card.state='running';this.running=card.id;this.activeStartedAt=Date.now();this.activeServerPoseAt=this.controller.world?.lastPoseAt||0;this.activeGoal=d.id==='walk'||d.id==='clear'?{x:d.values.x,y:d.values.y,z:d.values.z}:null
+   // Save the started state before any Minecraft input; a process crash
+   // must not re-expose the original edit as if it had never started.
+   this.persist()
    // The native Android Commands > Follow card triggers the observed-owner field
     // trial; chat is not required. Other players remain normal Follow targets.
     // Home is granted only after the server verifies proximity, never on Play.
