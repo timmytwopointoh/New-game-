@@ -178,3 +178,33 @@ test('manually held home never starts autonomous return travel after reconnect',
  assert.equal(steps,0)
  assert.equal(p.state,'paused')
 })
+
+
+test('explicit go home can return without changing an owner STOP or claiming predicted arrival',t=>{
+ const {dir,plot,design}=fixture(t)
+ const home=new PermanentHome({directory:dir,scope:'realm-A'})
+ assert(home.saveFirst(plot,design).ok)
+ assert(home.saveProgress({autoResume:false}))
+ const sent=[]
+ const w={dimension:0,editModeVerified:true,movementVerified:true,
+  position:{x:10.5,y:105.62,z:10.5},serverPosition:{x:10.5,y:105.62,z:10.5},
+  standPosition(){return {x:Math.floor(this.position.x),y:Math.floor(this.position.y-1.62),z:Math.floor(this.position.z)}},
+  walkable:()=>true,block:()=>({name:'air'}),requestNearby(){}}
+ const nav={client:{},job:null,lastPoseAt:99000,walk(goal){sent.push(goal);this.job={kind:'solo',goal};return {accepted:true}}}
+ const c={connection:{spawned:true},world:w,navigation:nav,
+  report(){},companion:{homeMemory:home}}
+ const p=new HomeProject(c)
+ p.restoreSaved(home.record,'realm-A')
+ assert.equal(p.requestReturnHome().accepted,true)
+ p.tick(100000)
+ assert.equal(sent.length,1)
+ assert.equal(home.record.autoResume,false)
+ nav.job=null;w.position={x:134.5,y:105.62,z:37.5}
+ p.tick(107000)
+ assert.equal(p.returnHomeOnly,true,'predicted position is not enough to claim arrival')
+ w.serverPosition={x:134.5,y:105.62,z:37.5};nav.lastPoseAt=108000
+ p.tick(108200)
+ assert.equal(p.returnHomeOnly,false)
+ assert.equal(p.state,'paused')
+ assert.equal(home.record.autoResume,false)
+})
