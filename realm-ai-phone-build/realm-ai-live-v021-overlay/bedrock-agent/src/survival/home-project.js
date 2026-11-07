@@ -5,12 +5,13 @@ import {physicalHomePlan,homeCompletion,inspectHomeCapacity} from './home-archit
 import {nextHomeObstruction,homeProjectOwnedCoordinates} from './home-clearance.js'
 import {HomeSupply} from './home-supply.js'
 import {constructionExposure} from './construction-guard.js'
+import {routeSearchCandidates} from './player-locator.js'
 const safeScope=scope=>String(scope??'')
 const key=p=>p.x+','+p.y+','+p.z
 const distance=(a,b)=>a&&b?Math.hypot(a.x-b.x-.5,a.y-b.y-1.62,a.z-b.z-.5):Infinity
 export class HomeProject {
  constructor(controller){this.c=controller;this.supply=new HomeSupply(controller);this.clear()}
- clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null;this.ownerPauseRequested=false;this.proximityReview=null;this.proximityApproval=null}
+ clear(){this.plan=null;this.plot=null;this.pending=null;this.review=null;this.clearance=null;this.supply.reset();this.state='idle';this.stage=0;this.started=0;this.lastAttempt=0;this.lastReport=0;this.reason='No home project started.';this.moveAttempts=0;this.ownerScope=null;this.ownerPauseRequested=false;this.proximityReview=null;this.proximityApproval=null;this.lastHomeReturnAttempt=0;this.homeReturnGoal=null;this.lastHomeReturnReport=0}
  preview(plot,design){
   this.clear()
   this.plan=physicalHomePlan(plot,design);this.plot=plot;this.state='preview'
@@ -30,10 +31,51 @@ export class HomeProject {
   this.reason='Permanent home remembered. Waiting for actual Realm blocks before resuming.'
   return this.snapshot()
  }
+ // An app restart does not mean the avatar reappears on its saved plot.
+ // Travel toward the immutable home through short, fully observed dry routes
+ // before checking old construction blocks. Never teleport, cross unknown
+ // terrain, silently end other owner tasks, or claim travel succeeded.
+ approachSavedHome(now){
+  if(!this.restoreAutoResume||!this.plot)return false
+  const w=this.c.world,n=this.c.navigation,at=w.standPosition?.(),home=this.plot.center
+  if(!at||!home||!w.movementVerified)return true
+  const distanceHome=Math.hypot(at.x-home.x,at.z-home.z)
+  if(distanceHome<=10){
+   // Let an in-flight segment finish before editing the home site.
+   return !!n.job
+  }
+  if(n.job||n.pendingFollow||n.survey||this.c.resources?.active||
+     this.c.miningJobs?.active||this.c.acquisition?.active||this.c.operations?.pending){
+   this.reason='Permanent home remembered; waiting for the active owner task to finish before returning.'
+   return true
+  }
+  if(now-this.lastHomeReturnAttempt<6000)return true
+  this.lastHomeReturnAttempt=now
+  const candidates=routeSearchCandidates(w,at,home,{maxSegment:12,range:16,limit:20})
+  for(const candidate of candidates){
+   if(!w.walkable(candidate.goal))continue
+   const result=n.walk?.(candidate.goal,{allowMining:false,maxDrop:1})
+   if(result?.accepted){
+    this.homeReturnGoal={...candidate.goal}
+    this.reason='Returning to the original permanent home in verified dry segments; '+
+      Math.round(candidate.remaining)+' horizontal blocks still to travel.'
+    return true
+   }
+  }
+  this.homeReturnGoal=null
+  this.reason='Home is saved at '+key(home)+'. Waiting for a safe observed route; '+
+    'keeping the Realm connected and the existing construction untouched.'
+  try{w.requestNearby?.(n.client)}catch{}
+  if(now-this.lastHomeReturnReport>30000){
+   this.lastHomeReturnReport=now;this.c.report?.(this.reason)
+  }
+  return true
+ }
  recheckSavedStages(now){
   const c=this.c,w=c.world,n=c.navigation
   if(!c.connection?.spawned||w.dimension!==this.plot?.dimension||
       !w.editModeVerified||!w.position)return
+  if(this.approachSavedHome(now))return
   const count=this.restoreTarget??0
   for(let i=0;i<count;i++){
    const stage=this.plan.stages[i]
