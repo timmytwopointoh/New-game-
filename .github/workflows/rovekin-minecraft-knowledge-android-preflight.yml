@@ -1,11 +1,10 @@
 name: Rovekin Minecraft goal intelligence native Android APK preflight
 on:
+  workflow_dispatch:
   push:
     branches: [ feature/rovekin-minecraft-goal-intelligence-20261107 ]
     paths:
       - .github/workflows/rovekin-minecraft-knowledge-android-preflight.yml
-      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/**
-      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/**
 permissions:
   contents: read
 jobs:
