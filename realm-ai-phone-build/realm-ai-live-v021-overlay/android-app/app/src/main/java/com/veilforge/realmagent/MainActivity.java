@@ -155,7 +155,7 @@ public class MainActivity extends Activity {
         LinearLayout account=new LinearLayout(this);body.addView(account,space(8));account.addView(button("Start bot",this::startBot),new LinearLayout.LayoutParams(0,d(56),1));Button signIn=button("Microsoft sign-in code",this::showAuth);signIn.setContentDescription("Show Microsoft sign-in code");account.addView(signIn,new LinearLayout.LayoutParams(0,d(56),1));
         body.addView(sectionLabel("SESSION"),space(18));LinearLayout modes=new LinearLayout(this);body.addView(modes,space(7));modes.addView(button("Survival",()->modeAction("survival")),new LinearLayout.LayoutParams(0,d(48),1));modes.addView(button("Creative",()->modeAction("creative")),new LinearLayout.LayoutParams(0,d(48),1));
         body.addView(button("Saved plans",this::showPlans),space(7));body.addView(button("Stop bot service",this::stopServiceNow),space(7));
-        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("Live Follow patches (no restart)",this::showLiveFollowPatches),space(7));body.addView(button("Export ALL diagnostics — ONE ZIP",this::exportBugReport),space(7));body.addView(button("Learning",this::showLearning),space(7));
+        body.addView(sectionLabel("CARE & RECORDS"),space(18));body.addView(button("Updates",()->AppUpdater.show(this)),space(7));body.addView(button("Live Follow patches (no restart)",this::showLiveFollowPatches),space(7));body.addView(button("Export ALL diagnostics — ONE ZIP",this::exportBugReport),space(7));body.addView(button("Learning",this::showLearning),space(7));.addView(button("On-device AI Brain",this::showNeuralBrain),space(7)).
         body.addView(txt("Share only a file you choose in Android's picker.",12,MUTED),space(14));Button shareFile=button("Share one file…",this::pickFileToShare);shareFile.setContentDescription("Choose one file from Android's file picker, then select an app to share it");body.addView(shareFile,space(5));
         AlertDialog dialog=new AlertDialog.Builder(this).setView(root).setPositiveButton("Save",(a,b)->saveAccountSettings()).setNegativeButton("Close",null).create();settingsDialog=dialog;dialog.setOnDismissListener(x->{if(settingsDialog==dialog)settingsDialog=null;for(EditText e:new EditText[]{botField,ownerField,realmField})if(e.getParent()!=null)((android.view.ViewGroup)e.getParent()).removeView(e);});dialog.show();CommandDeck.style(this,dialog,.88f);updateSettingsStatus(null);
     }
@@ -197,7 +197,9 @@ public class MainActivity extends Activity {
     void showLearningStatus(JSONObject status){
         JSONObject survival=status==null?null:status.optJSONObject("survival");
         JSONObject language=survival==null?null:survival.optJSONObject("language"),vocabulary=survival==null?null:survival.optJSONObject("vocabulary"),learning=survival==null?null:survival.optJSONObject("learning");
-        String detail="Offline glossary: "+(language==null?"5,000":language.optInt("bundledWords"))+" words. This app uses vocabulary and command rules; a neural language model is not installed.\n\n";
+        JSONObject brain=status==null?null:status.optJSONObject("brain");
+        String detail="Offline glossary: "+(language==null?"5,000":language.optInt("bundledWords"))+
+            " words. Local neural model: "+(brain==null?"status unavailable":brain.optString("phase","not installed"))+".\n\n";
         if(vocabulary==null)detail+="Start the bot to see current Realm learning.\n";
         else{detail+="Saved word mappings: "+vocabulary.optInt("count")+" / 200 (private to this Realm).\n";for(String field:new String[]{"actions","materials"}){JSONObject entries=vocabulary.optJSONObject(field);if(entries!=null){Iterator<String> keys=entries.keys();int shown=0;while(keys.hasNext()&&shown++<6){String word=keys.next();detail+=word+" → "+entries.optString(word)+"\n";}}}if(!vocabulary.optString("error").isEmpty())detail+=vocabulary.optString("error")+"\n";}
         if(learning!=null){detail+="\nServer-confirmed tasks: "+learning.optInt("confirmed")+". Blocked: "+learning.optInt("blocked")+". Interrupted: "+learning.optInt("interrupted")+".\n";if(!learning.optString("error").isEmpty())detail+=learning.optString("error")+"\n";}
@@ -207,8 +209,60 @@ public class MainActivity extends Activity {
             ". The knowledge grows in private device storage while space is available; low storage suspends new writes.\\n";
         if(mind!=null)detail+="Individual companion: "+mind.optInt("verifiedSuccesses")+
             " confirmed learning successes, "+mind.optInt("decisions")+" decisions considered.\\n";
-        detail+="\\nThe companion can explore related meanings, remember observed biomes and blocks, and learn preferences from verified game outcomes. It is not yet a full neural language model.\\n\\nUse chat to ask it to be funnier, be more serious, look for remembered blocks, or build. The command picker appears only in a developer/test APK; Stop always remains visible.";
+        detail+="\nRoveKin can use a real on-device neural language model for natural conversation after the optional model has been downloaded. Saved home, verified game status, Minecraft reference facts and recent Realm chat remain separate from permissions.\n\nGo to Settings → On-device AI Brain to install or inspect it. Without the model, the fallback vocabulary and offline answer rules still work.";
         new AlertDialog.Builder(this).setTitle("Language and learning").setMessage(detail).setPositiveButton("Close",null).show();
+    }
+    void showNeuralBrain(){
+        if(!apiConnected||token==null||token.isEmpty()){
+            new AlertDialog.Builder(this).setTitle("On-device AI Brain")
+                .setMessage("Start RoveKin first. His neural engine and model run in private storage on your phone, with no cloud chat service.")
+                .setPositiveButton("Close",null).show();return;
+        }
+        io.submit(()->{
+            try{JSONObject result=request("GET","/brain",null);
+                JSONObject brain=result.optJSONObject("brain");
+                ui.post(()->showNeuralBrainStatus(brain));
+            }catch(Exception e){
+                ui.post(()->bubble("ROVEKIN","AI brain status unavailable: "+e.getMessage(),false));
+            }
+        });
+    }
+    void showNeuralBrainStatus(JSONObject b){
+        if(b==null)return;
+        boolean installed=b.optBoolean("installed",false),downloading=b.optBoolean("downloading",false);
+        String message="Engine: "+b.optString("engine","Android ARM64 llama.cpp")+
+            "\nModel: "+b.optString("model","Qwen3-0.6B-Q4_K_M")+
+            "\nLicense: "+b.optString("license","Apache-2.0")+
+            "\nStatus: "+b.optString("phase","unknown")+
+            (downloading?"\nDownload: "+b.optInt("progressPercent",0)+"%":"")+
+            "\nLocal neural answers: "+b.optInt("replyCount",0)+
+            (b.optString("error","").isEmpty()?"":"\nProblem: "+b.optString("error"))+
+            "\n\nOne-time model download: approximately 397 MB. Requires at least 1.1 GB free storage to download and verify. "+
+            "After installation, AI conversation can work offline with no cloud LLM. "+
+            "Minecraft Realms itself still needs internet. On 4 GB RAM, replies may be slow or the model may fail to load. "+
+            "Chat never authorizes Minecraft edits.";
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle("RoveKin • Neural AI Brain").setMessage(message).setNegativeButton("Close",null);
+        if(downloading)dialog.setPositiveButton("Refresh",(d,w)->showNeuralBrain())
+            .setNeutralButton("Cancel download",(d,w)->neuralAction("/brain/cancel-install"));
+        else if(!installed)dialog.setPositiveButton("Install model",(d,w)->neuralAction("/brain/install"))
+            .setNeutralButton("Refresh",(d,w)->showNeuralBrain());
+        else dialog.setPositiveButton("Refresh",(d,w)->showNeuralBrain())
+            .setNeutralButton("Stop answer",(d,w)->neuralAction("/brain/cancel-answer"));
+        dialog.show();
+    }
+    void neuralAction(String endpoint){
+        final long revision=serviceRevision;
+        io.submit(()->{
+            try{JSONObject r=request("POST",endpoint,new JSONObject());
+                ui.post(()->{if(revision!=serviceRevision)return;
+                    bubble("ROVEKIN",r.optString("message","AI brain request processed."),false);
+                    if(r.optJSONObject("brain")!=null)showNeuralBrainStatus(r.optJSONObject("brain"));
+                });
+            }catch(Exception e){
+                ui.post(()->bubble("ROVEKIN","AI brain request failed: "+e.getMessage(),false));
+            }
+        });
     }
     JSONObject savedDiagnostics(){
         JSONObject cache=null;try{String text=getPreferences(MODE_PRIVATE).getString("lastConnectionDiagnostics","");if(!text.isEmpty())cache=ConnectionDiagnostics.sanitize(new JSONObject(text));}catch(Exception ignored){}
