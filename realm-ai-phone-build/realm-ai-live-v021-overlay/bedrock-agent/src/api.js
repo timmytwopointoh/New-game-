@@ -6,6 +6,10 @@ import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/comm
 import {respondToConversation,isConversationQuestion} from './conversation.js'
 import {bundledEnglishWordCount} from './lexicon/lookup.js'
 import http from 'node:http'
+import path from 'node:path'
+import {root} from '../tools/config.js'
+import {OwnerInbox} from './survival/owner-inbox.js'
+import {ConversationMemory} from './survival/conversation-memory.js'
 import crypto from 'node:crypto'
 import {parseCommand} from '../pack-template/scripts/commands.js'
 import {interpretMessage} from './chat.js'
@@ -204,7 +208,7 @@ export function createApi(config,connection,log=console.log){
     try{
      const text=String(raw).trim();let m
      if(/^command(?:\s|$)/i.test(text))pendingInterpretation=null
-     if(pendingInterpretation&&Date.now()-pendingInterpretation.createdAt>60000)pendingInterpretation=null
+     if(pendingInterpretation&&Date.now()-pendingInterpretation.createdAt>120000)pendingInterpretation=null
      const yes=/^(?:yes|yes that's right|yes that is right|correct|that's right|that is right)$/i.test(text),no=/^(?:no|nope|not that|wrong|cancel)$/i.test(text)
      const isChoice=pendingInterpretation?.kind==='word-sense'||(pendingInterpretation?.choices&&( /^[1-4]$/.test(text)||pendingInterpretation.choices.some(x=>typeof x==='string'&&x.toLowerCase().replace(/_/g,' ')===text.toLowerCase().trim().replace(/_/g,' '))))
      if(pendingInterpretation&&!yes&&!no&&!/^command\s/i.test(text)&&!isChoice&&!(pendingInterpretation.kind==='unknown-action'&&resolveActionTarget(text)))pendingInterpretation=null
@@ -335,7 +339,27 @@ export function createApi(config,connection,log=console.log){
    }
    return output
  }
- const controller={planner,message}
+ // One phone-local inbox for every live, scope-bound approval or clarification.
+ // A language correction never carries mining/building permission.
+ const inbox=new OwnerInbox(connection,{interpretation:()=>pendingInterpretation,dispatch:raw=>message(raw)})
+ const conversation=new ConversationMemory({
+  directory:path.join(root,'private','conversation-memory'),
+  scope:connection.survival?.commandVocabulary?.scope||null
+ })
+ const routedMessage=(raw,options={})=>{
+  const scope=connection.survival?.commandVocabulary?.scope||null
+  conversation.setScope(scope)
+  const recall=conversation.respondToRecall(raw)
+  if(recall)return recall
+  // A bare "confirm" only acts when there is exactly one CURRENT permission.
+  // Arbitrary prose or ambiguous multiple prompts never becomes consent.
+  const selected=inbox.confirmSingleFromChat(raw)
+  const result=selected||message(raw,options)
+  conversation.remember('owner',raw)
+  if(result?.message)conversation.remember('rovekin',result.message)
+  return result
+ }
+ const controller={planner,message:routedMessage,inbox,conversation}
  let stopEpoch=0
  const token=config.localAPI.token
  const server=http.createServer(async(req,res)=>{
@@ -399,14 +423,15 @@ export function createApi(config,connection,log=console.log){
    if(req.method==='GET'&&pathname==='/support')return send(200,{support:connection.trace?.summary()||null})
    if(req.method==='GET'&&pathname==='/support/snapshot')return send(200,makeSupportSnapshot(connection))
    if(req.method==='GET'&&pathname==='/diagnostics')return send(200,connection.diagnostics?.()||{phase:'unavailable',savedAuthentication:'kept'})
-   if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot()})
+   if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot()})
+   if(req.method==='GET'&&pathname==='/inbox')return send(200,{inbox:inbox.snapshot(),conversation:conversation.snapshot()})
    if(req.method==='GET'&&pathname==='/catalog')return send(200,{catalog:commandCatalog,options:connection.survival?{...formOptions(connection.survival.world,new URL(req.url,'http://127.0.0.1').searchParams.get('q')||''),owners:config.ownerPlayerNames||[]}:null})
    if(req.method==='GET'&&pathname==='/plans')return send(200,{plans:connection.survival?.commandPlans.snapshot()})
    if(req.method==='GET'&&pathname==='/planner')return send(200,{planner:planner.snapshot()})
    if(req.method==='GET'&&pathname==='/updates'){
      const n=Number(new URL(req.url,'http://127.0.0.1').searchParams.get('after')||0)
      if(!Number.isSafeInteger(n)||n<0)return send(400,{error:'invalid cursor'})
-     return send(200,{...connection.status(),planner:planner.snapshot(),updates:(connection.events||[]).filter(e=>e.id>n).slice(-32),cursor:connection.nextEventId||0})
+     return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot(),updates:(connection.events||[]).filter(e=>e.id>n).slice(-32),cursor:connection.nextEventId||0})
    }
    if(req.method==='POST'&&(pathname==='/research/preview'||pathname==='/research/run')){
      let body='';try{for await(const part of req){body+=part.toString('utf8');if(Buffer.byteLength(body)>12000)return send(413,{accepted:false,message:'Research answer exceeds size limit.'})}
@@ -424,6 +449,23 @@ export function createApi(config,connection,log=console.log){
        const ids=[];for(const d of descriptors){const prepared=plans.prepare(d);ids.push(prepared.plans.selected)}
        return send(200,{...plans.activateSubset(ids),research:{planned:result.commands.length,warnings:result.warnings}})
      }catch(e){return send(400,{accepted:false,message:'Research plan not executed: '+String(e.message||e).slice(0,220)})}
+   }
+   if(req.method==='POST'&&pathname==='/inbox/respond'){
+     let body=''
+     try{
+      for await(const part of req){body+=part.toString('utf8');if(Buffer.byteLength(body)>1024)return send(413,{accepted:false,message:'Response too long.'})}
+      const data=JSON.parse(body)
+      if(Number.isSafeInteger(data.epoch)&&data.epoch<stopEpoch)
+       return send(200,{accepted:false,queued:false,message:'STOP cancelled the old inbox response.',inbox:inbox.snapshot()})
+      const result=inbox.respond(data)
+      if(data.decision==='explain'&&result.accepted){
+       const scope=connection.survival?.commandVocabulary?.scope||null
+       conversation.setScope(scope)
+       conversation.remember('owner','About '+String(data.id).slice(0,35)+': '+String(data.explanation||''))
+       conversation.remember('rovekin',result.message)
+      }
+      return send(200,result)
+     }catch(e){return send(200,{accepted:false,queued:false,message:'Could not answer the current inbox request: '+String(e.message||e).slice(0,90),inbox:inbox.snapshot()})}
    }
    if(req.method==='POST'&&(pathname==='/command'||pathname==='/message'||pathname==='/mode'||pathname.startsWith('/plans/'))){
      let body=''
@@ -454,14 +496,14 @@ export function createApi(config,connection,log=console.log){
        }
        if(pathname==='/message'){
          if(typeof data.message!=='string')return send(400,{error:'message must be text'})
-         const output=message(data.message)
+         const output=routedMessage(data.message)
          log('Text chat: '+output.message.slice(0,120))
          // Valid chat text has been delivered, even if the bot rejects the goal.
          // A 422 used to make the phone mislabel this as a network failure.
          return send(200,output)
        }
        if(typeof data.command!=='string')return send(400,{error:'command must be text'})
-       const output=message(data.command)
+       const output=routedMessage(data.command)
        log('Local command '+String(data.command).slice(0,100)+': '+output.message)
        return send(200,output)
      }catch{return send(400,{error:'invalid JSON'})}
