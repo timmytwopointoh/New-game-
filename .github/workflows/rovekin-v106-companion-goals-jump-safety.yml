@@ -7,6 +7,7 @@ on:
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/**
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-companion-goals.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/traversal-respawn.test.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
   workflow_dispatch:
 permissions:
