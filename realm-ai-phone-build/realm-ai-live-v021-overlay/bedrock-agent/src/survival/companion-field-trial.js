@@ -48,10 +48,10 @@ export function verifiedArrival(c,owner,{maxDistance=10,maxAgeMs=8000,now=Date.n
 
 export class CompanionFieldTrial{
  constructor(companion){this.companion=companion;this.clear()}
- clear(){this.state='idle';this.startedAt=0;this.owner=null;this.dimension=null;this.scope=null;this.reason='';this.result=null;this.lastTick=0;this.homeAnchor={...OWNER_TEST_HOME_ANCHOR}}
+ clear(){this.state='idle';this.startedAt=0;this.owner=null;this.dimension=null;this.scope=null;this.reason='';this.result=null;this.lastTick=0;this.ownerPositionHome=false;this.homeAnchor={...OWNER_TEST_HOME_ANCHOR}}
  snapshot(){return {state:this.state,owner:this.owner,targetXYZ:{...this.homeAnchor},startedAt:this.startedAt,dimension:this.dimension,
   reason:this.reason,result:this.result?.accepted===true?{accepted:true,projectState:this.result?.project?.state}:null}}
- start(now=Date.now()){
+ start(now=Date.now(),{ownerPositionHome=false}={}){
   const c=this.companion.c,owner=ownerName(c),scope=this.companion.editScope().realm
   if(this.companion.homeMemory?.hasHome)return {accepted:true,queued:false,message:'My first home is permanently assigned already. I will not create another.'}
   if(!owner||!scope)return {accepted:false,queued:false,message:'Set one actual owner and join a selected Realm before testing.'}
@@ -69,10 +69,16 @@ export class CompanionFieldTrial{
   if(!followed?.accepted)return {...followed,message:'I could not safely start following '+owner+': '+String(followed?.message||'not ready')}
   // Set after navigation.follow() (which resets old jobs). Use XYZ only when
   // player locator data is absent; terrain collision still gates each step.
-  c.navigation.followTargetHint={...this.homeAnchor}
+  // The historical explicit XYZ test keeps its old marker. Ordinary owner
+  // requests must NEVER inherit that marker: follow the actual named player.
+  this.ownerPositionHome=ownerPositionHome===true
+  this.homeAnchor=this.ownerPositionHome?null:{...OWNER_TEST_HOME_ANCHOR}
+  c.navigation.followTargetHint=this.homeAnchor?{...this.homeAnchor}:null
   this.state='following';this.startedAt=now;this.lastTick=0;this.owner=owner
   this.dimension=c.world.dimension;this.scope=scope
-  this.reason='Finding '+owner+' near X=162 Y=96 Z=53. Home is assigned only after fresh server positions confirm approach within four blocks.'
+  this.reason=this.ownerPositionHome?
+   'Finding '+owner+' using actual named-player updates. Home will be set to their verified arrival spot, not an old waypoint.':
+   'Finding '+owner+' near X=162 Y=96 Z=53. Home is assigned only after fresh server positions confirm approach within four blocks.'
   return {accepted:true,queued:true,message:'On my way! I will find you first, then set my new home beside your spot and start building.',fieldTrial:this.snapshot()}
  }
  tick(now=Date.now()){
@@ -103,13 +109,17 @@ export class CompanionFieldTrial{
   // Minecraft displays block XYZ; Bedrock entity position is height-offset.
   // Require the actual owner to be standing at/near the supplied home location.
   const ownerFeet={x:at.position.x,y:at.position.y-1.62,z:at.position.z}
-  const anchorDistance=distance(ownerFeet,this.homeAnchor)
-  if(anchorDistance>4){
+  const anchorDistance=this.homeAnchor?distance(ownerFeet,this.homeAnchor):0
+  if(!this.ownerPositionHome&&anchorDistance>4){
    this.state='awaiting-arrival'
    this.reason='The named owner is in reach, but moved '+anchorDistance.toFixed(1)+
     ' blocks from the supplied home XYZ (162 96 53). Waiting for the owner at that spot.'
    return
   }
+  // For natural commands, permanently lock the actual observed owner's feet.
+  // This is not an approximate locator waypoint; verifiedArrival already
+  // checked fresh near-entity identity and our own server-corrected position.
+  if(this.ownerPositionHome)this.homeAnchor={x:Math.floor(ownerFeet.x),y:Math.floor(ownerFeet.y),z:Math.floor(ownerFeet.z)}
   // Stop following before construction starts; the HOME command itself
   // rechecks that the owner is present and inside this same dimension.
   n.stop('Reached the owner safely. Starting home field test.',false)
