@@ -71,8 +71,12 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
   if(v)return result(`In Minecraft, ${subject} means ${v}. That describes a goal, not a standalone executable packet.`)
   return null
  }
- m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|show me how to)\s+(?:make|craft|obtain|get|find|build)\s+(.+?)(?:\?)?$/)
+ m=s.match(/^(?:how (?:do|can) (?:i|you|we)|how to|show me how to|tell me how to|do you know how to)\s+(?:make|craft|obtain|get|find|build)\s+(.+?)(?:\?)?$/)
  if(m){const n=material(m[1].replace(/\?$/,''));if(n)return result(itemFacts(n)+' Crafting is currently reference/planning only; actual crafting transactions are not yet implemented.')}
+ // Everyday mob questions use verified catalog entries, never a fake
+ // response or a guess based on what might exist in unloaded terrain.
+ m=s.match(/^how much (?:health|damage) does (?:a |an |the )?([a-z0-9_ ]+?) (?:have|deal|do)(?:\?)?$/)
+ if(m){const info=mobReference(m[1]);if(info)return result(`${info.name}: HP ${info.health??'unknown'}; attack damage ${info.normalDamage??'not verified'}. ${info.behavior}`,{knowledge:{kind:'mob',...info}})}
  m=s.match(/^(?:where (?:can i|do you|to)|how to)\s+(?:find|locate|mine)\s+(.+?)(?:\?)?$/)
  if(m){const n=material(m[1].replace(/\?$/,''));if(n)return result(`Looking for ${friendly(n)}. ${locatedResource(n,world)} This scan only uses visible, received terrain.`,{knowledge:{kind:'search',name:n}})}
  m=s.match(/^(?:(?:go\s+)?(?:get|gather|collect|fetch|harvest|obtain|acquire|retrieve|chop|mine)(?:\s+me)?|bring me)\s+(?:(\d{1,3})\s+)?(.+)$/)
