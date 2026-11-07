@@ -155,15 +155,16 @@ public final class RovekinChatPanel {
         });
         statusText=label("Connecting to your AI…",11,DIM,false);
         statusText.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
-        statusText.setMaxLines(2);statusText.setMaxWidth(dp(180));
-        top.addView(statusText,new LinearLayout.LayoutParams(-2,dp(48)));
+        statusText.setSingleLine(true);
+        // Put connection metadata BELOW the toolbar so a narrow phone
+        // cannot push the inbox beyond the right edge of the display.
         // Compact top-right inbox. The number is the number of CURRENT
         // unanswered live prompts, never an unread marketing notification.
         FrameLayout envelope=new FrameLayout(activity);
         envelope.setContentDescription("Open RoveKin's questions and permissions");
         envelope.setBackground(new RippleDrawable(ColorStateList.valueOf(0x77e2f4ff),
             grad(new int[]{0xff254d3c,0xff192d36,0xff201b32},0xffb58bff,13),null));
-        inboxIcon=label("✉",28,PAPER,true);
+        inboxIcon=label("✉  INBOX",15,PAPER,true);
         inboxIcon.setGravity(Gravity.CENTER);
         envelope.addView(inboxIcon,new FrameLayout.LayoutParams(-1,-1));
         inboxCount=label("0",11,INK,true);
@@ -176,10 +177,11 @@ public final class RovekinChatPanel {
         envelope.addView(inboxCount,badge);
         inboxCount.setVisibility(View.GONE);
         envelope.setOnClickListener(v->{if(openInbox!=null)openInbox.run();});
-        LinearLayout.LayoutParams envelopeLP=new LinearLayout.LayoutParams(dp(52),dp(48));
+        LinearLayout.LayoutParams envelopeLP=new LinearLayout.LayoutParams(dp(105),dp(48));
         envelopeLP.leftMargin=dp(7);
         top.addView(envelope,envelopeLP);
         body.addView(top,below(0));
+        body.addView(statusText,new LinearLayout.LayoutParams(-1,dp(18)));
         RovekinDripBar drips=new RovekinDripBar(activity);
         body.addView(drips,new LinearLayout.LayoutParams(-1,dp(19)));
         // One quiet, read-only goal strip, fed only by the phone-local
@@ -303,6 +305,7 @@ public final class RovekinChatPanel {
             inboxCount.setVisibility(count==0?View.GONE:View.VISIBLE);
             inboxCount.setText(count>9?"9+":String.valueOf(count));
         }
+        if(inboxIcon!=null)inboxIcon.setText(count>0?"✉  INBOX":"✉  INBOX");
         if(inboxIcon!=null)inboxIcon.setContentDescription(count==0?
             "Inbox: no questions or permissions waiting":
             "Inbox: "+count+" questions or permissions need your response");
