@@ -58,8 +58,8 @@ export function mineableKnowledge(block,toolId=null){
  return {breakable:true,harvestable,estimatedMs,reason:harvestable?'Breaking is possible; drop and inventory still need server evidence.':'Block may break, but this tool is not expected to harvest its normal drop.'}
 }
 
-export function selectKnownResource(world,goal,excluded=new Set()){
- if(!world?.position||!world?.scan||!goal)return null
+export function visibleResourceCandidates(world,goal,excluded=new Set()){
+ if(!world?.position||!world?.scan||!goal)return []
  const names=goal.kind==='tree-harvest'||goal.sourceFamily==='logs'?treeTrunks:[...new Set([...(goal.target==='dirt'?['dirt','grass_block']:recognizedBlocks.has(goal.target)?[goal.target]:[]),...(world.registry?.blocksArray||[]).filter(b=>(b.drops||[]).some(id=>world.registry.items[id]?.name===goal.target)).map(b=>b.name)])]
  const candidates=[]
  for(const name of names){
@@ -74,7 +74,12 @@ export function selectKnownResource(world,goal,excluded=new Set()){
   }
  }
  candidates.sort((a,b)=>a.distance-b.distance)
- return candidates[0]||null
+ // A visible candidate is not permission to mine. Assess actual hazard,
+ // reach, tool, drops and protected construction after the choice.
+ return candidates
+}
+export function selectKnownResource(world,goal,excluded=new Set()){
+ return visibleResourceCandidates(world,goal,excluded)[0]||null
 }
 
 export function internalResourcePlan(raw,{inventory={},knownInventory=false}={}){
