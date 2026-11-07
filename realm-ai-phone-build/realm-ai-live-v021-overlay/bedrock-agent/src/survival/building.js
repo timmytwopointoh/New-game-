@@ -51,14 +51,21 @@ export function blueprint({shape,origin,width=1,height=1,material,positions:cust
 export function overlapsBody(cell,eye){if(!eye)return false;const feet=eye.y-1.62;return eye.x+.3>cell.x&&eye.x-.3<cell.x+1&&eye.z+.3>cell.z&&eye.z-.3<cell.z+1&&feet+1.8>cell.y+.0001&&feet<cell.y+1-.0001}
 export class Building{
  constructor(world,report=()=>{}){this.world=world;this.report=report;this.reset()}
- reset(){this.job=null;this.state='idle';this.reason='';this.placed=0;this.total=0}
+ reset(){this.job=null;this.state='idle';this.reason='';this.placed=0;this.total=0;this.trustedSupports=null}
  inventory(material){const w=this.world;return [...w.inventory].filter(([slot,item])=>slot>=0&&slot<9&&item?.count>0&&w.registry?.items?.[item.network_id]?.name===material)}
  check(){const w=this.world;if(!w.editModeVerified)return 'Server Survival or grounded Creative mode and abilities must be verified.';if(w.abilityState?.effective.build===false)return 'The server has disabled this player’s building permission.';if(!w.enabled||!w.inventoryKnown||!w.position)return 'Join, enable view and receive inventory before building.';const h=w.attributes['minecraft:health'];if(h!==undefined&&h<=6)return 'Health is too low to build.';return null}
  begin(descriptor,now=Date.now()){
   if(this.job)return {accepted:false,queued:false,message:'A building job is already active.'}
   const denied=this.check();if(denied)return {accepted:false,queued:false,message:denied}
   let design;try{design=blueprint(descriptor)}catch(e){return {accepted:false,queued:false,message:e.message}}
-  const exposed=constructionExposure(this.world,design.positions)
+  // Climbing supplies trusted dirt supports only after the server confirms
+  // both the block and item consumption. Never ignore another player's build.
+  const supports=this.trustedSupports instanceof Set&&design.shape==='block'&&design.material==='dirt'?
+   new Set([...this.trustedSupports].filter(k=>{
+    const saved=this.world.ownedPlacements?.get(this.world.dimension+':'+k)
+    return saved?.name==='dirt'&&this.world.block(saved)?.name==='dirt'
+   })):null
+  const exposed=constructionExposure(this.world,design.positions,{ignoreVerifiedProjectBlocks:supports})
   const approved=approvedEdit(this.world,'build',design.positions,now)
   if(exposed.state!=='clear'&&!approved)return {accepted:false,queued:false,confirmationRequired:exposed.state==='protected',message:exposed.state==='protected'?`Existing construction within 15 blocks of this build (${exposed.near.name}). Ask the owner to confirm these exact coordinates.`:exposed.reason||'Unknown nearby construction; request more terrain first.'}
   const internalStructure=descriptor.internalStructure===true&&['chest','crafting_table','furnace'].includes(design.material)
