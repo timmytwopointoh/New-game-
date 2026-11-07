@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {EventEmitter} from 'node:events'
 import {classifyConversation,isConversationUtterance,respondToConversation} from '../src/conversation.js'
 import {createApi} from '../src/api.js'
+import {RealmChat} from '../src/realm-chat.js'
 
 function memory(){return {recent:()=>[{role:'owner',text:'We were exploring a forest'}]}}
 test('ordinary dialogue is NOT an unsupported Minecraft/code command',()=>{
@@ -104,4 +105,22 @@ test('phone POST /message answers chat, greetings, feelings and knowledge withou
    body:JSON.stringify({message:'follow me'})})
   assert.equal(anonymous.status,401)
  }finally{await new Promise(resolve=>server.close(resolve))}
+})
+
+test('addressed in-Game owner greeting and check-in become real conversation, not connection ping',()=>{
+ const c=new EventEmitter()
+ c.username='Bot';c.config={minecraft:{botPlayerName:'Bot'}}
+ c.spawned=true;c.chatDiagnostics={}
+ const received=[],sent=[]
+ c.say=m=>{sent.push(m);return true}
+ const planner=new EventEmitter()
+ const api={planner,message:q=>{received.push(q);return {accepted:true,queued:false,message:'Conversational reply to '+q}}}
+ const chat=new RealmChat(c,api,{ownerPlayerNames:['Owner']},()=>{}, {cooldownMs:0,clock:(()=>{let n=1;return ()=>n++*1000})()})
+ c.emit('player-chat',{source:'Owner',message:'Bot, hello'})
+ c.emit('player-chat',{source:'Owner',message:'Bot, are you there?'})
+ c.emit('player-chat',{source:'Other',message:'Bot, hello'})
+ assert.deepEqual(received,['hello','are you there?'])
+ assert.equal(sent.length,2)
+ assert(sent.every(m=>m.startsWith('Conversational reply')))
+ chat.stop()
 })
