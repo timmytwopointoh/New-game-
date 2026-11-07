@@ -9,7 +9,7 @@ const valid=p=>p&&[p.x,p.y,p.z,p.dimension].every(Number.isSafeInteger)
 const near=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<=4
 export class StorageIncidents{
  constructor(controller,{directory=null,scope=null}={}){
-  this.c=controller;this.directory=directory;this.file=null;this.scope=null;this.incidents=[];this.error='';this.readOnly=false;this.lastReportAt=0
+  this.c=controller;this.directory=directory;this.file=null;this.scope=null;this.incidents=[];this.error='';this.readOnly=false;this.lastReportAt=0;this.lastCheckedAt=0
   this.setScope(scope)
  }
  setScope(scope){
@@ -31,7 +31,11 @@ export class StorageIncidents{
    fs.renameSync(this.file+'.tmp',this.file)
   }catch{this.error='Chest incident could not be saved.'}
  }
- observe(now=Date.now()){
+ observe(now=Date.now(),{force=false}={}){
+  // Called from the 20 Hz movement loop; storage auditing should never
+  // interfere with travel or spend battery scanning old chest records.
+  if(!force&&now-this.lastCheckedAt>=0&&now-this.lastCheckedAt<1000)return
+  this.lastCheckedAt=now
   const w=this.c.world,ws=this.c.workshop
   if(!w?.enabled||!w.registry||!ws?.records)return
   let changed=false
