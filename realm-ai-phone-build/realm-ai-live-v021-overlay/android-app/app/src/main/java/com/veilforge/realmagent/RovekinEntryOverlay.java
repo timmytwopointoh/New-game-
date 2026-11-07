@@ -51,6 +51,7 @@ public final class RovekinEntryOverlay {
     private TextView statusText, authText, footerText;
     private Button copyButton, openLoginButton;
     private String actualCode="", verificationUrl="", liveStatus="Waiting to connect";
+    private String lastInboxNoticeKey="";
     private boolean beginTapped=false, chatShown=false;
     private JSONObject lastStatus;
     private Screen screen=Screen.SPLASH;
@@ -242,6 +243,9 @@ public final class RovekinEntryOverlay {
         });
         openLoginButton.setVisibility(View.GONE); add(overlayPanel,openLoginButton,8);
         add(overlayPanel,button("CONNECT / RETRY",true,()->connect()),18);
+        // Inbox is accessible during Minecraft login and pack downloads too.
+        // Questions can be practiced while the Realm is disconnected.
+        add(overlayPanel,button("✉  INBOX / QUESTIONS",false,a::showOwnerInbox),8);
         add(overlayPanel,button("EDIT ACCOUNT",false,()->showAiName("")),8);
         // Technical internals remain in the original service and diagnostics; no version/readme clutter.
         if(autoConnect)connect();
@@ -299,8 +303,34 @@ public final class RovekinEntryOverlay {
             r.optBoolean("spawned",false),false);
         chat.refresh(actual,RovekinCatalogAdapter.fromLiveCatalog(catalog),liveStatus);
         chat.setAvatarStatus(r);
-        chat.refreshInbox(r.optJSONObject("inbox"));
+        onInbox(r.optJSONObject("inbox"));
         chat.refreshGoal(r.optJSONObject("goals"),r.optBoolean("spawned",false));
+    }
+    /** Lightweight inbox updates are intentionally independent from the
+     * large Minecraft status response, which can fail or be delayed. */
+    public void onInbox(JSONObject data){
+        if(chat!=null)chat.refreshInbox(data);
+        JSONArray requests=data==null?null:data.optJSONArray("requests");
+        if(requests==null||requests.length()==0){lastInboxNoticeKey="";return;}
+        StringBuilder key=new StringBuilder();
+        int real=0;
+        for(int i=0;i<requests.length();i++){
+            JSONObject item=requests.optJSONObject(i);
+            if(item==null)continue;
+            key.append(item.optString("id","")).append('|');
+            if(!"demo".equals(item.optString("kind")))real++;
+        }
+        String current=key.toString();
+        if(!current.equals(lastInboxNoticeKey)){
+            lastInboxNoticeKey=current;
+            if(chatShown&&screen==Screen.CHAT){
+                String message=real>0?
+                    "✉ I have "+real+" question"+(real==1?"":"s")+
+                      " for you. Tap INBOX at the top right to respond.":
+                    "✉ The practice question is ready. Tap INBOX at the top right to try it.";
+                a.bubble("ROVEKIN",message,false);
+            }
+        }
     }
     /** Called from the existing MainActivity.update() UI callback. */
     public void onStatus(JSONObject realStatus,String legacyConnectionText){
