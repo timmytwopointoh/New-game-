@@ -1,0 +1,42 @@
+name: Rovekin v1.0.6 companion goals and post-jump safety regression
+on:
+  push:
+    branches: [ feature/rovekin-v106-companion-goal-continuity-20261107 ]
+    paths:
+      - .github/workflows/rovekin-v106-companion-goals-jump-safety.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/**
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-companion-goals.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  companion-and-liveness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned standalone Android companion dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate controller syntax and targeted safety regressions
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/api.js
+          node --check src/survival/companion-goal-journal.js
+          node --check src/survival/companion-priorities.js
+          node --check src/survival/navigation.js
+          node --test \
+            tests/rovekin-companion-goals.test.js \
+            tests/rovekin-inbox-conversation.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js \
+            tests/rovekin-session-retention.test.js \
+            tests/permanent-home-memory.test.js \
+            tests/traversal-respawn.test.js \
+            tests/home-clearance-field.test.js \
+            tests/companion-field-trial.test.js
