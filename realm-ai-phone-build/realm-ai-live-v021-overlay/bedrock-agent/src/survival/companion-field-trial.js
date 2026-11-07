@@ -49,7 +49,7 @@ export function verifiedArrival(c,owner,{maxDistance=10,maxAgeMs=8000,now=Date.n
 export class CompanionFieldTrial{
  constructor(companion){this.companion=companion;this.clear()}
  clear(){this.state='idle';this.startedAt=0;this.owner=null;this.dimension=null;this.scope=null;this.reason='';this.result=null;this.lastTick=0;this.ownerPositionHome=false;this.homeAnchor={...OWNER_TEST_HOME_ANCHOR}}
- snapshot(){return {state:this.state,owner:this.owner,targetXYZ:{...this.homeAnchor},startedAt:this.startedAt,dimension:this.dimension,
+ snapshot(){return {state:this.state,owner:this.owner,targetXYZ:this.homeAnchor?{...this.homeAnchor}:null,startedAt:this.startedAt,dimension:this.dimension,
   reason:this.reason,result:this.result?.accepted===true?{accepted:true,projectState:this.result?.project?.state}:null}}
  start(now=Date.now(),{ownerPositionHome=false}={}){
   const c=this.companion.c,owner=ownerName(c),scope=this.companion.editScope().realm
