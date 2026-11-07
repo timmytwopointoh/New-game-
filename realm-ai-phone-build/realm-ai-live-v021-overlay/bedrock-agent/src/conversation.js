@@ -37,13 +37,13 @@ export function isConversationQuestion(raw){return !/^command(?:\s|$)/i.test(Str
  */
 export function isConversationUtterance(raw){
  const s=clean(raw)
- if(!s||/^command(?:\\s|$)/.test(s))return false
+ if(!s||/^command(?:\s|$)/.test(s))return false
  const kind=classifyConversation(raw).kind
  if(kind!=='chat')return true
- return /^(?:(?:i am|i'm|im|i feel|i felt|i think|i thought|i wonder|i like|i love|i hate|i don't|i dont|i wish|i just|i was|we are|we're|we should|we could|we have|you are|you're|you keep|you seem|you sound|you never|you always|you don't|you dont|that is|that's|this is|it's|its|today |yesterday |remember when |let's talk|lets talk|let's chat|lets chat|tell me something|talk to me|say something|tell me a story|talk about|i want to talk|i need to talk)\\b)/i.test(s)
+ return /^(?:(?:i am|i'm|im|i feel|i felt|i think|i thought|i wonder|i like|i love|i hate|i don't|i dont|i wish|i just|i was|we are|we're|we should|we could|we have|you are|you're|you keep|you seem|you sound|you never|you always|you don't|you dont|that is|that's|this is|it's|its|today |yesterday |remember when |let's talk|lets talk|let's chat|lets chat|tell me something|talk to me|say something|tell me a story|talk about|i want to talk|i need to talk)\b)/i.test(s)
 }
 const MAX_RESPONSE=390
-const short=s=>String(s||'').replace(/[\\r\\n\\x00-\\x1f\\x7f]/g,' ').trim().slice(0,MAX_RESPONSE)
+const short=s=>String(s||'').replace(/[\r\n\x00-\x1f\x7f]/g,' ').trim().slice(0,MAX_RESPONSE)
 function conversationalContext(raw,{world=null,navigation=null,memory=null}={}){
  const s=clean(raw)
  const state=String(navigation?.state||'idle').replace(/[^a-z-]/gi,'').slice(0,35)
