@@ -541,7 +541,7 @@ public class MainActivity extends Activity {
             ui.post(()->{if(epoch!=commandEpoch)return;syncPlans(result.optJSONObject("plans"));bubble("VEILFORGE",result.optString("message","No research result"),false);});
         }catch(Exception e){ui.post(()->bubble("VEILFORGE","Research execution failed: "+e.getMessage(),false));}});
     }
-    void send(String raw){String msg=raw.trim();if(msg.equalsIgnoreCase("stop")){stopNow();return;}if(msg.equalsIgnoreCase("command")||msg.equalsIgnoreCase("commands")){input.setText("");showJobs();return;}final long epoch=commandEpoch;if(msg.length()<1||msg.length()>190||msg.contains("\n"))return;input.setText("");bubble("YOU",msg,true);
+    void send(String raw){String msg=raw.trim();if(msg.equalsIgnoreCase("stop")){stopNow();return;}if(msg.equalsIgnoreCase("inbox")||msg.equalsIgnoreCase("questions")||msg.equalsIgnoreCase("open inbox")){input.setText("");showOwnerInbox();return;}if(msg.equalsIgnoreCase("command")||msg.equalsIgnoreCase("commands")){input.setText("");showJobs();return;}final long epoch=commandEpoch;if(msg.length()<1||msg.length()>190||msg.contains("\n"))return;input.setText("");bubble("YOU",msg,true);
         io.submit(()->{if(epoch!=commandEpoch)return;try{JSONObject r=request("POST","/message",new JSONObject().put("message",msg).put("epoch",epoch));ui.post(()->{syncPlans(r.optJSONObject("plans"));if(r.optBoolean("showCatalog"))showJobs();bubble("VEILFORGE",r.optString("message","No response"),false);});}
           catch(Exception e){ui.post(()->bubble("VEILFORGE","Bot not ready: "+e.getMessage(),false));}});}
     void update(){final long revision=serviceRevision;io.submit(()->{try{JSONObject r=request("GET","/updates?after="+cursor,null);ui.post(()->{if(revision!=serviceRevision)return;
