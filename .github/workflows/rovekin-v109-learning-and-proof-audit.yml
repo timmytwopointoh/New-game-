@@ -1,0 +1,42 @@
+name: Rovekin v1.0.9 real adaptive learning and verified-work audit
+on:
+  push:
+    branches: [fix/rovekin-v109-real-learning-audit-20261107]
+    paths:
+      - .github/workflows/rovekin-v109-learning-and-proof-audit.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/command-plans.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/navigation.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/resource-jobs.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/internal-skills.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v109-learning-truth.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned Node dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate actual learning integration and legacy resource/survival regressions
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          for f in src/survival/{internal-skills,resource-jobs,command-plans,navigation,companion-mind}.js; do node --check "$f"; done
+          node --test \
+            tests/rovekin-v109-learning-truth.test.js \
+            tests/resource-jobs.test.js \
+            tests/rovekin-inbox-v108-visible.test.js \
+            tests/rovekin-v107-goal-resume-and-support.test.js \
+            tests/rovekin-companion-goals.test.js \
+            tests/permanent-home-memory.test.js \
+            tests/traversal-respawn.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js \
+            tests/rovekin-session-retention.test.js
