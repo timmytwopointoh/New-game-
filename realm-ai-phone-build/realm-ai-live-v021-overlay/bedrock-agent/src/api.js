@@ -4,6 +4,9 @@ import {isForestryReturnCommand} from './survival/forestry-return.js'
 import {commandCatalog,parseDescriptor,parseCommandRequest,renderDescriptor,formOptions} from './survival/command-plans.js'
 import {suggestAction,suggestMaterial,resolveActionTarget} from './survival/command-vocabulary.js'
 import {respondToConversation,isConversationUtterance} from './conversation.js'
+import {LocalBrain} from './local-llm.js'
+import {brainContext} from './brain-context.js'
+import fs from 'node:fs'
 import {bundledEnglishWordCount} from './lexicon/lookup.js'
 import http from 'node:http'
 import path from 'node:path'
@@ -42,6 +45,8 @@ export function chatDispatch(raw,connection){
 }
 export function createApi(config,connection,log=console.log){
  const planner=new Planner(connection)
+ const brain=new LocalBrain({directory:path.join(root,'private','llm')})
+ let brainEpoch=0
  planner.on('planner-update',u=>{
    if(typeof connection.nextEventId==='number'&&Array.isArray(connection.events)){
      connection.events.push({id:++connection.nextEventId,source:'Planner',message:u.message})
@@ -158,6 +163,25 @@ export function createApi(config,connection,log=console.log){
   }).finally(()=>{if(googleAbort===abort)googleAbort=null})
   return {accepted:true,queued:true,message:"Let me check that and get back to you with a clear answer."}
  }
+ function askLocalBrain(text,{replyToRealm=false}={}){
+  // Neural text is read-only conversation and never a gameplay command.
+  if(!brain.verified&&!fs.existsSync(brain.modelFile))return null
+  const epoch=brainEpoch,scope=connection.survival?.commandVocabulary?.scope||null
+  const context=brainContext(text,{survival:connection.survival,connection,memory:conversation})
+  void brain.answer(text,context).then(reply=>{
+   if(epoch!==brainEpoch||scope!==(connection.survival?.commandVocabulary?.scope||null))return
+   const answer=reply.available?reply.message:
+    'My local neural engine could not answer this time: '+String(reply.message||'unknown').slice(0,85)+'. I can still use the offline Minecraft reference.'
+   const framed=connection.survival?.voice?.frame?.(answer,{input:text,world:connection.survival?.world})||answer
+   connection.survival?.report?.(framed)
+   if(replyToRealm&&connection.spawned)connection.say?.(framed.slice(0,175))
+   if(reply.available){conversation.setScope(scope);conversation.remember('rovekin',framed)}
+  }).catch(()=>{
+   if(epoch===brainEpoch)connection.survival?.report?.('My neural reply failed. No Minecraft command was sent.')
+  })
+  return {accepted:true,queued:true,neural:true,
+   message:"I'm thinking with my on-phone AI brain. I'll reply in this chat; no game command was sent."}
+ }
  const message=(raw,{replyToRealm=false}={})=>{
    if(typeof raw!=='string'||raw.length>190||/[\r\n\x00-\x1f\x7f]/.test(raw))return {accepted:false,queued:false,message:'Use one message of 190 characters or fewer.'}
    const addressed=interpretNameUtterance(raw,
@@ -194,7 +218,7 @@ export function createApi(config,connection,log=console.log){
    }
    if(/^(?:stop|stop everything|cancel|cancel job|cancel plan|abort|abort mission|stop following|stop mining|stop walking)$/i.test(String(raw).trim().replace(/^command\s+/i,''))){
      const finishingFollow=/^(?:stop following(?: me)?|finish task)$/i.test(String(raw).trim())
-     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();
+     researchEpoch++;googleAbort?.abort();googleAbort=null;pendingInterpretation=null;planner.cancel();brainEpoch++;brain.cancelAnswer();
      // STOP cancels the current job only. It must NOT disable Realm reconnect
      // or terminate the companion's connection; Android service shutdown is a
      // separate, explicitly administrative action.
@@ -305,9 +329,10 @@ export function createApi(config,connection,log=console.log){
       const reply=respondToConversation(text,{vocabulary,world:connection.survival?.world,
        navigation:connection.survival?.navigation,memory:conversation})
       const offline=offlineMinecraftResponse(text,{world:connection.survival?.world})
+      const neural=offline?null:askLocalBrain(text,{replyToRealm})
       let descriptor=null;try{descriptor=parseDescriptor(reply)}catch{}
       const needResearch=typeof reply==='string'&&/I don.t have a reliable answer to that question yet/i.test(reply)
-      output=offline||(needResearch?researchConversation(text,{replyToRealm}):null)||
+      output=offline||neural||(needResearch?researchConversation(text,{replyToRealm}):null)||
        (descriptor&&['status','movement','inventory','about','recipe'].includes(descriptor.id)?
         connection.survival.handle(renderDescriptor(descriptor)):{accepted:true,queued:false,message:reply,plans:plans.snapshot()})
      }else{
@@ -362,7 +387,7 @@ export function createApi(config,connection,log=console.log){
  // Only server-confirmed events count as progress; interrupted tasks never
  // resume silently after a saved-session reconnect.
  connection.on('survival-update',u=>journal.noteVerifiedProgress(u?.message||''))
- connection.on('session-end',()=>journal.interrupt('Realm session disconnected.'))
+ connection.on('session-end',()=>{brainEpoch++;brain.cancelAnswer();journal.interrupt('Realm session disconnected.')})
  // Native Commands cards bypass chat, so follow an actual started card into
  // the same goal journal. Never treat a Play tap as server confirmation.
  let seenPlanLaunch=''
@@ -412,7 +437,7 @@ export function createApi(config,connection,log=console.log){
   if(result?.message)conversation.remember('rovekin',result.message)
   return result
  }
- const controller={planner,message:routedMessage,inbox,conversation,journal}
+ const controller={planner,message:routedMessage,inbox,conversation,journal,brain}
  let stopEpoch=0
  const token=config.localAPI.token
  const server=http.createServer(async(req,res)=>{
@@ -460,7 +485,11 @@ export function createApi(config,connection,log=console.log){
    }
    if(req.method==='GET'&&pathname==='/knowledge/mob'){const q=new URL(req.url,'http://127.0.0.1').searchParams,entity=mobReference(q.get('name'));return entity?send(200,{entity}):send(404,{error:'Unknown Bedrock entity'})}
    if(req.method==='GET'&&pathname==='/knowledge/offline')return send(200,{knowledge:offlineKnowledgeStats,requiresGoogleKey:false})
-  if(req.method==='GET'&&pathname==='/research/google-status')return send(200,{configured:google.configured(),active:!!googleAbort})
+  if(req.method==='GET'&&pathname==='/brain')return send(200,{brain:brain.status()})
+   if(req.method==='POST'&&pathname==='/brain/install')return send(200,brain.install())
+   if(req.method==='POST'&&pathname==='/brain/cancel-install')return send(200,brain.cancelInstall())
+   if(req.method==='POST'&&pathname==='/brain/cancel-answer'){brainEpoch++;brain.cancelAnswer();return send(200,{accepted:true,message:'Canceled the local neural reply. No game action changed.',brain:brain.status()})}
+   if(req.method==='GET'&&pathname==='/research/google-status')return send(200,{configured:google.configured(),active:!!googleAbort})
    if(req.method==='POST'&&pathname==='/research/google-key'){
      let body='';try{for await(const chunk of req){body+=chunk.toString('utf8');if(body.length>500)return send(413,{accepted:false,message:'Key payload too long'})}
        const data=JSON.parse(body);if(data.clear===true){googleKeys.clear();return send(200,{accepted:true,configured:false,message:'Private Google research key cleared.'})}
@@ -476,7 +505,7 @@ export function createApi(config,connection,log=console.log){
    if(req.method==='GET'&&pathname==='/support')return send(200,{support:connection.trace?.summary()||null})
    if(req.method==='GET'&&pathname==='/support/snapshot')return send(200,makeSupportSnapshot(connection))
    if(req.method==='GET'&&pathname==='/diagnostics')return send(200,connection.diagnostics?.()||{phase:'unavailable',savedAuthentication:'kept'})
-   if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot(),goals:journalStatus()})
+   if(req.method==='GET'&&pathname==='/status')return send(200,{...connection.status(),planner:planner.snapshot(),inbox:inbox.snapshot(),conversation:conversation.snapshot(),brain:brain.status(),goals:journalStatus()})
    if(req.method==='GET'&&pathname==='/inbox')return send(200,{inbox:inbox.snapshot(),conversation:conversation.snapshot(),goals:journalStatus()})
    if(req.method==='GET'&&pathname==='/catalog')return send(200,{catalog:commandCatalog,options:connection.survival?{...formOptions(connection.survival.world,new URL(req.url,'http://127.0.0.1').searchParams.get('q')||''),owners:config.ownerPlayerNames||[]}:null})
    if(req.method==='GET'&&pathname==='/goals')return send(200,{goals:journalStatus()})
