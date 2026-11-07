@@ -42,6 +42,14 @@ export class CompanionGoalJournal{
    if(data?.schema!==1||!Array.isArray(data.goals)||data.goals.length>MAX_GOALS)throw Error('Invalid journal')
    if(!data.goals.every(validGoal))throw Error('Corrupted goal entry')
    this.goals=data.goals.slice(-MAX_GOALS)
+   // A persisted record is NOT evidence that the Android service, socket,
+   // movement input or pending permissions survived the restart.
+   const latest=this.latest()
+   if(latest&&['requested','working','waiting-owner','blocked'].includes(latest.status)){
+    latest.status='interrupted';latest.updatedAt=Date.now()
+    latest.detail='The phone service restarted. I remember your goal, but execution and old permissions were not resumed.'
+    this.save()
+   }
   }catch{this.readOnly=true;this.error='The saved goal journal is unreadable; kept intact instead of overwriting.'}
  }
  save(){
@@ -65,11 +73,13 @@ export class CompanionGoalJournal{
   // not a new active job.
   const granted=result.accepted===true||result.queued===true||result.confirmationRequired===true
   if(!granted)return null
-  const status=result.confirmationRequired===true?'waiting-owner':result.queued===true?'requested':'requested'
+  const status=result.confirmationRequired===true?'waiting-owner':'requested'
   const same=this.latest()
   if(same&&same.intent.toLowerCase()===text.toLowerCase()&&now-same.at<15000&&
      ['requested','working','waiting-owner','blocked'].includes(same.status))return {...same}
   const id=crypto.createHash('sha256').update(String(this.scope)+'|'+String(now)+'|'+String(this.counter++)+'|'+text).digest('hex').slice(0,16)
+  if(result.queued===true&&same&&['requested','working','waiting-owner','blocked'].includes(same.status))
+   this.transition('interrupted','A new owner task replaced this active attempt; its previous outcome is not confirmed.',now)
   const item={id,category,intent:text,status,detail:result.confirmationRequired===true?
    'Waiting for your permission; no world edit was made.':
    result.queued===true?'Request accepted or queued; the Realm has not confirmed completion.':
@@ -91,7 +101,7 @@ export class CompanionGoalJournal{
  }
  observe({survival=null,spawned=false}={},now=Date.now()){
   const g=this.latest()
-  if(!g||this.readOnly||!survival||!spawned)return
+  if(!g||this.readOnly||!survival||!spawned||['completed','cancelled'].includes(g.status))return
   // Never mark a command "completed" from a successful chat/plan response.
   if(g.category==='home'){
    const home=survival.companion?.homeProject
@@ -160,7 +170,7 @@ export class CompanionGoalJournal{
   this.observe({survival,spawned})
   const current=this.latest()
   const currentText='Your last '+current.category+' goal was “'+current.intent+'”. Status: '+current.status+
-   '. '+current.detail
+   '. '+current.detail+(current.note?' Your saved guidance: '+current.note+'.':'')
   let next=' I will not restart interrupted or destructive work without a new owner instruction.'
   if(help){
    if(current.status==='blocked')next=' Please inspect the obstruction or choose a safe route, then ask me to retry. I will re-check the Realm before acting.'
