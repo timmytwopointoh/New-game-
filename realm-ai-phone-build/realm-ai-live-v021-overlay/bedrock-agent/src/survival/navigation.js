@@ -481,6 +481,15 @@ export class Navigation{
   if(!hold.stableSince)hold.stableSince=now
   if(now-hold.stableSince<350||now-hold.started<500)return
   this.pendingServerLanding=null
+  // The staircase/step route was already verified before takeoff. Do not
+  // discard it just because an intermediate landing needed server evidence.
+  // Only a recovery jump with afterJumpGoal requires a fresh route search.
+  if(!hold.replanAfterJump&&hold.routeSnapshot?.length&&
+      w.walkable(hold.routeSnapshot[0])){
+   this.route=hold.routeSnapshot;this.progress.reset();this.state='walking'
+   this.reason='Server confirmed landing; continuing the already verified staircase.'
+   return
+  }
   const goal=hold.goal,start=w.standPosition?.()
   if(!goal||!start){this.route=null;this.state='blocked';this.reason='Landing confirmed, but route must be reobserved.';return}
   const plan=this.routeTo(goal,start,{allowSteps:true,allowDirt:true})
@@ -509,7 +518,8 @@ export class Navigation{
      const delta={x:desired.x-p.x,y:desired.y-p.y,z:desired.z-p.z}
      this.world.position=desired;this.flight=null
      this.pendingServerLanding={target:{...landing},goal:this.afterJumpGoal||this.job?.goal||null,
-      started:now,flightStarted:f.started,stableSince:0}
+      started:now,flightStarted:f.started,stableSince:0,
+      routeSnapshot:this.route?.map(p=>({...p}))||null,replanAfterJump:!!this.afterJumpGoal}
      this.afterJumpGoal=null;this.route=null;this.routeAlignment=null
      this.state='landing-for-server'
      this.reason='Jump predicted; waiting for server-confirmed grounded position before next action.'
