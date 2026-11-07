@@ -1,0 +1,43 @@
+name: Rovekin v1.0.10 verified Bedrock movement readiness recovery
+on:
+  push:
+    branches: [fix/rovekin-v110-movement-readiness-20261107]
+    paths:
+      - .github/workflows/rovekin-v110-movement-readiness-audit.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/connection.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/diagnostic-store.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/support-snapshot.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/world.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/verification.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v110-movement-readiness.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  movement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Install exact on-phone dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify own Bedrock abilities, safe readiness, transport and existing movement regressions
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          for f in src/connection.js src/diagnostic-store.js src/support-snapshot.js src/survival/{world,verification,navigation}.js; do node --check "$f"; done
+          node --test \
+            tests/rovekin-v110-movement-readiness.test.js \
+            tests/rovekin-v109-learning-truth.test.js \
+            tests/rovekin-v109-plan-restart.test.js \
+            tests/traversal-respawn.test.js \
+            tests/companion-world-policy.test.js \
+            tests/rovekin-rejoin-lifecycle.test.js \
+            tests/rovekin-session-retention.test.js \
+            tests/follow-readiness-queue.test.js \
+            tests/support-snapshot.test.js \
+            tests/resource-jobs.test.js
