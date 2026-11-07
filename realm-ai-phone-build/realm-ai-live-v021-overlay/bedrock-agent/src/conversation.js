@@ -117,7 +117,9 @@ export function respondToConversation(raw,{vocabulary=null,world=null,navigation
  }
  const intent=classifyConversation(raw)
  switch(intent.kind){
-  case 'greeting':return "Hey! I'm here and reading your messages. How's your day going? We can talk, or explore the Realm when you ask me to."
+  case 'greeting':return /^(?:how are you|how's it going|hows it going)/.test(text)?
+   "I'm here and able to read your messages. My phone-based brain can discuss the Realm and Minecraft, but I don't have human feelings. How are you doing?":
+   "Hey! I'm here and reading your messages. How's your day going? We can talk, or explore the Realm when you ask me to."
   case 'thanks':return "You’re welcome! I can execute supported direct instructions; the saved-plan queue still has its own Activate control."
   case 'joke':return "Why did the Creeper bring a map? It kept losing its friends in a blast!"
   case 'teasing':return "I’m still here to help. Want a status check, a Minecraft lookup, or to prepare a command?"
