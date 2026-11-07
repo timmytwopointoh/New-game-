@@ -49,7 +49,7 @@ export function constructionExposure(world,positions,{radius=CONSTRUCTION_BUFFER
   if(d>radius*radius)continue
   const p={x,y,z},block=world.block(p),overlay=world.block(p,1)
   seen++
-  if(!block||!overlay){if(d<=9)unknownNear=true;continue}
+  if(!block||!overlay){if(d<9)unknownNear=true;continue}
   const own=world.ownedPlacements?.get(`${world.dimension}:${key(p)}`)
   if(ignoreVerifiedProjectBlocks?.has(key(p))&&own?.name===block.name)continue
   for(const b of [block,overlay]){
