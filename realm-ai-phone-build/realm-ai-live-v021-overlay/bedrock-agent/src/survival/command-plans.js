@@ -136,10 +136,11 @@ export class CommandPlans{
   const card=this.cards.find(c=>c.id===id);if(!card)throw Error('Choose a saved command.')
   // Pressing Play on any saved card reuses it, without a separate Reuse step.
   // Revalidate BEFORE rearming: a completed build must never restart blindly.
-  const d=validateDescriptor(card.descriptor);this.validateChoices(d)
+  const d=validateDescriptor(card.descriptor)
   if(card.state!=='waiting'&&
       ['dig','place','build_wall','build_floor','build_shelter','quarry','strip_mine','gather','craft','collect'].includes(d.id))
    throw Error('That world-edit card was already attempted. Inspect the Realm and prepare a NEW card before another edit.')
+  this.validateChoices(d)
   const old={selected:this.selected,state:card.state,result:card.result,activationLocked:card.activationLocked}
   this.selected=id;card.state='waiting';card.result='';card.activationLocked=false
   try{this.persist()}catch(e){this.selected=old.selected;card.state=old.state;card.result=old.result;card.activationLocked=old.activationLocked;throw e}
