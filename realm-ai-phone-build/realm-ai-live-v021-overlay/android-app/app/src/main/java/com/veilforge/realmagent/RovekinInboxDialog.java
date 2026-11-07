@@ -90,7 +90,7 @@ public final class RovekinInboxDialog {
         content.setBackground(shape(a,0xff0a2b20,0xff4d8a64,16));
         scroll.addView(content);
         add(content,label(a,"✉  "+count+" waiting",20,LIME,true),0,a);
-        add(content,label(a,"Each question belongs to an exact Realm action. Approve only what you recognize. Deny never deletes the home or your account.",13,DIM,false),7,a);
+        add(content,label(a,"RoveKin can ask about a task, an unfamiliar word or specific permission. A help request never starts a task or grants mining/building permission.",13,DIM,false),7,a);
         final AlertDialog dialog=new AlertDialog.Builder(a)
             .setTitle("RoveKin • Questions & Permissions")
             .setView(scroll).setNegativeButton("Close",null).create();
@@ -122,6 +122,16 @@ public final class RovekinInboxDialog {
                     add(card,button(a,(j+1)+". "+option,false,()->submit(a,id,"choose",null,index,dialog)),5,a);
                 }
                 add(card,button(a,"✕ No, none of these",false,()->submit(a,id,"deny",null,null,dialog)),7,a);
+            }else if("guidance".equals(kind)){
+                // Help is not permission: these buttons only acknowledge
+                // or dismiss the question. A retry requires a new command.
+                LinearLayout row=new LinearLayout(a);row.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams yes=new LinearLayout.LayoutParams(0,dp(a,49),1);
+                yes.rightMargin=dp(a,7);
+                row.addView(button(a,"✓ Got it",true,()->submit(a,id,"approve",null,null,dialog)),yes);
+                row.addView(button(a,"Not now",false,()->submit(a,id,"deny",null,null,dialog)),
+                    new LinearLayout.LayoutParams(0,dp(a,49),1));
+                add(card,row,11,a);
             }else if(!"clarification".equals(kind)||item.optBoolean("approvalRequired",false)){
                 LinearLayout row=new LinearLayout(a);row.setGravity(Gravity.CENTER_VERTICAL);
                 LinearLayout.LayoutParams yes=new LinearLayout.LayoutParams(0,dp(a,49),1);
