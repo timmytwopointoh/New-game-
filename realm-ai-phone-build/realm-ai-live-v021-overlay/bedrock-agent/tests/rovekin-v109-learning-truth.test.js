@@ -81,7 +81,7 @@ test('only Minecraft-confirmed block break and later inventory gain train adapti
  assert.deepEqual(s.events.find(x=>x.event==='learn')?.args.slice(0,2),['mine','oak_log'])
  assert.equal(s.events.find(x=>x.event==='learn')?.args[2].evidence,'server-block-update')
  assert.equal(s.agent.snapshot().confirmedPickups,0)
- s.setStock({oak_log:2});s.agent.tick(now+900)
+ s.setStock({oak_log:2});s.agent.tick(now+1250)
  assert.equal(s.agent.snapshot().confirmedPickups,1)
  assert(s.events.some(x=>x.event==='learn'&&x.args[0]==='collect'&&x.args[2].evidence==='server-inventory-increase'))
 })
