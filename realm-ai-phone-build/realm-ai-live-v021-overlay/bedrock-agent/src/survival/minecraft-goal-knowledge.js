@@ -107,10 +107,10 @@ const normalize=s=>String(s||'').trim().toLowerCase().replace(/[.!?]+$/,'').repl
 const prompt=s=>s.replace(/^(?:please |can you |could you |would you )+/,'')
 const explain=s=>{
  const q=prompt(normalize(s))
- const m=q.match(/^(?:plan(?: (?:to|for|how to))?|how (?:do|can|would) (?:i|we|you)|what (?:do|would|should) (?:i|we|you) need (?:to|for)|what (?:is|'s) (?:needed|required|the best way) (?:to|for)|teach (?:me|yourself) (?:how to|about)|figure out (?:how to|a way to)|help (?:me|us) (?:with|to)|i want (?:you )?to|prepare (?:for|to)) (.+)$/)
+ const m=q.match(/^(?:plan(?: (?:to|for|how to))?|how to|how (?:do|can|would) (?:i|we|you)|what (?:do|would|should) (?:i|we|you) need (?:to|for)|what (?:is|'s) (?:needed|required|the best way) (?:to|for)|teach (?:me|yourself) (?:how to|about)|figure out (?:how to|a way to)|help (?:me|us) (?:with|to)|i want (?:you )?to|prepare (?:for|to)) (.+)$/)
  return {query:m?m[1]:q,explicit:!!m}
 }
-const isBroadAction=q=>/^(?:build|make|set up|start|grow|breed|farm|prepare|survive|protect|explore|fish|enchant|brew|find)\b/.test(q)
+const isBroadAction=q=>/^(?:build|make|set up|start|grow|breed|farm|prepare|survive|protect|explore|fish|enchant|brew|find|smelt)\b/.test(q)
 const actionSupport={
  'observe':'supported (observed data only)','gather':'partial; requires actual nearby target, tool, break and pickup',
  'walk':'partial; known terrain and movement are required',
@@ -128,6 +128,19 @@ export function understandMinecraftGoal(raw,{inventory={},inventoryKnown=false,d
  if(typeof raw!=='string'||raw.length>190)return null
  const {query,explicit}=explain(raw)
  if(!explicit&&!isBroadAction(query))return null
+ // Precise craftable item targets outrank thematic phrases. "Make a diamond
+ // pickaxe" is an item recipe, not the broad diamond-mining expedition.
+ const directItem=query.match(/^(?:craft|make|get|obtain) (?:me |us |a |an |some |the )?(.+)$/)
+ const directName=directItem&&resolveMaterial(directItem[1])
+ if(directName){
+  const plan=supplyPlan(directName,1,inventoryKnown?inventory:{},inventoryKnown)
+  return {kind:'minecraft-item-plan',title:'Prepare '+directName.replace(/_/g,' '),item:directName,
+   planningOnly:true,acceptedActions:0,inventoryKnown,
+   steps:plan.ok?plan.steps.slice(0,32).map((s,i)=>({...s,index:i+1,confirmed:false,abilityStatus:actionSupport[s.action==='obtain'?'gather':s.action==='craft'?'craft':'positioned-build']})):[],
+   knownMissing:inventoryKnown&&plan.ok?Object.keys(plan.missing):[],recipeKnown:plan.ok,
+   notes:['Recipe data is a reference. Check server recipe, inventory, and station before acting.'],
+   risks:[],message:plan.ok?'Item dependency plan only; actual crafting/gathering not started.':plan.message}
+ }
  const match=GOALS.find(g=>g.pattern.test(query))
  if(match){
   const owned=inventoryKnown?{...inventory}:{}
