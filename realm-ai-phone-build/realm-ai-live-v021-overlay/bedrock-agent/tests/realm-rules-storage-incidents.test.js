@@ -82,7 +82,7 @@ test('observed absence after reconnect is not proof of who broke the chest',t=>{
  assert.match(f.reports[0],/newly observed terrain/)
  assert.equal(f.observer.latest().nearbyDrops.length,0)
  f.blocks.set('10,64,20',{name:'chest'})
- f.observer.observe(1600)
+ f.observer.observe(2600)
  assert.equal(f.observer.latest().status,'reappeared-observed')
  assert.match(f.observer.latest().note,/NOT been verified/)
 })
