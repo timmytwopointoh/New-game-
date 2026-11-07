@@ -32,7 +32,15 @@ export function parseResourceGoal(raw){
    quantity,maxDistance:8,needsPickup:true,continuousSearch:true,
    sourceFamily:/^(?:wood|logs|log)$/.test(raw)?'logs':null}
  }
- const gather=s.match(/^(?:gather|collect|mine|get) (\d{1,4}) (.+)$/)
+ const some=s.match(/^(?:go )?(?:gather|collect|mine|get|harvest) (?:some|a few) (.+)$/)
+ if(some){
+  const target=resolveMaterial(some[1].replace(/ blocks?$/,''))
+  if(!target)return {error:'Choose a known Bedrock material for this resource goal.'}
+  // "Some" is a small, bounded starting goal, not endless mining.
+  return {kind:'mine-material',target,quantity:8,maxBlocks:48,
+   maxDistance:8,needsPickup:true,continuousSearch:true}
+ }
+ const gather=s.match(/^(?:go )?(?:gather|collect|mine|get|harvest|chop) (\d{1,4}) (.+)$/)
  if(gather){const quantity=Number(gather[1]),raw=gather[2].replace(/ blocks?$/,''),target=resolveMaterial(raw);if(!target||quantity<1||quantity>2304)return {error:'Choose a known material and a quantity from 1–2304.'};return {kind:'mine-material',target,maxBlocks:Math.min(4096,quantity*4+16),quantity,maxDistance:8,needsPickup:true,continuousSearch:true,sourceFamily:/^(?:wood|logs|log)$/.test(raw)?'logs':null}}
  const m=s.match(/^(?:go )?(?:find and mine|find and break|locate and mine|search for and mine) (?:some |a |the )?(.+)$/)
  if(!m)return null
