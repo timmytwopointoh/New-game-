@@ -42,6 +42,9 @@ test('dirt climbing waits for block AND inventory confirmation, then physically 
  f.cliff(3);assert(f.n.walk({x:4,y:67,z:0}).accepted);const now=Date.now();let confirms=0
  for(let t=0;t<12000;t+=50){
   f.w.serverPosition={...f.w.position};f.n.step(now+t)
+  // The synthetic test server explicitly acknowledges the actual landing.
+  // Production cannot skip this authoritative ground+position check.
+  if(f.n.pendingServerLanding)f.n.observeServer({position:{...f.w.position},on_ground:true},now+t+1)
   const b=f.n.climbing.builder,j=b.job?.pending
   if(j){
    assert(!f.n.flight,'never jump while placement is unconfirmed')
@@ -67,7 +70,7 @@ test('Stop cancels a pending dirt placement and preserves gravity and already-co
 })
 test('Creative staircase uses actual held dirt, waits for server blocks and does not consume the stack',()=>{
  const f=fixture('creative');try{f.cliff(3);f.w.inventory.set(0,{...f.w.inventory.get(0),count:1});assert(f.n.walk({x:4,y:67,z:0}).accepted);const now=Date.now();let placed=0
- for(let t=0;t<12000;t+=50){f.w.serverPosition={...f.w.position};f.n.step(now+t);const pending=f.n.climbing.builder.job?.pending;if(pending){f.set(pending.target,'dirt');placed++}if(f.n.state==='arrived-predicted')break}
+ for(let t=0;t<12000;t+=50){f.w.serverPosition={...f.w.position};f.n.step(now+t);if(f.n.pendingServerLanding)f.n.observeServer({position:{...f.w.position},on_ground:true},now+t+1);const pending=f.n.climbing.builder.job?.pending;if(pending){f.set(pending.target,'dirt');placed++}if(f.n.state==='arrived-predicted')break}
  if(placed<3)console.log('CREATIVE_CLIMB_DIAGNOSTIC',JSON.stringify({placed,state:f.n.state,reason:f.n.reason,pose:f.w.position,route:f.n.route,climbing:f.n.climbing.snapshot(),builder:f.n.climbing.builder.snapshot(),decisions:f.n.decisions}))
  assert(placed>=3);assert(f.w.grounded());assert(f.w.position.x>3.9);assert.equal(f.w.inventory.get(0).count,1)
  }finally{f.close()}
