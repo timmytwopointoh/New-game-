@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {EventEmitter} from 'node:events'
 import {abilityEvidence,normalizedAbilityLayerType} from '../src/survival/verification.js'
 import {WorldView} from '../src/survival/world.js'
-import {RealmConnection} from '../src/connection.js'
+import {Connection} from '../src/connection.js'
 import {sanitizeDiagnosticReport} from '../src/diagnostic-store.js'
 import {makeSupportSnapshot} from '../src/support-snapshot.js'
 
@@ -63,7 +63,7 @@ test('only matching own authenticated entity ID can update ability readiness',()
 })
 const probe=world=>{
  const nav={spawned:true,timer:{},state:'stopped',job:null,loading:{},isRespawning:()=>false}
- return RealmConnection.prototype.movementProbe.call({spawned:true,survival:{world,navigation:nav}})
+ return Connection.prototype.movementProbe.call({spawned:true,survival:{world,navigation:nav}})
 }
 test('movement diagnostics show unknown own ability separately from actual terrain and grounding',()=>{
  const world={terrainKnown:()=>true,grounded:()=>true,clearBody:()=>true,
@@ -97,7 +97,7 @@ test('fully verified healthy movement requires a live navigation loop in the sam
  const d=probe(world)
  assert.equal(d.movementGate,'ready')
  assert.equal(d.movementAbilityStatus,'confirmed')
- const unlooped=RealmConnection.prototype.movementProbe.call({spawned:true,survival:{
+ const unlooped=Connection.prototype.movementProbe.call({spawned:true,survival:{
   world,navigation:{spawned:true,timer:null,state:'stopped',isRespawning:()=>false}}})
  assert.equal(unlooped.movementGate,'navigation-loop-not-running')
 })
