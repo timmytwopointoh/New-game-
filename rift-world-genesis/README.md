@@ -1,38 +1,21 @@
-# RIFT WORLD — SHATTERED ATLAS
+# Rift World: Shattered Atlas — v0.2 Living Atlas production milestone
 
-An original **offline Android action-RPG** and its isolated native Android/Gradle build project. Code name: **RIFTCORE**. This is a new game, not a reskin or import of any earlier Rift World project. This first release is the **Genesis playable prototype**, not the finished content-heavy game.
+An offline touch-first Android action-RPG using RIFTCORE (original Canvas 2.5D simulation) in a native Android WebView wrapper. This is a **tested production-quality milestone prototype**, not a content-complete AAA title. The v0.1 Genesis release remains preserved.
 
-## Actually implemented in Genesis
+### v0.2 systems
+- Reworked layered landscape drawing and authored explorable Lumen Reach landmarks (Fallen Observatory, Mirrorwell, Phase Bridge, Moonveil Shrine).
+- Deterministic collision with trees, boulders, water and lava, with movement sliding and Phase Bridge navigation.
+- Directional 3-hit combo sword cone, damage on multiple colliding creatures only, arc VFX, Dash invulnerability and impact sounds.
+- Rebuilt layered hero gear silhouette and enemy-specific illustrated animated creatures.
+- Astral Warden boss: HP UI, 3 readable telegraphed patterns (radial volley, targeted blast, fan projectiles), fury phase under 57% HP.
+- Persistent 3-branch skill tree (Blade Dancer, Storm Sentinel, Rift Weaver), level-up points, stronger rewards for boss kills.
+- Four discoverable relic landmarks with shards and XP.
+- Rift arena snapshot persisted while paused; existing Genesis save schema migrated in place.
+- Gamepad A/B/X/Y + left stick, keyboard and touch; independent offline installation.
+- Android package `com.veilforge.riftworld`, versionCode 2; existing project debug keystore unchanged.
 
-- Real, continuous touch-controlled overworld with original procedural landscape art and distinct environmental palettes: Lumen Reach, Verdant Hollow, Emberfall, Mirror Tides, Nightglass.
-- Five spatially located rift gateways; deterministic map; dynamic animated Rift sanctums, encounter waves and the Hollow Sentinel boss.
-- Original Wayfinder hero with authored geometric illustration, lighting, shadows and movement animation; Glimmerfang, Fracture Wisp, Shardback, Hollow Sentinel, individual behavior/cooldowns/hit effects.
-- Real-time strikes/combo, phase-based Riftshift, AoE Pulse, movement Dash, HP/energy bars, particles, knockback, XP/levels, star-shard economy, repeatable permanent Anchor upgrades.
-- Offline local saves, continue/new game, pause/resume, death/respawn, map screen, mobile action buttons and joystick, keyboard/gamepad-adjacent fallback, synthetic combat sound.
-- Dedicated Android application ID `com.veilforge.riftworld` and separate project signing identity (DEBUG for first build). No Internet permission, analytics, ads, remote code or external assets.
+### Technical limitations / priorities
+This retains a Canvas/WebView engine for portable Android iteration; the illustrated geometric art is not a 3D mesh or skeletal animation. The first build must be tested on the owner's phone for touch ergonomics, FPS, battery, and long-session stability. Future progression includes meshes/rigs, handmade encounters, authored quests, soundtrack, and art content. Do not pad APK size artificially.
 
-## Build
-
-Use owner PC's existing Android SDK/Gradle from the verified independent Windows `emulator-tester` runner. In the `android` directory:
-
-```powershell
-gradle --no-daemon :app:assembleDebug
-```
-
-`app/build/outputs/apk/debug/app-debug.apk` is the real debug-signed Android APK. Do not claim success before actual SDK compilation, `aapt`, alignment, `apksigner`, install/launch and emulator evidence.
-
-Static/integration simulation without Android tooling:
-
-```sh
-node scripts/test-game.cjs
-```
-
-## Content expansion / size budget
-
-This is the **engine/gameplay foundation**, not a fake large APK. Production target is approximately **600–1000 MB of genuinely authored content** (characters/creatures, animation, 3D props and texture atlases, environmental audio, voiced cinematic sequences, bosses, level-specific music). Ship Android-compatible compressed formats, mipmaps and quality settings; do **not** bulk up the APK with filler or unneeded archives. Future content can be installed via integrity-checked optional packs if the final APK exceeds the distribution channel limit. Mobile FPS, RAM, storage and thermal limits take priority over arbitrary file size.
-
-Production stages: Genesis (playable loop) → Atlas (expanded biomes/abilities/narrative) → Bestiary (creature/quest variety) → Eclipse (bosses/cinematics/content packs) → Android release QA.
-
-## Preserve other work
-
-All source lives in `rift-world-genesis/` on an isolated branch in `New-game-` until the parent PC can safely move the *whole subdirectory only* into its own private `Rift-World` repository. Do not alter VEILFORGE Studio/VQ, Realm AI, Peks, Chibi, Sector, their emulator sessions or signing identities.
+### QA
+`node scripts/test-game.cjs` runs headless offline simulation. `node scripts/test-milestone.cjs` checks milestone features and state migration. Actual PC build/emulator is handled only by the established self-hosted runner with isolated AVD, persistent Rift World key, checksum/manifest checks and no other apps changed.

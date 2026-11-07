@@ -7,8 +7,8 @@ android {
         applicationId = "com.veilforge.riftworld"
         minSdk = 26
         targetSdk = 28
-        versionCode = 1
-        versionName = "0.1.0-genesis-alpha"
+        versionCode = 2
+        versionName = "0.2.0-living-atlas-test"
     }
     signingConfigs {
         create("riftWorldDebug") {
