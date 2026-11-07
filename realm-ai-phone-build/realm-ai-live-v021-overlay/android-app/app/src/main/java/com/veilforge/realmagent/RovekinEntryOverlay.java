@@ -300,6 +300,7 @@ public final class RovekinEntryOverlay {
         chat.refresh(actual,RovekinCatalogAdapter.fromLiveCatalog(catalog),liveStatus);
         chat.setAvatarStatus(r);
         chat.refreshInbox(r.optJSONObject("inbox"));
+        chat.refreshGoal(r.optJSONObject("goals"),r.optBoolean("spawned",false));
     }
     /** Called from the existing MainActivity.update() UI callback. */
     public void onStatus(JSONObject realStatus,String legacyConnectionText){
