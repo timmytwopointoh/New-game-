@@ -32,16 +32,16 @@ test('ordinary chat home-test invitation and exact test phrase both work',()=>{
   assert.equal(isHomeFieldTestCommand(phrase),false,phrase)
 })
 
-test('follows the owner first, refuses to assign home at a distance, then assigns exactly once at 10 blocks',()=>{
+test('natural home request waits for fresh owner proximity within four blocks, then grants only once',()=>{
  const f=fixture();let now=100000
- const response=f.field.start(now);assert.equal(response.accepted,true)
+ const response=f.field.start(now,{ownerPositionHome:true});assert.equal(response.accepted,true)
  assert.equal(f.field.state,'following')
  assert.deepEqual(f.calls[0],['follow','Owner'])
  observation(f,now+1000,20)
  f.field.tick(now+1000)
  assert.equal(f.field.state,'awaiting-arrival')
  assert.equal(f.calls.filter(x=>x[0]==='home').length,0)
- observation(f,now+2500,30)
+ observation(f,now+2500,38)
  f.field.tick(now+2500)
  assert.equal(f.field.state,'building')
  assert.equal(f.calls.filter(x=>x[0]==='home').length,1)
