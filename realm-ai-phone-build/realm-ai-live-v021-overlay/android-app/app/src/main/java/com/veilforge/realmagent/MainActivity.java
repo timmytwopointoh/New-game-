@@ -627,9 +627,31 @@ public class MainActivity extends Activity {
             if("POST".equals(verb))SupportLog.record(this,path.startsWith("/mode")?"mode_requested":"command_sent");c.setConnectTimeout(4000);c.setReadTimeout(5000);c.setRequestMethod(verb);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");
             if(payload!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream o=c.getOutputStream()){o.write(payload.toString().getBytes(StandardCharsets.UTF_8));}}
             if(c.getResponseCode()!=200)throw new IOException("Local API returned "+c.getResponseCode());
-            try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[2048];int n;while((n=in.read(buf))!=-1){if(out.size()+n>32768)throw new IOException("Response too large");out.write(buf,0,n);}JSONObject result=new JSONObject(out.toString("UTF-8"));if(result.has("accepted")&&!result.optBoolean("accepted"))SupportLog.record(this,"command_blocked");ui.post(()->{if(revision==serviceRevision)markControllerAvailable();});return result;}
+            try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[2048];int n;while((n=in.read(buf))!=-1){if(out.size()+n>(path.startsWith("/updates")?131072:32768))throw new IOException("Response too large");out.write(buf,0,n);}JSONObject result=new JSONObject(out.toString("UTF-8"));if(result.has("accepted")&&!result.optBoolean("accepted"))SupportLog.record(this,"command_blocked");ui.post(()->{if(revision==serviceRevision)markControllerAvailable();});return result;}
         }catch(Exception error){SupportLog.record(this,"api_failed");throw error;}finally{c.disconnect();}}
-    final Runnable refresh=new Runnable(){public void run(){if(!active)return;if(!token.isEmpty())update();ui.postDelayed(this,4500);}};
+    // Poll this small endpoint separately from /updates. A giant world
+    // snapshot must never hide the unread permission count in the toolbar.
+    void refreshInboxDirect(){
+        if(token==null||token.isEmpty()||!serviceStarted)return;
+        final long revision=serviceRevision;
+        io.submit(()->{
+            try{
+                JSONObject envelope=request("GET","/inbox",null);
+                ui.post(()->{
+                    if(revision!=serviceRevision||rovekin==null)return;
+                    rovekin.onInbox(envelope.optJSONObject("inbox"));
+                });
+            }catch(Exception ignored){/* Keep current badge; next poll retries. */}
+        });
+    }
+    final Runnable refresh=new Runnable(){public void run(){
+        if(!active)return;
+        if(!token.isEmpty()){
+            update();
+            refreshInboxDirect();
+        }
+        ui.postDelayed(this,4500);
+    }};
     @Override protected void onResume(){super.onResume();if(getIntent().getBooleanExtra("showUpdates",false)){getIntent().removeExtra("showUpdates");AppUpdater.show(this);}active=true;ui.removeCallbacks(refresh);ui.post(refresh);}
     @Override protected void onPause(){active=false;ui.removeCallbacks(refresh);super.onPause();}
     @Override protected void onDestroy(){io.shutdownNow();urgent.shutdownNow();supportIo.shutdownNow();super.onDestroy();}
