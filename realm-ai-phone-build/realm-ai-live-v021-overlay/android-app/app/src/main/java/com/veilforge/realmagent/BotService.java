@@ -57,6 +57,19 @@ public final class BotService extends Service {
                     boolean refresh = prefs.getInt("asset_bundle_version",-1) != code;
                     copyAssetTree(getAssets(), "nodejs-project", root, refresh);
                     if(refresh) prefs.edit().putInt("asset_bundle_version",code).commit();
+                    // The executable resides in Android's extracted, executable
+                    // native-library directory (not the noexec app data folder).
+                    // RoveKin's Node runtime reads only this private path and
+                    // launches it with a random bearer key on loopback.
+                    File brainDir=new File(root,"private/llm");
+                    if(!brainDir.exists()&&!brainDir.mkdirs())throw new IOException("Private AI brain folder unavailable");
+                    File nativeExecutable=new File(getApplicationInfo().nativeLibraryDir,"librovekin_llama_server.so");
+                    org.json.JSONObject runtime=new org.json.JSONObject();
+                    runtime.put("executable",nativeExecutable.getAbsolutePath());
+                    File runtimeFile=new File(brainDir,"native-runtime.json");
+                    try(FileOutputStream out=new FileOutputStream(runtimeFile)){
+                        out.write(runtime.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
                     writeStage("assets-ready");
                     File entry = new File(root, "src/mobile.js");
                     if (!entry.isFile()) throw new IOException("Embedded bot entry is missing");
