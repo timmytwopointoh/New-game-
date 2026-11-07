@@ -8,12 +8,28 @@ const text=s=>String(s||'').replace(/[\x00-\x1f\x7f]/g,' ').replace(/\s+/g,' ').
 export class OwnerInbox{
  constructor(connection,{interpretation=()=>null,dispatch=()=>({accepted:false,message:'No interpreter.'}),guidance=()=>null,respondGuidance=()=>({accepted:false,message:'No guidance handler.'})}={}){
   this.connection=connection;this.interpretation=interpretation;this.dispatch=dispatch;this.guidance=guidance;this.respondGuidance=respondGuidance;this.lastNotes=[]
+  this.demo=null;this.seen=new Map();this.seenScope=null
  }
  scope(){const c=this.connection.survival;return c?.companion?.editScope?.().realm||c?.commandVocabulary?.scope||null}
+ // A TEST CARD, NOT a Minecraft edit permission. Works when the local bot
+ // controller is active but the Realm is still loading or disconnected.
+ createDemo(now=Date.now()){
+  const fresh=!!this.demo&&this.demo.expiresAt>now
+  if(!fresh)this.demo={
+   id:'demo-'+crypto.randomBytes(8).toString('hex'),kind:'demo',
+   title:'Practice: Can you see my message?',category:'Practice',
+   prompt:'This is a safe inbox test from RoveKin. Tap Got it, No, or send an explanation.',
+   detail:'Nothing in Minecraft will be changed. A real permission request uses a separate, expiring approval code.',
+   options:[],expiresAt:now+15*60*1000,approvalRequired:false
+  }
+  return {accepted:true,queued:false,message:fresh?'The test question is already waiting in Inbox.':'Test question delivered. Open Inbox to answer it.',
+   inbox:this.snapshot(now)}
+ }
  pending(now=Date.now()){
   const c=this.connection.survival,home=c?.companion?.homeProject,edit=c?.companion?.edits,scope=this.scope()
-  if(!scope)return []
   const items=[]
+  if(this.demo&&now<this.demo.expiresAt)items.push({...this.demo})
+  if(!scope)return items
   const add=(type,p,{title,prompt,detail='',options=[],kind='permission',category='Home',allowApproval=true}={})=>{
    if(!p||!Number.isFinite(p.expires)||now>p.expires)return
    if(p.scope!==undefined&&String(typeof p.scope==='object'?p.scope.realm:p.scope)!==String(scope))return
@@ -51,13 +67,40 @@ export class OwnerInbox{
   if(help&&help.kind==='guidance'&&typeof help.id==='string'&&Number.isFinite(help.expiresAt)&&help.expiresAt>now)items.push(help)
   return items
  }
- snapshot(now=Date.now()){const requests=this.pending(now);return {count:requests.length,requests,notes:this.lastNotes.slice(-4),realmScoped:!!this.scope()}}
+ snapshot(now=Date.now()){
+  const scope=this.scope()
+  if(scope!==this.seenScope){this.seen.clear();this.seenScope=scope}
+  const requests=this.pending(now),ids=new Set(requests.map(r=>r.id))
+  // Remember a bounded set of titles only: no old codes, coordinates,
+  // explanations or executable approval data in recent notifications.
+  for(const req of requests)if(req.kind!=='demo'){
+   this.seen.set(req.id,{id:req.id,title:req.title,category:req.category,kind:req.kind,
+    expiresAt:req.expiresAt,lastSeenAt:now})
+  }
+  while(this.seen.size>8)this.seen.delete(this.seen.keys().next().value)
+  const recent=[...this.seen.values()].filter(x=>!ids.has(x.id)&&now-x.lastSeenAt<30*60*1000)
+   .slice(-4).reverse().map(x=>({title:x.title,category:x.category,
+      status:x.expiresAt<=now?'expired':'no-longer-active',actionable:false}))
+  return {count:requests.length,requests,recent,notes:this.lastNotes.slice(-4),
+   realmScoped:!!scope,demoAvailable:true}
+ }
  respond({id,decision,explanation='',choice=null}={},now=Date.now()){
   if(typeof id!=='string'||id.length>80||!['approve','deny','explain','choose'].includes(decision))
    return {accepted:false,queued:false,message:'Choose a valid current inbox request and response.'}
   const active=this.pending(now).find(r=>r.id===id)
   if(!active)return {accepted:false,queued:false,message:'That request expired, changed, or belongs to another Realm. No action was taken.',inbox:this.snapshot(now)}
   const c=this.connection.survival,comp=c?.companion,home=comp?.homeProject,scope=this.scope()
+  if(active.kind==='demo'){
+   if(decision==='choose')return {accepted:false,queued:false,message:'The practice card has no command choices.'}
+   if(decision==='explain'){
+    const note=text(explanation)
+    if(note.length<2)return {accepted:false,queued:false,message:'Write a short explanation to test delivery.'}
+    this.demo=null
+    return {accepted:true,queued:false,message:'Your practice explanation reached RoveKin’s inbox. No world action was performed.',inbox:this.snapshot(now)}
+   }
+   this.demo=null
+   return {accepted:true,queued:false,message:'Practice response received ('+(decision==='approve'?'Got it':'No')+'). The inbox is working; Minecraft was not changed.',inbox:this.snapshot(now)}
+  }
   // Help cards are NEVER approval of world edits. Even a user tapping the
   // positive button only acknowledges the problem; a fresh command is needed.
   if(active.kind==='guidance'){
