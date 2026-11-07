@@ -6,8 +6,8 @@ import {resolveActionTarget} from './command-vocabulary.js'
 const idFor=(type,scope,code,extra='')=>type+'-'+crypto.createHash('sha256').update([scope,code,extra].join('|')).digest('hex').slice(0,16)
 const text=s=>String(s||'').replace(/[\x00-\x1f\x7f]/g,' ').replace(/\s+/g,' ').trim().slice(0,240)
 export class OwnerInbox{
- constructor(connection,{interpretation=()=>null,dispatch=()=>({accepted:false,message:'No interpreter.'})}={}){
-  this.connection=connection;this.interpretation=interpretation;this.dispatch=dispatch;this.lastNotes=[]
+ constructor(connection,{interpretation=()=>null,dispatch=()=>({accepted:false,message:'No interpreter.'}),guidance=()=>null,respondGuidance=()=>({accepted:false,message:'No guidance handler.'})}={}){
+  this.connection=connection;this.interpretation=interpretation;this.dispatch=dispatch;this.guidance=guidance;this.respondGuidance=respondGuidance;this.lastNotes=[]
  }
  scope(){const c=this.connection.survival;return c?.companion?.editScope?.().realm||c?.commandVocabulary?.scope||null}
  pending(now=Date.now()){
@@ -47,6 +47,8 @@ export class OwnerInbox{
      '. Choosing a meaning prepares a plan only; it does not start a destructive task.',
     options,expiresAt:(interp.createdAt||now)+120000,approvalRequired:false})
   }
+  const help=this.guidance()
+  if(help&&help.kind==='guidance'&&typeof help.id==='string'&&Number.isFinite(help.expiresAt)&&help.expiresAt>now)items.push(help)
   return items
  }
  snapshot(now=Date.now()){const requests=this.pending(now);return {count:requests.length,requests,notes:this.lastNotes.slice(-4),realmScoped:!!this.scope()}}
@@ -56,6 +58,13 @@ export class OwnerInbox{
   const active=this.pending(now).find(r=>r.id===id)
   if(!active)return {accepted:false,queued:false,message:'That request expired, changed, or belongs to another Realm. No action was taken.',inbox:this.snapshot(now)}
   const c=this.connection.survival,comp=c?.companion,home=comp?.homeProject,scope=this.scope()
+  // Help cards are NEVER approval of world edits. Even a user tapping the
+  // positive button only acknowledges the problem; a fresh command is needed.
+  if(active.kind==='guidance'){
+   if(decision==='choose')return {accepted:false,queued:false,message:'A help request does not offer a world-edit shortcut.'}
+   const r=this.respondGuidance(id,decision,explanation,now)
+   return {...r,inbox:this.snapshot(now)}
+  }
   if(decision==='explain'){
    const note=text(explanation)
    if(note.length<2)return {accepted:false,queued:false,message:'Write a short explanation before sending.'}
