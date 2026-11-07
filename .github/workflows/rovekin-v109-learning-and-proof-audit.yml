@@ -4,6 +4,7 @@ on:
     branches: [fix/rovekin-v109-real-learning-audit-20261107]
     paths:
       - .github/workflows/rovekin-v109-learning-and-proof-audit.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/command-plans.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/companion-mind.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/navigation.js
@@ -11,6 +12,7 @@ on:
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/internal-skills.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v109-learning-truth.test.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v109-plan-restart.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/companion-goal-journal.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
   workflow_dispatch:
 permissions:
