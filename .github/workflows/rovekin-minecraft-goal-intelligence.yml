@@ -7,7 +7,10 @@ on:
       - .github/workflows/rovekin-minecraft-goal-intelligence.yml
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/minecraft-goal-knowledge.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/controller.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/realm-rules.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/storage-incidents.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/minecraft-goal-knowledge.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/realm-rules-storage-incidents.test.js
 permissions:
   contents: read
 jobs:
@@ -28,8 +31,11 @@ jobs:
           set -euo pipefail
           node --check src/survival/minecraft-goal-knowledge.js
           node --check src/survival/controller.js
+          node --check src/survival/realm-rules.js
+          node --check src/survival/storage-incidents.js
           node --test \
             tests/minecraft-goal-knowledge.test.js \
+            tests/realm-rules-storage-incidents.test.js \
             tests/resource-jobs.test.js \
             tests/companion-field-trial.test.js \
             tests/permanent-home-memory.test.js \
