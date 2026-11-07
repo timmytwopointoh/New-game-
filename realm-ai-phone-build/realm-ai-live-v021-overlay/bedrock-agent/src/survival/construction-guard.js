@@ -23,7 +23,29 @@ export function approvedEdit(world,kind,positions,now=Date.now()) {
 // Work-stage scanning uses a SINGLE expanded box, not 256 separate sphere scans.
 // Unloaded cells within three blocks cause a conservative "unverified" state.
 // No scanning/chunk loading can establish provenance for all natural materials.
-export function constructionExposure(world,positions,{radius=CONSTRUCTION_BUFFER,ignoreVerifiedProjectBlocks=null}={}) {
+// Expensive 15-block safety scan is memoized for at most 1.5 seconds and
+// ONLY while both server-observed chunk and block revisions remain unchanged.
+// A newly placed, mined or loaded block invalidates it immediately.
+const exposureCache=new WeakMap()
+export function constructionExposure(world,positions,options={}){
+ if(!world||!Array.isArray(positions)||positions.length<1||positions.length>256)return scanConstructionExposure(world,positions,options)
+ const ignore=options.ignoreVerifiedProjectBlocks
+ const key=[options.radius??CONSTRUCTION_BUFFER,world.dimension,
+  positions.map(p=>p.x+','+p.y+','+p.z).join(';'),
+  ignore instanceof Set?[...ignore].sort().join(';'):'',
+  world.ownedPlacements?.size||0].join('|')
+ const revision=String(world.terrainRevision??'')+'/'+String(world.blockRevision??'')
+ const now=Date.now()
+ let state=exposureCache.get(world)
+ if(!state||state.revision!==revision){state={revision,entries:new Map()};exposureCache.set(world,state)}
+ const previous=state.entries.get(key)
+ if(previous&&now-previous.at>=0&&now-previous.at<1500)return previous.result
+ const result=scanConstructionExposure(world,positions,options)
+ if(state.entries.size>=12)state.entries.delete(state.entries.keys().next().value)
+ state.entries.set(key,{at:now,result})
+ return result
+}
+function scanConstructionExposure(world,positions,{radius=CONSTRUCTION_BUFFER,ignoreVerifiedProjectBlocks=null}={}) {
  if(!world?.block||!Array.isArray(positions)||!positions.length||positions.length>256||!positions.every(valid)||radius!==CONSTRUCTION_BUFFER)
   return {state:'unverified',reason:'Valid observed work coordinates are required.'}
  const min={x:Math.min(...positions.map(p=>p.x)),y:Math.min(...positions.map(p=>p.y)),z:Math.min(...positions.map(p=>p.z))}
