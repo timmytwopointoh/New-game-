@@ -284,7 +284,7 @@ public final class RovekinEntryOverlay {
         if(painting!=null)painting.setAnimated(false);
         frame.setOnClickListener(null);
         frame.removeAllViews(); // transcript still lives in the hidden legacy root.
-        chat=new RovekinChatPanel(a,router,trustedRole,a::reconnectWithDiagnosticZip);
+        chat=new RovekinChatPanel(a,router,trustedRole,a::reconnectWithDiagnosticZip,a::showOwnerInbox);
         View chatView=chat.create(a.scroll);
         frame.addView(chatView,new FrameLayout.LayoutParams(-1,-1));
         if(status!=null)refreshChat(status);
@@ -299,6 +299,7 @@ public final class RovekinEntryOverlay {
             r.optBoolean("spawned",false),false);
         chat.refresh(actual,RovekinCatalogAdapter.fromLiveCatalog(catalog),liveStatus);
         chat.setAvatarStatus(r);
+        chat.refreshInbox(r.optJSONObject("inbox"));
     }
     /** Called from the existing MainActivity.update() UI callback. */
     public void onStatus(JSONObject realStatus,String legacyConnectionText){
