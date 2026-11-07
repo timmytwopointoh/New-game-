@@ -431,6 +431,9 @@ public class MainActivity extends Activity {
         } catch(Exception e){serviceStarted=false;apiConnected=false;getPreferences(MODE_PRIVATE).edit().putBoolean("serviceStarted",false).apply();renderPowerButton();bubble("VEILFORGE","Could not start: "+e.getClass().getSimpleName(),false);}
     }
     JSONArray bundledCatalog(){try(InputStream in=getAssets().open("nodejs-project/src/survival/command-catalog.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>131072)throw new IOException();out.write(b,0,n);}return new JSONArray(out.toString("UTF-8"));}catch(Exception e){return new JSONArray();}}
+    // This is the production phone inbox reached by the top-right envelope.
+    // It reads only from the bearer-authenticated, loopback RoveKin process.
+    void showOwnerInbox(){RovekinInboxDialog.show(this);}
     void showJobs(){
         if(catalog.length()==0)catalog=bundledCatalog();commandDeck=new CommandDeck(this,catalog);final CommandDeck shown=commandDeck;shown.show();
         if(token.isEmpty())return;
