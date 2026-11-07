@@ -91,42 +91,72 @@ export class Connection extends EventEmitter {
   // Read-only, owner-local telemetry: fixed enums/booleans only.
   // Never expose player names, coordinates, chat, Realm IDs, auth or tokens.
   movementProbe(){
-   const w=this.survival?.world,n=this.survival?.navigation
-   if(!w||!n)return {movementGate:'unavailable',movementVerified:false,movementTerrainKnown:false,
-    movementAbilityKnown:false,movementGrounded:false,followPending:false,followActive:false,movementState:'idle'}
-   let gate='unknown',terrain=false,grounded=false
-   try{
-    terrain=w.terrainKnown?.()===true
-    grounded=w.grounded?.()===true
-    if(!this.spawned||!n.spawned)gate='not-spawned'
-    else if(w.attributes?.['minecraft:health']===0||n.isRespawning?.())gate='awaiting-respawn'
-    else if(w.inputLocks?.move)gate='input-locked'
-    else if(w.abilityState?.effective?.flying)gate='flight-active'
-    else if(w.gameMode===null)gate='mode-unknown'
-    else if(!w.abilityState?.known)gate='abilities-unknown'
-    else if(w.abilityState?.loading)gate='abilities-loading'
-    else if(!w.movementVerified)gate='abilities-incompatible'
-    else if(!terrain)gate='terrain-unknown'
-    else if(!w.position||!w.clearBody(w.position))gate='body-obstructed'
-    else if(!grounded)gate='not-grounded'
-    else gate='ready'
-   }catch{gate='unavailable'}
-   const states=['idle','stopped','following','walking','waiting-for-player','waiting-for-terrain',
-    'waiting-for-readiness','blocked','arrived-predicted','loading','landing']
-   return {movementGate:gate,movementVerified:w.movementVerified===true,
-    movementTerrainKnown:terrain,movementAbilityKnown:w.abilityState?.known===true,
-    movementGrounded:grounded,followPending:!!n.pendingFollow,followActive:n.job?.kind==='follow',
-    movementState:states.includes(n.state)?n.state:'other',
-    movementLastWorkMs:Math.max(0,Math.min(60000,n.lastWorkDurationMs||0)),
-    movementPeakWorkMs:Math.max(0,Math.min(60000,n.maxWorkDurationMs||0)),
-    movementScheduleGapMs:Math.max(0,Math.min(60000,n.lastSchedulingGapMs||0)),
-    // Safe timing only, never player identity or private coordinates.
-    movementLandingPending:!!n.pendingServerLanding,
-    movementLandingAgeMs:n.pendingServerLanding?Math.max(0,Math.min(60000,Date.now()-n.pendingServerLanding.started)):0,
-    movementLastJumpAgeMs:n.lastJumpAt?Math.max(0,Math.min(60000,Date.now()-n.lastJumpAt)):null,
-    movementServerPoseAgeMs:n.lastPoseAt?Math.max(0,Math.min(60000,Date.now()-n.lastPoseAt)):null,
-    homeWorkState:['running','paused','restoring','furnishing','owner-paused'].includes(this.survival?.companion?.homeProject?.state)?
-      this.survival.companion.homeProject.state:'other'}
+    const w=this.survival?.world,n=this.survival?.navigation
+    if(!w||!n)return {movementGate:'unavailable',movementProbeStage:'controller-not-attached',
+      movementVerified:false,movementTerrainKnown:false,movementAbilityKnown:false,
+      movementGrounded:false,followPending:false,followActive:false,movementState:'idle'}
+    const statuses=['idle','stopped','following','walking','waiting-for-player',
+      'waiting-for-terrain','waiting-for-readiness','blocked','arrived-predicted',
+      'loading','landing','landing-for-server']
+    let stage='terrain',terrain=false,grounded=false,gate='unknown'
+    // Each field is measured independently. Earlier one transient exception
+    // collapsed every field to false and labeled the problem "unavailable".
+    // The safe snapshot deliberately omits IDs, coordinates, chat and tokens.
+    const info={
+      movementAbilityReportsSeen:Math.min(10000,w.abilityReportsSeen||0),
+      movementOwnAbilityReportsSeen:Math.min(10000,w.ownAbilityReportsSeen||0),
+      movementOwnBaseLayerSeen:w.ownAbilityBaseSeen===true,
+      movementAbilityKnown:w.abilityState?.known===true,
+      movementNavSpawned:n.spawned===true,
+      movementLoopRunning:!!n.timer,
+      movementWorldEnabled:w.enabled===true,
+      movementVerified:false,movementTerrainKnown:false,movementGrounded:false,
+      followPending:!!n.pendingFollow,followActive:n.job?.kind==='follow',
+      movementState:statuses.includes(n.state)?n.state:'other'
+    }
+    try{
+      terrain=w.terrainKnown?.()===true
+      info.movementTerrainKnown=terrain
+      stage='ground'
+      grounded=w.grounded?.()===true
+      info.movementGrounded=grounded
+      stage='ability'
+      info.movementVerified=w.movementVerified===true
+      info.movementAbilityStatus=!info.movementAbilityKnown?
+        w.ownAbilityReportsSeen>0?'own-base-missing':w.abilityReportsSeen>0?'other-player-only':'no-own-ability-packet':
+        w.abilityState?.loading?'loading':w.movementVerified?'confirmed':'incompatible'
+      stage='gate'
+      if(!this.spawned||!n.spawned)gate='not-spawned'
+      else if(w.attributes?.['minecraft:health']===0||n.isRespawning?.())gate='awaiting-respawn'
+      else if(w.inputLocks?.move)gate='input-locked'
+      else if(w.abilityState?.effective?.flying)gate='flight-active'
+      else if(w.gameMode===null)gate='mode-unknown'
+      else if(!info.movementAbilityKnown)gate='abilities-unknown'
+      else if(w.abilityState?.loading)gate='abilities-loading'
+      else if(!info.movementVerified)gate='abilities-incompatible'
+      else if(!terrain)gate='terrain-unknown'
+      else if(!w.position||!w.clearBody(w.position))gate='body-obstructed'
+      else if(!grounded)gate='not-grounded'
+      else if(!n.timer)gate='navigation-loop-not-running'
+      else gate='ready'
+      stage='timing'
+      Object.assign(info,{
+        movementLastWorkMs:Math.max(0,Math.min(60000,n.lastWorkDurationMs||0)),
+        movementPeakWorkMs:Math.max(0,Math.min(60000,n.maxWorkDurationMs||0)),
+        movementScheduleGapMs:Math.max(0,Math.min(60000,n.lastSchedulingGapMs||0)),
+        movementLandingPending:!!n.pendingServerLanding,
+        movementLandingAgeMs:n.pendingServerLanding?Math.max(0,Math.min(60000,Date.now()-n.pendingServerLanding.started)):0,
+        movementLastJumpAgeMs:n.lastJumpAt?Math.max(0,Math.min(60000,Date.now()-n.lastJumpAt)):null,
+        movementServerPoseAgeMs:n.lastPoseAt?Math.max(0,Math.min(60000,Date.now()-n.lastPoseAt)):null,
+        homeWorkState:['running','paused','restoring','furnishing','owner-paused'].includes(this.survival?.companion?.homeProject?.state)?
+          this.survival.companion.homeProject.state:'other'
+      })
+      return {...info,movementGate:gate,movementProbeStage:'complete'}
+    }catch{
+      // Do not claim a readiness failure or "ready" based on an exception.
+      // The next report identifies which local probe failed.
+      return {...info,movementGate:'probe-error',movementProbeStage:stage}
+    }
   }
   diagnostics(){return {...this.movementProbe(),schema:1,phase:this.lastPhase,authState:this.authState,connected:this.connected,joined:this.joined,spawned:this.spawned,deviceCodePending:!!this.authChallenge?.userCode,titleTokenRecoveryAttempted:this.titleTokenRecoveryAttempted===true,...this.realmDiscovery,packStage:this.packStatus.stage,packReason:this.packStatus.reason||'none',packFreeMB:this.packStatus.freeMB??0,packNeededMB:this.packStatus.neededMB??0,packRetryable:this.packStatus.retryable===true,packCacheStatusIssued:this.packStatus.cacheStatusIssued===true,packDownloadRequestIssued:this.packStatus.downloadRequestIssued===true,packResponseCount:this.packStatus.packResponseCount??0,packNativeEarlyCompletionsSuppressed:this.packStatus.suppressedNativePackCompletions??0,headlessPackProbe:this.packStatus.headlessPackProbe===true,headlessProbeSent:this.packStatus.headlessProbeSent===true,headlessProbeAccepted:this.packStatus.headlessProbeAccepted===true,packServerCount:this.packStatus.serverPackCount??0,packCdnCount:this.packStatus.cdnPackCount??0,packAdvertisedCount:this.packStatus.packAdvertisedCount??0,packInfoReceived:this.packStatus.packInfoReceived===true,packStackReceived:this.packStatus.packStackReceived===true,packNoPackDirectStack:this.packStatus.packNoPackDirectStack===true,packVerifiedCacheCount:this.packStatus.packVerifiedCacheCount??0,packMissingCount:this.packStatus.packMissingCount??0,packSkippedOptional:this.packStatus.packSkippedOptional??0,packSelectionPolicy:this.packStatus.packSelectionPolicy??'unknown',packHandshakeMode:this.packStatus.packHandshakeMode??'unknown',packLegacyBehaviorCount:this.packStatus.packLegacyBehaviorCount??0,packResourceInfoCount:this.packStatus.packResourceInfoCount??0,packTextureInfoCount:this.packStatus.packTextureInfoCount??0,packBehaviorInfoCount:this.packStatus.packBehaviorInfoCount??0,packDuplicateListEntries:this.packStatus.packDuplicateListEntries??0,packHeaders:this.packHeadersReceived,packChunks:this.packChunksReceived,...this.loadingLiveness.snapshot(),loadingRecoveryAttempts:this.recoveryAttempts,loadingRecoveryScheduled:!!this.recoveryTimer,sessionRecoveryAttempts:this.sessionCloseCount||0,sessionRecoveryCause:this.lastSessionCloseCause||'none',loadingNextRetrySeconds:this.recoveryNextAt?Math.max(0,Math.ceil((this.recoveryNextAt-Date.now())/1000)):0,failure:this.lastFailure||null,clientIdentity:this.clientIdentity||null,...transportEvidenceSummary(this.client),transportCloseKind:this.transportCloseKind||'none',transportCloseOrigin:this.transportCloseOrigin||'unknown',...(()=>{const state=this.transportCloseSnapshot||inspectTransportState(this.client);return {transportKind:state.transportKind,rtcConnectionState:state.rtcConnectionState,rtcIceState:state.rtcIceState,rtcReliableState:state.rtcReliableState}})(),packWaitingForServer:this.connected&&this.client?._closed!==true&&this.packStatus?.stage==='pack-request'&&this.packHeadersReceived===0,packServerWaitSeconds:this.connected&&this.client?._closed!==true&&this.packRequestAt>0?Math.max(0,Math.floor((Date.now()-this.packRequestAt)/1000)):0,transportCloseCode:this.transportCloseCode||0,transportCloseLabel:this.transportCloseLabel||'unobserved',packWireProtocol:this.packWire?.version||'not-initialized',packWireMode:this.packWire?.mode||'unknown',packWireEncoded:this.packStatus.packWireEncoded===true,packWireVerified:this.packStatus.packWireVerified===true,packWireVersion:this.packStatus.packWireVersion||'unknown',packWireCode:this.packStatus.packWireCode||0,packWireBytes:this.packStatus.packWireBytes||0,packWireIds:this.packStatus.packWireIds||0,packWireText:this.packStatus.packWireText||'unknown',packTransportConnectedAtRequest:this.packStatus.packTransportConnectedAtRequest===true,packResourceClassifiedCount:this.packStatus.packResourceClassifiedCount||0,packBehaviorClassifiedCount:this.packStatus.packBehaviorClassifiedCount||0,packAddonClassifiedCount:this.packStatus.packAddonClassifiedCount||0,packHeadersSeenByHandler:this.packStatus.packHeadersSeenByHandler||0,packChunksSeenByHandler:this.packStatus.packChunksSeenByHandler||0,savedAuthentication:'kept'}}
   status(){return {chatDiagnostics:{...this.chatDiagnostics},support:this.trace?.summary(),diagnostics:this.diagnostics(),survival:this.survival.snapshot(),connected:this.connected,joined:this.joined,spawned:this.spawned,username:this.username||null,server:this.config.minecraft.mode==='realm'?'Bedrock Realm':this.config.minecraft.host+':'+this.config.minecraft.port,lastError:this.lastError,lastPhase:this.lastPhase,
