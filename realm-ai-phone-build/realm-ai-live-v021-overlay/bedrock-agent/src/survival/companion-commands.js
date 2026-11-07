@@ -107,6 +107,10 @@ export class CompanionCommands {
    return this.edits.confirm(s,this.editScope(),this.c.world)
   if(/^confirm home proximity \d{6}$/.test(s)||s==='cancel home proximity')
    return this.homeProject.confirmProximity(s,this.editScope().realm)
+  // "Go home" means travel, not permission to restart paused demolition,
+  // mining, or construction. "Resume home" is the separate owner intent.
+  if(/^(?:go home|go back home|head home|head back home|return home|return to (?:your|the) home|go to your (?:home|house|base)|take yourself home)$/.test(s))
+   return this.homeProject.requestReturnHome()
   if(s==='resume working on your house'||s==='go back to your house'||s==='resume house work'){
    const restored=this.resumeSavedHome();if(restored)return restored
    this.social.mode='house'
@@ -122,7 +126,7 @@ export class CompanionCommands {
   if(s==='resume home'||s==='resume building home'){
    const restored=this.resumeSavedHome();if(restored)return restored
    this.social.mode='house';const result=this.homeProject.resumeAfterOwnerTask(this.editScope().realm);return result.accepted?result:this.homeProject.requestAuthorization(this.editScope().realm)}
-  if(s==='home status'||s==='check home')return {accepted:true,queued:false,message:this.homeRoutine.inspect().message+' '+this.homeProject.snapshot().reason+(this.homeMemory.record?' Permanent home: '+Object.values(this.homeMemory.record.plot.center).join(', ')+'.':''),home:this.homeRoutine.snapshot(),permanentHome:this.homeMemory.summary(),project:this.homeProject.snapshot()}
+  if(/^(?:home status|check home|where is your home|do you remember your home|what is your home location)$/.test(s))return {accepted:true,queued:false,message:this.homeRoutine.inspect().message+' '+this.homeProject.snapshot().reason+(this.homeMemory.record?' Permanent home: '+Object.values(this.homeMemory.record.plot.center).join(', ')+'.':''),home:this.homeRoutine.snapshot(),permanentHome:this.homeMemory.summary(),project:this.homeProject.snapshot()}
   if(s==='bed supplies'||s==='how to get a bed'||s==='how do you get a bed'||s==='find home bed')return this.homeRoutine.inspect()
   if(s==='craft home bed'||s==='make a home bed'||s==='craft a bed')return this.homeRoutine.craftBed()
   if(s==='place home bed'||s==='put down home bed')return this.homeRoutine.placeBed()
