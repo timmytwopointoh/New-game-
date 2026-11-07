@@ -35,6 +35,8 @@ public final class RovekinChatPanel {
     private final RovekinActionRouter router;
     private final RovekinFeatureContract.Authorization authorization;
     private final Runnable reconnectAndCapture;
+    private final Runnable openInbox;
+    private TextView inboxIcon,inboxCount;
     private RovekinFeatureContract.Runtime runtime=
         new RovekinFeatureContract.Runtime(false,false,false,false);
     private List<RovekinFeatureContract.Skill> catalog=Collections.emptyList();
@@ -45,12 +47,16 @@ public final class RovekinChatPanel {
     private Button start,stop,send;
     public RovekinChatPanel(Activity activity,RovekinActionRouter router,
                             RovekinFeatureContract.Authorization authorization){
-        this(activity,router,authorization,null);
+        this(activity,router,authorization,null,null);
     }
     public RovekinChatPanel(Activity activity,RovekinActionRouter router,
                             RovekinFeatureContract.Authorization authorization,Runnable reconnectAndCapture){
+        this(activity,router,authorization,reconnectAndCapture,null);
+    }
+    public RovekinChatPanel(Activity activity,RovekinActionRouter router,
+                            RovekinFeatureContract.Authorization authorization,Runnable reconnectAndCapture,Runnable openInbox){
         this.activity=activity;this.router=router;this.authorization=authorization;
-        this.reconnectAndCapture=reconnectAndCapture;
+        this.reconnectAndCapture=reconnectAndCapture;this.openInbox=openInbox;
     }
     private int dp(float v){return (int)(v*activity.getResources().getDisplayMetrics().density+.5f);}
     static int safeBottomPaddingPx(int bottomInsetPx,int minPx,int gutterPx){
@@ -151,6 +157,28 @@ public final class RovekinChatPanel {
         statusText.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
         statusText.setMaxLines(2);statusText.setMaxWidth(dp(180));
         top.addView(statusText,new LinearLayout.LayoutParams(-2,dp(48)));
+        // Compact top-right inbox. The number is the number of CURRENT
+        // unanswered live prompts, never an unread marketing notification.
+        FrameLayout envelope=new FrameLayout(activity);
+        envelope.setContentDescription("Open RoveKin's questions and permissions");
+        envelope.setBackground(new RippleDrawable(ColorStateList.valueOf(0x77e2f4ff),
+            grad(new int[]{0xff254d3c,0xff192d36,0xff201b32},0xffb58bff,13),null));
+        inboxIcon=label("✉",28,PAPER,true);
+        inboxIcon.setGravity(Gravity.CENTER);
+        envelope.addView(inboxIcon,new FrameLayout.LayoutParams(-1,-1));
+        inboxCount=label("0",11,INK,true);
+        inboxCount.setGravity(Gravity.CENTER);
+        inboxCount.setMinWidth(dp(19));inboxCount.setMinHeight(dp(19));
+        inboxCount.setPadding(dp(3),0,dp(3),0);
+        inboxCount.setBackground(grad(new int[]{0xffe9ffb2,0xffaaff69},0xff073d22,11));
+        FrameLayout.LayoutParams badge=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
+        badge.topMargin=dp(1);badge.rightMargin=dp(1);
+        envelope.addView(inboxCount,badge);
+        inboxCount.setVisibility(View.GONE);
+        envelope.setOnClickListener(v->{if(openInbox!=null)openInbox.run();});
+        LinearLayout.LayoutParams envelopeLP=new LinearLayout.LayoutParams(dp(52),dp(48));
+        envelopeLP.leftMargin=dp(7);
+        top.addView(envelope,envelopeLP);
         body.addView(top,below(0));
         RovekinDripBar drips=new RovekinDripBar(activity);
         body.addView(drips,new LinearLayout.LayoutParams(-1,dp(19)));
@@ -237,6 +265,16 @@ public final class RovekinChatPanel {
         }
         if(start!=null)start.setAlpha(runtime.controllerConnected?.65f:1f);
         if(buddy!=null)buddy.setContentDescription(buddy.getContentDescription());
+    }
+    public void refreshInbox(JSONObject data){
+        int count=data==null?0:Math.max(0,Math.min(99,data.optInt("count",0)));
+        if(inboxCount!=null){
+            inboxCount.setVisibility(count==0?View.GONE:View.VISIBLE);
+            inboxCount.setText(count>9?"9+":String.valueOf(count));
+        }
+        if(inboxIcon!=null)inboxIcon.setContentDescription(count==0?
+            "Inbox: no questions or permissions waiting":
+            "Inbox: "+count+" questions or permissions need your response");
     }
     public void setAvatarStatus(JSONObject realControllerStatus){
         if(buddy!=null)buddy.setLiveState(realControllerStatus);
