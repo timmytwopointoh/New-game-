@@ -9,6 +9,9 @@ on:
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/home-project.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/companion-field-trial.test.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/permanent-home-memory.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/internal-skills.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/resource-jobs.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/new-home-gift-field.test.js
       - .github/workflows/rovekin-home-return-safety.yml
   workflow_dispatch:
 permissions:
@@ -32,11 +35,13 @@ jobs:
           node --check src/survival/companion-field-trial.js
           node --check src/survival/companion-commands.js
           node --check src/survival/home-project.js
+          node --check src/survival/internal-skills.js
           node --test \
             tests/companion-field-trial.test.js \
             tests/live-follow-home-anchor.test.js \
             tests/permanent-home-memory.test.js \
             tests/new-home-gift-field.test.js \
+            tests/resource-jobs.test.js \
             tests/follow-readiness-queue.test.js \
             tests/clearance-follow.test.js \
             tests/home-clearance-field.test.js \
