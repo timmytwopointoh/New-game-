@@ -17,6 +17,7 @@ import {ResourceJobs} from './resource-jobs.js'
 import {isForestryReturnCommand} from './forestry-return.js'
 import {LandmarkMemory} from './landmark-memory.js'
 import {ResourceRecall} from './resource-recall.js'
+import {understandMinecraftGoal} from './minecraft-goal-knowledge.js'
 import {CompanionMind} from './companion-mind.js'
 import {CompanionVoice} from './companion-voice.js'
 import {KnowledgeMemory} from './knowledge-memory.js'
@@ -117,7 +118,16 @@ export class SurvivalController{
   m=s.match(/^(?:plan (?:get|make|craft|gather|collect)|get|gather|collect|craft|make) (\d+) (.+)$/)
   if(m){const n=resolveMaterial(m[2]);if(!n)return answer('Unknown material; use “materials <name>” to look it up.');const plan=supplyPlan(n,Number(m[1]),this.world.items(),this.world.inventoryKnown);if(!plan.ok)return answer(plan.message);this.lastPlan=plan;return answer(`Plan ${plan.count} ${plan.name}${plan.inventoryKnown?'':' (inventory unknown; quantities assume empty inventory)'}: ${plan.steps.slice(0,12).map(x=>`${x.action} ${x.count} ${x.item}`).join(' → ')||'already supplied'}. ${plan.message}`,{supplyPlan:plan})}
   if(/^(?:plan status|show plan)$/.test(s))return answer(this.lastPlan?JSON.stringify(this.lastPlan):'No survival supply plan yet.')
-  if(/^(?:start plan|run plan|execute plan|approve plan)$/.test(s))return answer('Survival supply plans are previews. Crafting and block placement transactions are not implemented; no job was sent.')
+  if(/^(?:start plan|run plan|execute plan|approve plan)$/.test(s))return answer('Supply and knowledge plans are previews, not autonomous execution. Direct Craft, Dig, Follow and positioned Build still require their own server-verified conditions.')
+  // Broader natural-language goals never silently send a destructive action.
+  // Known immediate commands above retain priority, especially STOP and HOME.
+  const goalKnowledge=understandMinecraftGoal(s,{
+   inventory:this.world.items?.()||{},inventoryKnown:!!this.world.inventoryKnown,
+   dimension:this.world.dimension,health:this.world.attributes?.['minecraft:health']??null
+  })
+  if(goalKnowledge)return answer(goalKnowledge.title?goalKnowledge.title+': '+
+   goalKnowledge.steps.slice(0,6).map(x=>x.index+'. '+(x.detail||x.action)).join(' → ')+
+   '. '+goalKnowledge.message:goalKnowledge.message,{goalKnowledge})
   if(/^(?:follow|come|build|mine|harvest|smelt|fight|explore|return|mark|plan)\b/.test(s))return answer('That survival action is not implemented yet. Try “look around”, “walk to X Y Z”, or “plan get 8 torches”. No behavior-pack command or teleport was sent.')
   return answer('Try “help survival” for the no-add-on commands. Use a material name and quantity to prepare a supply plan.')
  }
