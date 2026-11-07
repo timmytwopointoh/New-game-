@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/rovekin-v109-learning-and-proof-audit.yml
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/command-plans.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/companion-mind.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/navigation.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/resource-jobs.js
       - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/internal-skills.js
