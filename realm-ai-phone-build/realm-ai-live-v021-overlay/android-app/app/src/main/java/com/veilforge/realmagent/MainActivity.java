@@ -29,7 +29,7 @@ public class MainActivity extends Activity {
     volatile long commandEpoch=System.currentTimeMillis(); int selectedPlan=0;
     EditText botField,ownerField,realmField,input;
     LinearLayout log;ScrollView scroll;TextView connection,authCodeLabel,settingsStatus;Button copyAuthCode,powerButton,commandsButton,activateButton,retryButton;String displayedAuthCode="",lastPresentedMicrosoftCode="";AlertDialog settingsDialog;
-    String token="",lastProgressText=""; long cursor=0,serviceRevision=0,lastApiSuccessAt=0,serviceStateSince=0; boolean active=false,serviceStarted=false,apiConnected=false;
+    String token="",lastProgressText=""; long cursor=0,serviceRevision=0,lastApiSuccessAt=0,serviceStateSince=0; boolean active=false,serviceStarted=false,apiConnected=false,lastRealmSpawned=false;
     final int PORT=8765;
     RovekinEntryOverlay rovekin; // Existing real Realm/Follow engine is authoritative.
     int d(int v){return (int)(v*getResources().getDisplayMetrics().density);}
@@ -547,6 +547,20 @@ public class MainActivity extends Activity {
     void update(){final long revision=serviceRevision;io.submit(()->{try{JSONObject r=request("GET","/updates?after="+cursor,null);ui.post(()->{if(revision!=serviceRevision)return;
         markControllerAvailable();rememberDiagnostics(r.optJSONObject("diagnostics"));lastStatus=r;
         JSONObject survival=r.optJSONObject("survival");if(survival!=null)syncPlans(survival.optJSONObject("plans"));
+        boolean spawnedNow=r.optBoolean("spawned",false);
+        if(lastRealmSpawned&&!spawnedNow){
+            JSONObject transport=r.optJSONObject("diagnostics");
+            String cause=transport==null?"unknown":transport.optString("transportCloseKind","unknown");
+            String origin=transport==null?"unknown":transport.optString("transportCloseOrigin","unknown");
+            // Only observed disconnect information is shown. A new home
+            // assignment is not evidence that the permanent home was lost.
+            bubble("ROVEKIN","My Realm connection was interrupted ("+
+                cause.substring(0,Math.min(28,cause.length()))+"/"+
+                origin.substring(0,Math.min(28,origin.length()))+
+                "). My saved home and conversation stay on this phone. Reconnection is separate from house work.",false);
+            SupportLog.record(this,"realm_session_interrupted_home_preserved");
+        }
+        lastRealmSpawned=spawnedNow;
         JSONObject navState=survival==null?null:survival.optJSONObject("navigation");
         boolean blockedFollow=navState!=null&&"follow".equals(navState.optString("mode"))&&Arrays.asList("blocked","waiting-for-terrain").contains(navState.optString("state"));
         boolean retryablePlans=survival!=null&&survival.optJSONObject("plans")!=null&&survival.optJSONObject("plans").optBoolean("retryable");
