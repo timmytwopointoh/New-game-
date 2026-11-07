@@ -1,0 +1,39 @@
+name: Rovekin v1.0.11 dialogue fallback and owner-chat safety
+on:
+  push:
+    branches: [fix/rovekin-v111-real-conversation-20261107]
+    paths:
+      - .github/workflows/rovekin-v111-conversation-regression.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/conversation.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/api.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/rovekin-v111-dialogue.test.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/android-app/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dialogue:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Install identical Android bot dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Real HTTP dialogue, safety and existing regressions
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/conversation.js
+          node --check src/api.js
+          node --test \
+            tests/rovekin-v111-dialogue.test.js \
+            tests/owner-chat-action-handoff.test.js \
+            tests/rovekin-inbox-conversation.test.js \
+            tests/adaptive-companion-language-memory.test.js \
+            tests/rovekin-v110-movement-readiness.test.js \
+            tests/rovekin-v109-learning-truth.test.js \
+            tests/rovekin-v109-plan-restart.test.js \
+            tests/rovekin-v108-inbox-visible.test.js
