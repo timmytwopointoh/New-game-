@@ -1,0 +1,38 @@
+name: Rovekin Minecraft knowledge, safety and home regression
+on:
+  push:
+    branches:
+      - feature/rovekin-minecraft-goal-intelligence-20261107
+    paths:
+      - .github/workflows/rovekin-minecraft-goal-intelligence.yml
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/minecraft-goal-knowledge.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/src/survival/controller.js
+      - realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent/tests/minecraft-goal-knowledge.test.js
+permissions:
+  contents: read
+jobs:
+  offline-minecraft-understanding:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned Bedrock dependencies
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate source syntax and grounded knowledge
+        working-directory: realm-ai-phone-build/realm-ai-live-v021-overlay/bedrock-agent
+        run: |
+          set -euo pipefail
+          node --check src/survival/minecraft-goal-knowledge.js
+          node --check src/survival/controller.js
+          node --test \
+            tests/minecraft-goal-knowledge.test.js \
+            tests/resource-jobs.test.js \
+            tests/companion-field-trial.test.js \
+            tests/permanent-home-memory.test.js \
+            tests/new-home-gift-field.test.js \
+            tests/rovekin-session-retention.test.js \
+            tests/clearance-follow.test.js
