@@ -4,6 +4,7 @@ import {EventEmitter} from 'node:events'
 import {classifyConversation,isConversationUtterance,respondToConversation} from '../src/conversation.js'
 import {createApi} from '../src/api.js'
 import {RealmChat} from '../src/realm-chat.js'
+import {offlineMinecraftResponse} from '../src/offline-minecraft-brain.js'
 
 function memory(){return {recent:()=>[{role:'owner',text:'We were exploring a forest'}]}}
 test('ordinary dialogue is NOT an unsupported Minecraft/code command',()=>{
@@ -123,4 +124,19 @@ test('addressed in-Game owner greeting and check-in become real conversation, no
  assert.equal(sent.length,2)
  assert(sent.every(m=>m.startsWith('Conversational reply')))
  chat.stop()
+})
+
+test('natural Minecraft questions use real bundled data rather than generic code fallback',()=>{
+ for(const raw of ['How do you craft a torch?', 'Do you know how to make a crafting table?', 'Tell me how to craft an iron pickaxe?']){
+  const ans=offlineMinecraftResponse(raw)
+  assert(ans&&ans.accepted===true,raw)
+  assert(/bedrock|catalog|craft|recipe|block|ingredient|output/i.test(ans.message),raw+': '+ans.message)
+ }
+ const hp=offlineMinecraftResponse('How much health does a zombie have?')
+ assert(hp?.accepted===true)
+ assert.match(hp.message,/zombie/i)
+ assert.match(hp.message,/HP/i)
+ const damage=offlineMinecraftResponse('How much damage does a creeper deal?')
+ assert(damage?.accepted===true)
+ assert.match(damage.message,/attack damage/i)
 })
