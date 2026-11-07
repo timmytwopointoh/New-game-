@@ -11,14 +11,14 @@ const airNames=new Set(['air','cave_air','void_air'])
 const isWater=name=>/^(?:flowing_)?water$/.test(name||'')
 export class WorldView{
  constructor(){this.reset()}
- reset(){this.locator=new PlayerLocator();this.editApproval=null;this.unknownAddonBlocks=new Map();this.terrainRevision=0;this.visibilityCache=null;this.blockStates=new Map();this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
+ reset(){this.locator=new PlayerLocator();this.editApproval=null;this.unknownAddonBlocks=new Map();this.terrainRevision=0;this.visibilityCache=null;this.blockStates=new Map();this.serverAuthoritativeBreaking=null;this.serverAuthoritativeInventory=null;this.serverPosition=null;this.serverGrounded=null;this.inputLocks={};this.dragonState='unknown';this.ownedPlacements=new Map();this.blockRevision=0;this.blockRevisions=new Map();this.abilityState=null;this.abilityReportsSeen=0;this.ownAbilityReportsSeen=0;this.ownAbilityBaseSeen=false;this.lastOwnAbilityAt=0;this.uniqueId=null;this.gameMode=null;this.gameModeSource=null;this.registry=null;this.Block=null;this.sections=new Map();this.biomeStores=new Map();this.biomeNames=new Map();this.biomeDecodeErrors=0;this.updates=new Map();this.position=null;this.entityId=null;this.dimension=0;this.chunks=0;this.decodeErrors=0;this.lastError='';this.enabled=true;this.inventory=new Map();this.inventoryKnown=false;this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null;this.effects=new Map();this.entities=new Map();this.players=new Map();this.drops=new Map();this.selectedSlot=null;this.listeners=[];this.pending=new Set();this.inventoryProtocol=new InventoryProtocol(this)}
  initialize(packet,version='1.26.60'){
   this.terrainRevision++;this.visibilityCache=null;this.blockStates.clear();this.registry=registryFactory('bedrock_'+version);this.Block=blockFactory(this.registry)
   this.hashMode=packet.block_network_ids_are_hashes===true
   this.registry.handleStartGame({...packet,itemstates:packet.itemstates||this.registry.writeItemStates()})
   this.ownedPlacements.clear();this.sections.clear();this.biomeStores.clear();this.biomeNames.clear();this.biomeDecodeErrors=0;this.updates.clear();this.entities.clear();this.players.clear();this.drops.clear();this.selectedSlot=null;this.pending.clear();this.inventory.clear();this.inventoryKnown=false;this.inventoryProtocol.reset();this.attributes={};this.healthRevision=0;this.lastHurtAt=null;this.deathReportedAt=null
   this.serverAuthoritativeInventory=typeof packet.server_authoritative_inventory==='boolean'?packet.server_authoritative_inventory:null
-  this.serverAuthoritativeBreaking=typeof packet.server_authoritative_block_breaking==='boolean'?packet.server_authoritative_block_breaking:null;this.blockRevision=0;this.blockRevisions.clear();this.serverPosition={...packet.player_position};this.serverGrounded=null;this.inputLocks={};this.hardcore=packet.hardcore===true;this.abilityState=null;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
+  this.serverAuthoritativeBreaking=typeof packet.server_authoritative_block_breaking==='boolean'?packet.server_authoritative_block_breaking:null;this.blockRevision=0;this.blockRevisions.clear();this.serverPosition={...packet.player_position};this.serverGrounded=null;this.inputLocks={};this.hardcore=packet.hardcore===true;this.abilityState=null;this.abilityReportsSeen=0;this.ownAbilityReportsSeen=0;this.ownAbilityBaseSeen=false;this.lastOwnAbilityAt=0;this.uniqueId=packet.entity_id===undefined?null:String(packet.entity_id)
   this.gameMode=this.normalizeMode(packet.player_gamemode);this.gameModeSource=this.gameMode?'player-specific start_game':null
   // Bedrock GameMode 5 is the player's explicit "use the world default" value.
   // It is safe to resolve through world_gamemode because the start_game field
@@ -250,7 +250,16 @@ export class WorldView{
  attach(client){
   const on=(event,fn)=>{const safe=p=>{try{fn(p)}catch(e){this.decodeErrors++;this.lastError=String(e.message||e).slice(0,140);this.onPacketError?.(e)}};client.on(event,safe);this.listeners.push([client,event,safe])}
   on('start_game',p=>this.initialize(p,client.version||client.options?.version||'1.26.60'))
-  on('update_abilities',p=>{if(this.uniqueId!==null&&String(p.entity_unique_id)===this.uniqueId)this.abilityState=abilityEvidence(p)})
+  on('update_abilities',p=>{
+   this.abilityReportsSeen++
+   // Other players' permissions do not prove this player's abilities.
+   if(this.uniqueId!==null&&String(p.entity_unique_id)===this.uniqueId){
+    this.ownAbilityReportsSeen++
+    this.abilityState=abilityEvidence(p)
+    this.ownAbilityBaseSeen=this.abilityState.known===true
+    this.lastOwnAbilityAt=Date.now()
+   }
+  })
   on('update_player_game_type',p=>{if(this.uniqueId!==null&&String(p.player_unique_id)===this.uniqueId){this.gameMode=this.normalizeMode(p.gamemode);this.gameModeSource='per-player server update'}})
   on('set_player_game_type',p=>{this.gameMode=this.normalizeMode(p.gamemode);this.gameModeSource='server set-player update'})
   on('update_client_input_locks',p=>{this.inputLocks={...p.locks}})
