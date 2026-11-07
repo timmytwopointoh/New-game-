@@ -53,19 +53,21 @@ export function dirtStaircase(world,start,goal,{excluded=()=>false,maxDrop=1}={}
 
 export class Climbing{
  constructor(world,report=()=>{}){this.world=world;this.report=report;this.builder=new Building(world,report);this.reset()}
- reset(){this.steps=new Map();this.kinds=new Map();this.current=null;this.edge=null;this.placed=0;this.total=0;this.reason='';this.builder.reset()}
+ reset(){this.steps=new Map();this.kinds=new Map();this.current=null;this.edge=null;this.placed=0;this.total=0;this.reason='';this.confirmedSupports=new Set();this.builder.reset()}
  prepare(stairs=[]){this.cancel();this.reset();this.gameMode=this.world.gameMode;for(const s of stairs){this.steps.set(key(s.cell),s.targets.map(p=>({...p})));this.kinds.set(key(s.cell),s.kind||'stair');this.total+=s.targets.length}}
- cancel(reason='Climbing stopped; confirmed dirt stays in the world.'){this.builder.cancel(reason);this.steps.clear();this.kinds.clear();this.current=null;this.edge=null}
+ cancel(reason='Climbing stopped; confirmed dirt stays in the world.'){this.builder.cancel(reason);this.builder.trustedSupports=null;this.confirmedSupports?.clear();this.steps.clear();this.kinds.clear();this.current=null;this.edge=null}
  beforeStep(cell,now){
   const targets=this.steps.get(key(cell));if(!targets)return {waiting:false}
   if(this.gameMode!==this.world.gameMode||!this.world.movementVerified||!this.world.editModeVerified||this.world.inputLocks?.jump)return {waiting:true,error:'Climbing needs unchanged verified mode, build permission and unlocked jump controls.'}
   if(!this.world.grounded())return {waiting:true}
   if(this.current&&!this.builder.job){
    if(this.builder.state!=='confirmed')return {waiting:true,error:this.builder.reason||'Dirt step was not confirmed.'}
-   this.placed++;targets.shift();this.current=null
+   // Trust the dirt block only after the server confirms placement and inventory.
+   this.confirmedSupports.add(key(this.current));this.placed++;targets.shift();this.current=null
   }
   if(!targets.length){this.steps.delete(key(cell));this.kinds.delete(key(cell));return {waiting:false}}
   if(!this.current){
+   this.builder.trustedSupports=this.confirmedSupports
    const result=this.builder.begin({shape:'block',origin:targets[0],material:'dirt'},now)
    if(!result.accepted)return {waiting:true,error:result.message}
    this.current=targets[0];this.report(`${this.kinds.get(key(cell))==='bridge'?'Bridging':'Climbing'}: placing dirt support ${this.placed+1}/${this.total}; waiting for the server before ${this.kinds.get(key(cell))==='bridge'?'crossing':'jumping'}.`)
