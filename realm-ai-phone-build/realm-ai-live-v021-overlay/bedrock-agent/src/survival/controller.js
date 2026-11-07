@@ -59,7 +59,7 @@ export class SurvivalController{
      ' ('+rule.source+'). Death concerns only carried inventory; broken chest storage is separate. I still verify actual post-respawn inventory.',realmRules:rule}
   }
   if(/^(?:chest status|storage status|what happened to (?:my |your |the )?chest|where are the chest items|what happened to my chest items|recover chest items|recover the chest items)$/.test(s)){
-   this.storageIncidents.observe(Date.now())
+   this.storageIncidents.observe(Date.now(),{force:true})
    const x=this.storageIncidents.snapshot(),a=x.latest
    return {accepted:true,queued:false,message:a?
     'Saved chest at '+a.position.x+','+a.position.y+','+a.position.z+': '+a.status+
