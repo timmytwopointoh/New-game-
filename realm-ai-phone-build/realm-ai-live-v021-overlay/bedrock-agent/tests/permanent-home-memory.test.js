@@ -64,8 +64,8 @@ test('after reconnect, previously confirmed stages are re-observed before more e
  const calls=[]
  const controller={
   connection:{spawned:true},
-  world:{dimension:0,editModeVerified:true,position:{x:134.5,y:105.62,z:37.5},
-   block:p=>({name:known.get([p.x,p.y,p.z].join(','))||'air'}),
+  world:{dimension:0,editModeVerified:true,movementVerified:true,position:{x:134.5,y:105.62,z:37.5},
+   standPosition:()=>({x:134,y:104,z:37}),block:p=>({name:known.get([p.x,p.y,p.z].join(','))||'air'}),
    requestNearby(){calls.push('observe')}},
   navigation:{client:{}},
   report:reason=>calls.push(reason),
@@ -89,8 +89,8 @@ test('changed or missing prior construction never gets silently rebuilt',t=>{
  assert(home.saveProgress({verifiedStages:1}))
  const project=new HomeProject({
   connection:{spawned:true},
-  world:{dimension:0,editModeVerified:true,position:{x:134.5,y:105.62,z:37.5},
-   block:()=>({name:'air'}),requestNearby(){}},
+  world:{dimension:0,editModeVerified:true,movementVerified:true,position:{x:134.5,y:105.62,z:37.5},
+   standPosition:()=>({x:134,y:104,z:37}),block:()=>({name:'air'}),requestNearby(){}},
   navigation:{client:{}},
   report(){},
   companion:{homeMemory:home}
