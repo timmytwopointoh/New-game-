@@ -71,6 +71,10 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
   if(v)return result(`In Minecraft, ${subject} means ${v}. That describes a goal, not a standalone executable packet.`)
   return null
  }
+ // Explain an achievable shelter plan without claiming that any world action happened.
+ m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|show me how to)\s+(?:build|construct|make)\s+(?:a\s+)?(?:small\s+)?(house|shelter|base)(?:\?)?$/)
+ if(m)return result('To build a safe '+m[1]+': first survey a dry, level footprint away from water and hostile mobs; count the floor, wall, roof and doorway blocks; gather the required materials and tools; verify the inventory; place a floor, walls, a two-block-high doorway, a roof and lighting; confirm each placement from server block updates; then inspect the finished shelter for gaps and hazards. This is a planning answer only: no terrain was surveyed, materials collected or blocks placed.',{knowledge:{kind:'building-plan',structure:m[1],executed:false}})
+
  m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|show me how to)\s+(?:make|craft|obtain|get|find|build)\s+(.+?)(?:\?)?$/)
  if(m){const n=material(m[1].replace(/\?$/,''));if(n)return result(itemFacts(n)+' Crafting is currently reference/planning only; actual crafting transactions are not yet implemented.')}
  m=s.match(/^(?:where (?:can i|do you|to)|how to)\s+(?:find|locate|mine)\s+(.+?)(?:\?)?$/)
@@ -86,9 +90,6 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
  }
  m=s.match(/^(?:(?:make|craft|smelt)(?:\s+me)?\s+)(?:(-?\d+)\s+)?(.+)$/)
  if(m){const count=Number(m[1]||1);if(!Number.isSafeInteger(count)||count<1||count>256)return result('Crafting requests are limited to 1–256 items; no crafting was attempted.');const n=material(m[2]);if(!n)return null;const p=supplyPlan(n,count,world?.items?.()||{},!!world?.inventoryKnown);return result(`Offline crafting goal: ${count} ${friendly(n)}. ${itemFacts(n)} ${p.ok?p.steps.slice(0,8).map(x=>`${x.action} ${x.count} ${friendly(x.item)}`).join(' -> '):p.message}. ${requirements.craft}. Crafting execution is not implemented; no item was created.`,{supplyPlan:p})}
- // Explain an achievable shelter plan without claiming that any world action happened.
- m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|show me how to)\s+(?:build|construct|make)\s+(?:a\s+)?(?:small\s+)?(house|shelter|base)(?:\?)?$/)
- if(m)return result('To build a safe '+m[1]+': first survey a dry, level footprint away from water and hostile mobs; count the floor, wall, roof and doorway blocks; gather the required materials and tools; verify the inventory; place a floor, walls, a two-block-high doorway, a roof and lighting; confirm each placement from server block updates; then inspect the finished shelter for gaps and hazards. This is a planning answer only: no terrain was surveyed, materials collected or blocks placed.',{knowledge:{kind:'building-plan',structure:m[1],executed:false}})
  if(/^(?:build|construct|create|make)\s+(?:me\s+)?(?:a\s+)?(?:small\s+)?(?:shelter|house|wall|floor|base)(?:\s+.*)?$/.test(s))return result(`Offline building goal: ${requirements.build}. For a live attempt, specify a known-air origin and an actual hotbar material. The bot cannot invent a footprint or claim placement success. A live placement still needs server confirmation; no blocks were placed.`)
  if(/^(?:defend|protect|fight|attack|kill)(?:\b|$)/.test(s))return result(`Hostile defense is already attempted by the on-device survival loop when observed hostile mobs are in range. ${requirements.combat}. Actual hits and kills are not yet reliably verified; it never attacks players intentionally.`)
  if(/^(?:use|open|eat|equip|wear|trade|interact|enchant|brew|sleep|ride|tame)(?:\b|$)/.test(s))return result(`I recognize this Minecraft interaction goal, but ${requirements.use}. This interaction type does not have a verified general executor yet. I have not interacted with anything.`)
