@@ -11,3 +11,5 @@ test('inventory confirmed satisfies task without mining',()=>{const world={inven
 test('visible-only scans never invent a target',()=>{const world={standPosition:()=>({x:1,y:65,z:2}),scan:()=>({found:[]})};const r=offlineMinecraftResponse('where can i find diamonds',{world});assert.match(r.message,/No visible/i)})
 test('building and crafting are honest about unimplemented capabilities',()=>{assert.match(offlineMinecraftResponse('build a shelter').message,/no blocks were placed/i);assert.match(offlineMinecraftResponse('craft a chest').message,/no item was created/i)})
 test('data status works without internet or Google key',()=>{assert.match(offlineMinecraftResponse('minecraft knowledge').message,/No Google key or network required/i)})
+
+test('building advice provides a grounded multi-step plan without claiming execution',()=>{const r=offlineMinecraftResponse('how do I build a house?');assert.equal(r.knowledge.kind,'building-plan');assert.equal(r.knowledge.executed,false);assert.match(r.message,/doorway.*roof.*lighting/i);assert.match(r.message,/no terrain was surveyed/i)})
