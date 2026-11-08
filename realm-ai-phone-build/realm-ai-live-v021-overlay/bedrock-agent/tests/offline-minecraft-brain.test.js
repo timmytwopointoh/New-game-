@@ -13,3 +13,5 @@ test('building and crafting are honest about unimplemented capabilities',()=>{as
 test('data status works without internet or Google key',()=>{assert.match(offlineMinecraftResponse('minecraft knowledge').message,/No Google key or network required/i)})
 
 test('building advice provides a grounded multi-step plan without claiming execution',()=>{const r=offlineMinecraftResponse('how do I build a house?');assert.equal(r.knowledge.kind,'building-plan');assert.equal(r.knowledge.executed,false);assert.match(r.message,/doorway.*roof.*lighting/i);assert.match(r.message,/no terrain was surveyed/i)})
+
+test('crafting quantity is bounded before supply planning',()=>{for(const command of ['craft 0 chests','craft 257 chests','smelt 999 iron ingot']){const r=offlineMinecraftResponse(command);assert.equal(r.queued,false);assert.match(r.message,/limited to 1–256/i);assert.match(r.message,/no crafting was attempted/i)}})
