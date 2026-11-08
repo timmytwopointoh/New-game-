@@ -75,17 +75,17 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
  if(m){const n=material(m[1].replace(/\?$/,''));if(n)return result(itemFacts(n)+' Crafting is currently reference/planning only; actual crafting transactions are not yet implemented.')}
  m=s.match(/^(?:where (?:can i|do you|to)|how to)\s+(?:find|locate|mine)\s+(.+?)(?:\?)?$/)
  if(m){const n=material(m[1].replace(/\?$/,''));if(n)return result(`Looking for ${friendly(n)}. ${locatedResource(n,world)} This scan only uses visible, received terrain.`,{knowledge:{kind:'search',name:n}})}
- m=s.match(/^(?:(?:go\s+)?(?:get|gather|collect|fetch|harvest|obtain|acquire|retrieve|chop|mine)(?:\s+me)?|bring me)\s+(?:(\d{1,3})\s+)?(.+)$/)
+ m=s.match(/^(?:(?:go\s+)?(?:get|gather|collect|fetch|harvest|obtain|acquire|retrieve|chop|mine)(?:\s+me)?|bring me)\s+(?:(-?\d+)\s+)?(.+)$/)
  if(m){const count=m[1]?Number(m[1]):1,n=material(m[2]);if(!n)return null
-  if(count<1||count>256)return result('Resource requests are limited to 1–256 for a bounded supply plan.')
+  if(!Number.isSafeInteger(count)||count<1||count>256)return result('Resource requests are limited to 1–256 for a bounded supply plan.')
   const stock=world?.items?.()||{},known=!!world?.inventoryKnown,have=stock[n]||0
   if(known&&have>=count)return result(`Inventory already reports ${have} ${friendly(n)}; requested amount is ${count}. No mining required.`)
   const plan=supplyPlan(n,count,stock,known)
   const steps=plan.ok?plan.steps.slice(0,8).map(x=>`${x.action} ${x.count} ${friendly(x.item)}`).join(' -> '):'Plan unavailable'
   return result(`Offline ${friendly(n)} goal (${count}): ${steps||'no supplies missing'}. ${locatedResource(n,world)} ${requirements.gather}. I can identify materials and attempt bounded manual mining/pickup, but a fully automatic harvest-to-inventory sequence is not verified. Nothing has been mined or collected.`,{supplyPlan:plan,knowledge:{kind:'resource-task',name:n}})
  }
- m=s.match(/^(?:(?:make|craft|smelt)(?:\s+me)?\s+)(?:(\d{1,3})\s+)?(.+)$/)
- if(m){const count=Number(m[1]||1);if(count<1||count>256)return result('Crafting requests are limited to 1–256 items; no crafting was attempted.');const n=material(m[2]);if(!n)return null;const p=supplyPlan(n,count,world?.items?.()||{},!!world?.inventoryKnown);return result(`Offline crafting goal: ${count} ${friendly(n)}. ${itemFacts(n)} ${p.ok?p.steps.slice(0,8).map(x=>`${x.action} ${x.count} ${friendly(x.item)}`).join(' -> '):p.message}. ${requirements.craft}. Crafting execution is not implemented; no item was created.`,{supplyPlan:p})}
+ m=s.match(/^(?:(?:make|craft|smelt)(?:\s+me)?\s+)(?:(-?\d+)\s+)?(.+)$/)
+ if(m){const count=Number(m[1]||1);if(!Number.isSafeInteger(count)||count<1||count>256)return result('Crafting requests are limited to 1–256 items; no crafting was attempted.');const n=material(m[2]);if(!n)return null;const p=supplyPlan(n,count,world?.items?.()||{},!!world?.inventoryKnown);return result(`Offline crafting goal: ${count} ${friendly(n)}. ${itemFacts(n)} ${p.ok?p.steps.slice(0,8).map(x=>`${x.action} ${x.count} ${friendly(x.item)}`).join(' -> '):p.message}. ${requirements.craft}. Crafting execution is not implemented; no item was created.`,{supplyPlan:p})}
  // Explain an achievable shelter plan without claiming that any world action happened.
  m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|show me how to)\s+(?:build|construct|make)\s+(?:a\s+)?(?:small\s+)?(house|shelter|base)(?:\?)?$/)
  if(m)return result('To build a safe '+m[1]+': first survey a dry, level footprint away from water and hostile mobs; count the floor, wall, roof and doorway blocks; gather the required materials and tools; verify the inventory; place a floor, walls, a two-block-high doorway, a roof and lighting; confirm each placement from server block updates; then inspect the finished shelter for gaps and hazards. This is a planning answer only: no terrain was surveyed, materials collected or blocks placed.',{knowledge:{kind:'building-plan',structure:m[1],executed:false}})
