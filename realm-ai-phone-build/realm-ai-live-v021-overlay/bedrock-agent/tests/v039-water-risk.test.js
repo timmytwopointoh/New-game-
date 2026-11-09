@@ -16,3 +16,15 @@ test('wading route is possible only with sufficient risk budget',()=>{const w=wo
 test('longer water crossing refuses to exceed exposure budget',()=>{const w=world({wet:[...wet,'5,64,0'],blocked:sides});assert.equal(findPath(w,start,goal,{waterBudget:4}).ok,false);assert.equal(findPath(w,start,goal,{waterBudget:5}).ok,true)})
 test('unknown route cells cannot be made safe by allowing water',()=>assert.equal(findPath(world({wet,blocked:[...sides,'3,64,0']}),start,goal,{waterBudget:8}).ok,false))
 test('penalty chooses a known dry detour over water',()=>{const p=findPath(world({wet:['2,64,0']}),start,goal,{waterBudget:4,waterPenalty:12});assert.equal(p.ok,true);assert.equal(p.waterCrossing,false)})
+
+test('zero water budget refuses wet cells even if the caller marks them walkable',()=>{
+ const w=world({wet,blocked:sides,allowWet:true})
+ assert.equal(findPath(w,start,goal,{waterBudget:0}).ok,false)
+ assert.equal(findPath(w,start,goal,{waterBudget:4}).ok,true)
+})
+test('zero water budget still permits leaving an already-wet starting cell',()=>{
+ const w=world({wet:['0,64,0'],blocked:sides,allowWet:true})
+ const p=findPath(w,start,goal,{waterBudget:0})
+ assert.equal(p.ok,true)
+ assert.equal(p.path.length,6)
+})
