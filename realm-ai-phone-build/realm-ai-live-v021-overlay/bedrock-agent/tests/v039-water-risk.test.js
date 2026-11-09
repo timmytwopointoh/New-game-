@@ -28,3 +28,16 @@ test('zero water budget still permits leaving an already-wet starting cell',()=>
  assert.equal(p.ok,true)
  assert.equal(p.path.length,6)
 })
+
+test('dry-only navigation rejects a wet destination even when it is marked walkable',()=>{
+ const w=world({wet:['5,64,0']})
+ const p=findPath(w,start,goal,{waterBudget:0})
+ assert.equal(p.ok,false)
+ assert.match(p.reason,/water/i)
+})
+test('wet starting position can remain stationary with zero water budget',()=>{
+ const w=world({wet:['0,64,0']})
+ const p=findPath(w,start,start,{waterBudget:0})
+ assert.equal(p.ok,true)
+ assert.equal(p.path.length,1)
+})
