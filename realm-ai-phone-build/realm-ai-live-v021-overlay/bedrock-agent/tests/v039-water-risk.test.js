@@ -41,3 +41,13 @@ test('wet starting position can remain stationary with zero water budget',()=>{
  assert.equal(p.ok,true)
  assert.equal(p.path.length,1)
 })
+
+test('invalid water budgets fail closed rather than permitting unbounded wading',()=>{
+ const w=world({wet,blocked:sides})
+ for(const waterBudget of [NaN,Infinity,-1,0.5,'4',null]){
+  const p=findPath(w,start,goal,{waterBudget})
+  assert.equal(p.ok,false,`waterBudget=${String(waterBudget)}`)
+  assert.match(p.reason,/budget/i)
+ }
+ assert.equal(findPath(w,start,goal,{waterBudget:4}).ok,true)
+})
