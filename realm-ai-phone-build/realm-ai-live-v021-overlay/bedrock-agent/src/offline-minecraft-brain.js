@@ -38,8 +38,10 @@ function locatedResource(name,world){
  if(!world?.standPosition?.()||!world?.scan)return 'Your current observed terrain is unavailable; I cannot locate it or invent coordinates.'
  try{
   const scan=world.scan(name)
-  const spot=scan?.found?.[0]
-  return spot?`The scan found a visible ${friendly(name)} at ${spot.x}, ${spot.y}, ${spot.z}. This is only a location, not a confirmed break or pickup.`:`No visible ${friendly(name)} is in the received nearby terrain. Move or look around to search another area.`
+  const spots=Array.isArray(scan?.found)?scan.found:[]
+  const spot=spots.find(p=>p&&[p.x,p.y,p.z].every(Number.isFinite)&&!p.inWater&&!p.underwater&&!p.isWater&&!p.hazardous)
+  if(spot)return `The scan found a visible ${friendly(name)} at ${spot.x}, ${spot.y}, ${spot.z}. This is only a location, not a confirmed safe route, break or pickup; verify the approach avoids water.`
+  return spots.length?`The scan returned ${friendly(name)} candidates, but none has valid dry, non-hazardous coordinates. I will not recommend an unsafe or unverified target.`:`No visible ${friendly(name)} is in the received nearby terrain. Move or look around to search another area.`
  }catch{return 'The local terrain scan could not confirm any target.'}
 }
 const requirements={
