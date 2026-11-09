@@ -23,3 +23,18 @@ test('shelter advice uses actionable multi-step building guidance before generic
 test('natural-language nearby shelter questions retain grounded planning without inventing player position',()=>{for(const question of ['can you explain how to build a house near me?','could you show me how to build a shelter next to me?','how can you make a base beside me?']){const r=offlineMinecraftResponse(question);assert.equal(r.knowledge.kind,'building-plan',question);assert.equal(r.knowledge.executed,false);assert.match(r.message,/confirmed player position/i);assert.match(r.message,/no terrain was surveyed/i)}})
 
 test('polite prefixes retain building explanation intent',()=>{for(const question of ['can you explain how to build a house near me?','could you show me how to build a shelter next to me?','please explain how to build a base beside me?','hey bot, show me how to build a house?']){const r=offlineMinecraftResponse(question);assert.ok(r,question);assert.equal(r.knowledge.kind,'building-plan',question);assert.equal(r.knowledge.executed,false);assert.match(r.message,/no terrain was surveyed/i)}})
+
+
+test('terrain suggestions reject malformed and explicitly wet or hazardous targets',()=>{
+ const world={standPosition:()=>({x:1,y:65,z:2}),scan:()=>({found:[{x:NaN,y:65,z:2},{x:3,y:64,z:2,inWater:true},{x:4,y:64,z:2,hazardous:true}]})}
+ const r=offlineMinecraftResponse('where can i find diamonds',{world})
+ assert.match(r.message,/none has valid dry, non-hazardous coordinates/i)
+ assert.doesNotMatch(r.message,/at NaN|at 3,|at 4,/)
+})
+
+test('terrain suggestions use a finite dry target without claiming a safe path',()=>{
+ const world={standPosition:()=>({x:1,y:65,z:2}),scan:()=>({found:[{x:1,y:64,z:2,underwater:true},{x:7,y:64,z:8}]})}
+ const r=offlineMinecraftResponse('where can i find diamonds',{world})
+ assert.match(r.message,/at 7, 64, 8/)
+ assert.match(r.message,/not a confirmed safe route/i)
+})
