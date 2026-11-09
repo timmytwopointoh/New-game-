@@ -51,3 +51,13 @@ test('invalid water budgets fail closed rather than permitting unbounded wading'
  }
  assert.equal(findPath(w,start,goal,{waterBudget:4}).ok,true)
 })
+
+test('invalid water penalties fail closed instead of rewarding unsafe crossings',()=>{
+ const w=world({wet,blocked:sides})
+ for(const waterPenalty of [NaN,Infinity,-Infinity,-1,'3',null]){
+  const p=findPath(w,start,goal,{waterBudget:4,waterPenalty})
+  assert.equal(p.ok,false,`waterPenalty=${String(waterPenalty)}`)
+  assert.match(p.reason,/penalty/i)
+ }
+ assert.equal(findPath(w,start,goal,{waterBudget:4,waterPenalty:0}).ok,true)
+})
