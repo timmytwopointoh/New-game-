@@ -64,7 +64,10 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
  let mob=s.match(/^(?:mob (?:stats|info)|how much health does|hp of|attack of|mob behavior)\s+([a-z0-9_ ]+?)(?:\?)?$/)
  if(mob){const info=mobReference(mob[1]);if(!info)return null;return result(`${info.name}: HP ${info.health??'unknown'}; attack damage ${info.normalDamage??'not independently verified'}. ${info.behavior} ${info.response}`,{knowledge:{kind:'mob',...info}})}
  // Explain an achievable shelter plan without claiming that any world action happened.
-  let m=s.match(/^(?:what (?:is|are)|what do you know about|tell me about|explain|about|define)\s+(.+?)(?:\?)?$/)
+ let m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|(?:explain|show me) how to|(?:can|could) you (?:explain|show me) how to)\s+(?:build|construct|make)\s+(?:a\s+)?(?:small\s+)?(house|shelter|base)(?:\s+(?:near|next to|beside)\s+me)?(?:\?)?$/)
+ if(m)return result('To build a safe '+m[1]+': first survey a dry, level footprint away from water and hostile mobs; count the floor, wall, roof and doorway blocks; gather the required materials and tools; verify the inventory; place a floor, walls, a two-block-high doorway, a roof and lighting; confirm each placement from server block updates; then inspect the finished shelter for gaps and hazards. '+(s.includes('near me')||s.includes('next to me')||s.includes('beside me')?'A nearby location requires a confirmed player position and safe terrain scan; I cannot assume your location. ':'')+'This is a planning answer only: no terrain was surveyed, materials collected or blocks placed.',{knowledge:{kind:'building-plan',structure:m[1],executed:false}})
+
+  m=s.match(/^(?:what (?:is|are)|what do you know about|tell me about|explain|about|define)\s+(.+?)(?:\?)?$/)
  if(m){const subject=m[1].replace(/\?$/,'');const n=material(subject),e=entity(subject),b=biome(subject),v=learnVerbs[subject];
   if(n)return result(itemFacts(n),{knowledge:{kind:'material',name:n}})
   if(e){const info=mobReference(e.name);return result(`${info?.name||e.displayName||friendly(e.name)}: HP ${info?.health??'unknown'}; attack damage ${info?.normalDamage??'not independently verified'}. ${info?.behavior||'Behavior needs observation.'} ${info?.response||''}`,{knowledge:{kind:'entity',...info}})}
@@ -72,9 +75,6 @@ export function offlineMinecraftResponse(raw,{world=null}={}){
   if(v)return result(`In Minecraft, ${subject} means ${v}. That describes a goal, not a standalone executable packet.`)
   return null
  }
-
- m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|(?:explain|show me) how to|(?:can|could) you (?:explain|show me) how to)\s+(?:build|construct|make)\s+(?:a\s+)?(?:small\s+)?(house|shelter|base)(?:\s+(?:near|next to|beside)\s+me)?(?:\?)?$/)
- if(m)return result('To build a safe '+m[1]+': first survey a dry, level footprint away from water and hostile mobs; count the floor, wall, roof and doorway blocks; gather the required materials and tools; verify the inventory; place a floor, walls, a two-block-high doorway, a roof and lighting; confirm each placement from server block updates; then inspect the finished shelter for gaps and hazards. '+(s.includes('near me')||s.includes('next to me')||s.includes('beside me')?'A nearby location requires a confirmed player position and safe terrain scan; I cannot assume your location. ':'')+'This is a planning answer only: no terrain was surveyed, materials collected or blocks placed.',{knowledge:{kind:'building-plan',structure:m[1],executed:false}})
 
  m=s.match(/^(?:how (?:do i|can (?:i|you)|to)|show me how to)\s+(?:make|craft|obtain|get|find|build)\s+(.+?)(?:\?)?$/)
  if(m){const n=material(m[1].replace(/\?$/,''));if(n)return result(itemFacts(n)+' Crafting is currently reference/planning only; actual crafting transactions are not yet implemented.')}
