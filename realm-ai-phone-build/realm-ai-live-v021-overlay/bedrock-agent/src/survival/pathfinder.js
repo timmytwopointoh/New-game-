@@ -2,6 +2,7 @@
 const key=p=>`${p.x},${p.y},${p.z}`
 const metric=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z)+Math.abs(a.y-b.y)
 export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSteps=false,maxDrop=1,waterBudget=0,waterPenalty=3}={}){
+ if(!Number.isSafeInteger(waterBudget)||waterBudget<0)return {ok:false,reason:'Water exposure budget must be a nonnegative whole number.'}
  if(![start?.x,start?.y,start?.z,goal?.x,goal?.y,goal?.z].every(Number.isSafeInteger))return {ok:false,reason:'Use whole block coordinates.'}
  if(!allowSteps&&start.y!==goal.y)return {ok:false,reason:'This preview requires a level route. Enable step-aware navigation for jumps.'}
  if(metric(start,goal)>maxDistance)return {ok:false,reason:`Destination exceeds the ${maxDistance}-block walking limit.`}
