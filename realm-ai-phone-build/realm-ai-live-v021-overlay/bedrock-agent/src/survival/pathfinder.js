@@ -6,6 +6,8 @@ export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSte
  if(!allowSteps&&start.y!==goal.y)return {ok:false,reason:'This preview requires a level route. Enable step-aware navigation for jumps.'}
  if(metric(start,goal)>maxDistance)return {ok:false,reason:`Destination exceeds the ${maxDistance}-block walking limit.`}
  if(!world.walkable(start)||!world.walkable(goal))return {ok:false,reason:'Start or destination is unsafe or not observed. Look around near loaded terrain first.'}
+ // A wet starting position may be escaped, but a dry-only request must never end in water.
+ if(waterBudget===0&&world.shallowWater?.(goal)&&key(start)!==key(goal))return {ok:false,reason:'Destination is in water; choose a dry observed block.'}
  const sid=(p,wet)=>`${key(p)}|${wet}`
  const open=[{p:start,wet:world.shallowWater?.(start)?1:0,g:0,f:metric(start,goal)}],cost=new Map([[sid(start,world.shallowWater?.(start)?1:0),0]]),parent=new Map(),visited=new Set()
  while(open.length&&visited.size<maxNodes){
