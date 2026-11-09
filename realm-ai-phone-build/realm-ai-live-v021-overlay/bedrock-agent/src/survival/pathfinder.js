@@ -25,7 +25,7 @@ export function findPath(world,start,goal,{maxNodes=4096,maxDistance=48,allowSte
     const penalty=world.terrainPenalty?.(p)??0
     if(!Number.isFinite(penalty)||penalty<0)continue
     const g=current.g+(dy?1.6+Math.max(0,-dy-1)*.4:1)+(water?waterPenalty:0)+penalty
-    if(wet>waterBudget||visited.has(pk)||metric(start,p)>maxDistance||!world.walkable(p)||g>=(cost.get(pk)??Infinity))continue
+    if(water&&waterBudget===0||wet>waterBudget||visited.has(pk)||metric(start,p)>maxDistance||!world.walkable(p)||g>=(cost.get(pk)??Infinity))continue
     if(dy===1&&!world.canJumpBetween?.(current.p,p))continue
     if(dy<0&&!world.canDropBetween?.(current.p,p,{maxDrop}))continue
     cost.set(pk,g);parent.set(pk,{p:current.p,parent:ck});open.push({p,wet,g,f:g+metric(p,goal)})
